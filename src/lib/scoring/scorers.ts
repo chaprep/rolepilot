@@ -17,13 +17,13 @@ export const SCORER_INFO: Record<Scorer, { name: string; description: string; ta
     tag: "Uses your AI provider",
   },
   JEV: {
-    name: "Jev by TypeSafe",
+    name: "Jev through OpenRouter",
     description: "A model made for quick judgments. It answers questions about the posting, and Dossier builds the score and the reasons from the posting's own lines.",
-    tag: "Needs a TypeSafe key",
+    tag: "Uses your OpenRouter key",
   },
 };
 
 export const TYPESAFE_KEY_URL = "https://console.typesafe.ai/keys";
 
-export const SCORING_KEY_MISSING = "Enter your TypeSafe key in Settings → Scoring first.";
-export const SCORING_KEY_UNREADABLE = "Your saved TypeSafe key can't be read. Enter it again in Settings → Scoring.";
+export const SCORING_KEY_MISSING = "Enter your OpenRouter key in Settings → AI provider first.";
+export const SCORING_KEY_UNREADABLE = "Your saved OpenRouter key cannot be read. Enter it again in Settings → AI provider.";

@@ -1,9 +1,10 @@
+import { encryptApiKey } from "@/lib/ai/api-key";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { json, stubFetch } from "@/lib/ai/test-http";
 import { clearJobSearchCache } from "@/lib/job-search/cache";
 import { EMPTY_QUERY, type FoundPosting } from "@/lib/job-search/search";
-import { encryptSecret, JOB_SOURCE_KEY, TYPESAFE_KEY } from "@/lib/secrets";
+import { encryptSecret, JOB_SOURCE_KEY } from "@/lib/secrets";
 import { saveSettings } from "@/lib/settings-data";
 import { createTestClient, resetDatabase } from "@/test/db";
 import { jsearchV2LastPage } from "@/test/job-search-fixtures";
@@ -33,7 +34,11 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
 const ai = vi.hoisted(() => ({ ready: true }));
-vi.mock("@/lib/ai/config", () => ({ isAiConfigured: async () => ai.ready, isAiUsable: async () => ai.ready }));
+vi.mock("@/lib/ai/config", async (original) => {
+ const actual=await original<typeof import("@/lib/ai/config")>();
+ return {...actual,isAiConfigured:async()=>ai.ready,isAiUsable:async()=>ai.ready,
+ resolveAiConfig:(saved:Parameters<typeof actual.resolveAiConfig>[0],source:Parameters<typeof actual.resolveAiConfig>[1],secret?:string)=>actual.resolveAiConfig(saved,{...source,DOSSIER_AI_KEY:ai.ready?"router-test":undefined},secret)};
+});
 vi.mock("@/lib/jobs/runner", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/jobs/runner")>()),
   startJob: vi.fn(async () => "score-job"),
@@ -133,25 +138,22 @@ describe("Score (#208)", () => {
 
   it("says when there's no AI provider to score with", async () => {
     ai.ready = false;
-    expect(await startScoringPosting({ posting })).toEqual({ ok: false, error: "Choose an AI provider in Settings → AI provider first." });
+    expect(await startScoringPosting({ posting })).toEqual({ ok: false, error: "Enter your OpenRouter key in Settings → AI provider first." });
   });
 
-  it("hands it to a Claude chat instead, with the connector on (#221)", async () => {
-    ai.ready = false;
-    await saveSettings({ connectorEnabledAt: "2026-10-23T09:00:00.000Z" });
-    const result = await startScoringPosting({ posting });
-    const stored = await prisma().posting.findFirstOrThrow({ where: { externalId: "job-1" } });
-    expect(result).toMatchObject({ ok: true, data: { handoff: expect.stringMatching(/^https:\/\/claude\.ai\/new\?q=/) } });
-    expect(decodeURIComponent((result as { data: { handoff: string } }).data.handoff)).toContain(`posting_id "${stored.id}"`);
+  it("requires the OpenRouter scoring connection even with the external connector enabled", async () => {
+    ai.ready=false;
+    await saveSettings({connectorEnabledAt:"2026-10-23T09:00:00.000Z"});
+    expect(await startScoringPosting({posting})).toMatchObject({ok:false,error:"Enter your OpenRouter key in Settings → AI provider first."});
   });
 
   it("scores with Jev once Settings → Scoring chose it, never handing off to Claude (#274)", async () => {
     const { startJob } = await import("@/lib/jobs/runner");
     ai.ready = false;
     await saveSettings({ scorer: "JEV", connectorEnabledAt: "2026-10-23T09:00:00.000Z" });
-    expect(await startScoringPosting({ posting })).toEqual({ ok: false, error: "Enter your TypeSafe key in Settings → Scoring first." });
+    expect(await startScoringPosting({ posting })).toEqual({ ok: false, error: "Enter your OpenRouter key in Settings → AI provider first." });
 
-    await saveSettings({ typesafeKeyEnc: encryptSecret(TYPESAFE_KEY, "ts_secret") });
+    await saveSettings({ provider:"OPENAI",baseUrl:"https://openrouter.ai/api/v1",apiKeyEnc:encryptApiKey("ts_secret") });
     expect(await startScoringPosting({ posting })).toEqual({ ok: true, data: { jobId: "score-job" } });
     expect(startJob).toHaveBeenLastCalledWith(expect.objectContaining({ type: "posting-score" }), { posting }, { key: "posting-score:JSEARCH:job-1" });
   });

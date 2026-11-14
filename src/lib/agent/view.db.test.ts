@@ -1,3 +1,4 @@
+const availability = vi.hoisted(()=>({ready:true}));
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveSettings } from "@/lib/settings-data";
@@ -20,7 +21,12 @@ vi.mock("./scan-lock", async (original) => {
 // Settings → Scoring reads DOSSIER_SCORER (#274).
 vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
 vi.mock("@/lib/time-zone", () => ({ lastKnownTimeZone: async () => "Europe/Berlin" }));
-vi.mock("@/lib/ai/config", () => ({ isAiConfigured: async () => true }));
+vi.mock("@/lib/ai/config", async (original) => {
+ const actual = await original<typeof import("@/lib/ai/config")>();
+ return { ...actual, isAiConfigured: async () => true,
+ resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
+ actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: availability.ready ? "router-test" : undefined},secret) };
+});
 vi.mock("@/lib/job-search/config", () => ({
   loadJobSearchConfig: async () => ({ source: "JSEARCH", saved: true, jsearch: { key: "k", host: "openwebninja", keyState: "set" }, adzuna: { appId: "", key: null, keyState: "none" } }),
   credentialsFor: () => ({ key: "k", host: "openwebninja" }),
@@ -32,6 +38,7 @@ const candidate = (externalId: string, score: number, data: Record<string, unkno
   prisma().agentCandidate.create({ data: { source: "JSEARCH", externalId, dedupeKey: externalId, title: `Posting ${externalId}`, company: "Ledgerly", place: "Berlin", remote: true, score, via: "LinkedIn", postedAt: new Date("2026-10-18T00:00:00Z"), ...data } });
 
 beforeEach(async () => {
+  availability.ready=true;
   await resetDatabase(prisma());
   await prisma().agentSearch.create({ data: { name: "My search", query: { keywords: "Data scientist", place: "Berlin", country: "de", radiusKm: 25, remoteOnly: false, postedWithin: "any" } } });
   await saveSettings({
@@ -44,7 +51,8 @@ afterAll(() => prisma().$disconnect());
 describe("the Agent screen's data (E16-6)", () => {
   it("links missing Jev credentials to Settings → Scoring", async () => {
     await saveSettings({ scorer: "JEV" });
-    expect(await loadAgentView(now)).toMatchObject({ setupSection: "scoring", setupProblem: "Enter your TypeSafe key in Settings → Scoring first." });
+    availability.ready=false;
+    expect(await loadAgentView(now)).toMatchObject({ setupSection: "ai", setupProblem: "Enter your OpenRouter key in Settings → AI provider first." });
   });
 
   it("finds each search's latest retained outcome even when absent from the last batch, formatting quota in the user's zone", async () => {

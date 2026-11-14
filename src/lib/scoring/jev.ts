@@ -239,6 +239,6 @@ export async function scoreWithJev(
 ): Promise<{ data: PostingFit; scoredWith: string }> {
   const lines = postingLines(posting.description);
   const result = await askJev({ state: jevState(posting, profile), questions: jevQuestions(lines) }, options);
-  onUsage?.({ task: "score-posting-jev", provider: "JEV", model: result.model, input: result.usage?.input_tokens ?? null, output: null });
+  onUsage?.({ task: "score-posting-jev", provider: "OPENROUTER", model: result.model, input: result.usage?.input_tokens ?? null, output: result.usage?.output_tokens ?? null });
   return { data: jevFit(jevParts(result.answers, lines)), scoredWith: `${SCORE_POSTING_JEV_VERSION} (${result.model})` };
 }

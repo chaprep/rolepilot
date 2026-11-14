@@ -11,7 +11,7 @@ import { AnthropicProvider } from "./providers/anthropic";
 import { LocalProvider } from "./providers/local";
 import { LmStudioProvider } from "./providers/lmstudio";
 import { MistralProvider } from "./providers/mistral";
-import { OpenAICompatibleProvider } from "./providers/openai-compatible";
+import { OpenRouterProvider } from "./providers/openrouter";
 
 export { AiError } from "./errors";
 export type { AIProvider, ChatMessage, CompletionRequest, JsonCompletionRequest } from "./provider";
@@ -27,7 +27,7 @@ export function createProvider(config: AiConfig): AIProvider {
     case AiProvider.LOCAL:
       return new LocalProvider(baseUrl, model, timeoutMs, recordUsage);
     case AiProvider.OPENAI:
-      return new OpenAICompatibleProvider("OPENAI", baseUrl, apiKey, model, timeoutMs, recordUsage);
+      return new OpenRouterProvider("OPENAI", baseUrl, apiKey, model, timeoutMs, recordUsage);
     case AiProvider.ANTHROPIC:
       return new AnthropicProvider(baseUrl, apiKey, model, timeoutMs, recordUsage);
     case AiProvider.MISTRAL:
@@ -39,5 +39,8 @@ export function createProvider(config: AiConfig): AIProvider {
 
 /** The provider configured in Settings, or by the DOSSIER_AI_* variables. */
 export async function getAiProvider(): Promise<AIProvider> {
-  return createProvider(await loadAiConfig());
+  const config = await loadAiConfig();
+  if (config.apiKeyProblem) throw AiError.config(config.apiKeyProblem);
+  if (!config.apiKey) throw AiError.config("Enter your OpenRouter API key in Settings → AI provider.");
+  return createProvider(config);
 }

@@ -87,7 +87,7 @@ export const classifyReply: Task<ClassifyInput, Classified> = async (provider, i
     schema: answerSchema,
     schemaName: "classified_reply",
     creativity: "FAITHFUL",
-    effort: "low",
+    effort: "medium",
     signal: options.signal,
   });
 

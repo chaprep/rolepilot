@@ -9,6 +9,7 @@ import { action, ActionError } from "@/lib/action";
 import { lockAgentSearches } from "@/lib/agent/searches";
 import { AiError, createProvider } from "@/lib/ai";
 import { applyApiKeyChange } from "@/lib/ai/api-key";
+import { LUNA, SONNET, OPENROUTER_URL } from "@/lib/ai/assignments";
 import { keyStateOf, loadAiConfig, resolveAiConfig } from "@/lib/ai/config";
 import type { KeyState } from "@/lib/ai/provider-options";
 import { DOCUMENT_LANGUAGES } from "@/lib/document-language";
@@ -26,7 +27,7 @@ import { prisma } from "@/lib/prisma";
 import { jevKey, loadScoringConfig, scoringView } from "@/lib/scoring/config";
 import { SCORERS } from "@/lib/scoring/scorers";
 import { askJev } from "@/lib/scoring/typesafe";
-import { applySecretChange, JOB_SOURCE_KEY, TYPESAFE_KEY } from "@/lib/secrets";
+import { applySecretChange, JOB_SOURCE_KEY } from "@/lib/secrets";
 
 import { seedBuiltIns } from "../../../../prisma/seed/built-ins";
 import { DOCUMENTS_TO_WRITE, isJobRetention } from "@/lib/settings";
@@ -53,15 +54,8 @@ export const saveAiProvider = action(
     baseUrl: z.string().trim().max(500),
     model: z.string().trim().max(200),
   }),
-  async ({ provider, baseUrl, model }) => {
-    const current = await loadSettings();
-    await saveSettings({
-      provider,
-      baseUrl: baseUrl || null,
-      model: model || null,
-      ...(current.provider !== provider ? { apiKeyEnc: null } : {}),
-    });
-    return { keyState: await currentKeyState() };
+  async (): Promise<{ keyState: KeyState }> => {
+    throw new ActionError("Models and provider are fixed for this installation.");
   },
 );
 
@@ -74,12 +68,12 @@ export const saveApiKey = action(
       z.object({ action: z.literal("clear") }),
     ]),
   }),
-  async ({ provider, change }) => {
+  async ({ change }) => {
     const current = await loadSettings();
     await saveSettings({
       apiKeyEnc: applyApiKeyChange(current.apiKeyEnc, change),
       // Until now the provider came from DOSSIER_AI_*; the key makes it a saved choice.
-      ...(current.provider ? {} : { provider }),
+      provider: AiProvider.OPENAI, baseUrl: OPENROUTER_URL,
     });
     return { keyState: await currentKeyState() };
   },
@@ -182,7 +176,7 @@ const loadScoringView = async () => scoringView(await loadScoringConfig());
 
 /** What scores postings: the AI model, or Jev. */
 export const saveScorer = action(z.object({ scorer: z.enum(SCORERS) }), async ({ scorer }) => {
-  await saveSettings({ scorer });
+  if (scorer !== "JEV") throw new ActionError("Scoring uses Jev through OpenRouter.");
   return loadScoringView();
 });
 
@@ -194,10 +188,8 @@ export const saveTypesafeKey = action(
       z.object({ action: z.literal("clear") }),
     ]),
   }),
-  async ({ change }) => {
-    const current = await loadSettings();
-    await saveSettings({ typesafeKeyEnc: applySecretChange(TYPESAFE_KEY, current.typesafeKeyEnc, change) });
-    return loadScoringView();
+  async (): Promise<import("@/lib/scoring/scorers").ScoringView> => {
+    throw new ActionError("Jev uses the shared OpenRouter key in AI settings.");
   },
 );
 
@@ -374,4 +366,25 @@ export const removeConnectorRedirect = action(z.object({ uri: z.string().max(200
   const redirects = (await loadSettings()).connectorRedirects.filter((entry) => entry !== uri);
   await saveSettings({ connectorRedirects: redirects });
   return { redirects };
+});
+
+/** Checks inference access, not just whether models appear in the catalog. */
+export const testOpenRouterConnection = action(z.object({}), async () => {
+  const config = await loadAiConfig();
+  const results = await Promise.all([LUNA, SONNET].map(async (model) => {
+    try {
+      if (!config.apiKey || config.apiKeyProblem) throw AiError.config(config.apiKeyProblem ?? "Enter your OpenRouter key first.");
+      const provider = createProvider({ ...config, model, timeoutMs: TEST_TIMEOUT_MS });
+      await provider.complete({ task: "connection-check", system: "Return a JSON object with ok set to true.",
+        messages: [{ role: "user", content: "Check the connection." }], schema: z.object({ ok: z.literal(true) }),
+        schemaName: "connection_check", maxTokens: 4096 });
+      return { model, connected: true, message: "Connected" };
+    } catch (error) {
+      return { model, connected: false, message: error instanceof AiError ? error.message : "Connection check failed." };
+    }
+  }));
+  const jev = await testJev({});
+  results.push({ model: "typesafe/jev-1.14", connected: jev.ok && jev.data.connected,
+    message: !jev.ok ? jev.error : jev.data.connected ? "Connected" : jev.data.message });
+  return { results };
 });

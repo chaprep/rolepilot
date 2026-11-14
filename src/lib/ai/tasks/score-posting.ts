@@ -100,7 +100,7 @@ export const scorePosting: Task<ScorePostingInput, PostingScore> = async (provid
     schemaName: "posting_score",
     // Judging, not writing: faithful, and no long think before answering.
     creativity: "FAITHFUL",
-    effort: "low",
+    effort: "medium",
     signal,
   });
   return { data: scoreFrom(answer), promptVersion: SCORE_POSTING_VERSION };

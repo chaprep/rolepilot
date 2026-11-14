@@ -1,8 +1,6 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, expect, it, vi } from "vitest";
 
-import { decryptApiKey } from "@/lib/ai/api-key";
 import type { AiConfig } from "@/lib/ai/config";
-import { AiError } from "@/lib/ai/errors";
 import { MockProvider } from "@/lib/ai/providers/mock";
 import { loadSettings } from "@/lib/settings-data";
 import { createTestClient, resetDatabase } from "@/test/db";
@@ -39,66 +37,13 @@ beforeEach(async () => {
 });
 afterAll(() => prisma().$disconnect());
 
-describe("the setup guide's AI step (E21-2)", () => {
-  it("saves a hosted provider with its key, picks the guide's model and checks it", async () => {
-    const result = await connectAi({ choice: "openai", key: " sk-test " });
-    expect(result).toMatchObject({ ok: true, data: { connected: true, model: "gpt-6.1-terra" } });
-    const saved = await loadSettings();
-    expect(saved).toMatchObject({ provider: "OPENAI", baseUrl: "https://api.openai.com/v1", model: "gpt-6.1-terra" });
-    expect(decryptApiKey(saved.apiKeyEnc!, "a".repeat(32))).toBe("sk-test");
-    expect(ai.configs.at(-1)).toMatchObject({ apiKey: "sk-test", model: "gpt-6.1-terra" });
-  });
-
-  it("checks again with the saved key, and keeps a key waiting for credit", async () => {
-    ai.make = () => {
-      throw AiError.of("rate-limited", "429");
-    };
-    expect(await connectAi({ choice: "anthropic", key: "sk-ant-1" })).toMatchObject({ ok: true, data: { connected: false, kind: "rate-limited" } });
-    expect((await loadSettings()).apiKeyEnc).not.toBeNull();
-
-    ai.make = (config) => new MockProvider({ model: config.model, models: ["claude-sonnet-5-5"] });
-    expect(await connectAi({ choice: "anthropic" })).toMatchObject({ ok: true, data: { connected: true, model: "claude-sonnet-5-5" } });
-  });
-
-  it("never sends another provider's key: it asks for one and changes nothing", async () => {
-    await connectAi({ choice: "openai", key: "sk-openai" });
-    const calls = ai.configs.length;
-    expect(await connectAi({ choice: "mistral" })).toMatchObject({ ok: true, data: { connected: false, kind: "auth", message: "Paste your Mistral API key first." } });
-    expect(ai.configs.length).toBe(calls);
-    expect(await loadSettings()).toMatchObject({ provider: "OPENAI", baseUrl: "https://api.openai.com/v1" });
-  });
-
-  it("says when the account has none of the guide's models", async () => {
-    ai.make = (config) => new MockProvider({ model: config.model, models: ["something-else"] });
-    expect(await connectAi({ choice: "mistral", key: "k" })).toMatchObject({ ok: true, data: { connected: false, kind: "model" } });
-  });
-
-  it("finds a local model where it answers, and keeps the model chosen before", async () => {
-    ai.make = (config) => {
-      if (config.baseUrl !== "http://host.docker.internal:1234") throw AiError.of("unreachable", "ECONNREFUSED");
-      return new MockProvider({ model: null, models: ["qwen2.5-7b-instruct", "llama-3.1-8b"] });
-    };
-    expect(await findLocalAi({ choice: "lmstudio" })).toMatchObject({
-      ok: true,
-      data: { found: true, baseUrl: "http://host.docker.internal:1234", model: "qwen2.5-7b-instruct" },
-    });
-    expect(await loadSettings()).toMatchObject({ provider: "LMSTUDIO", baseUrl: "http://host.docker.internal:1234", model: "qwen2.5-7b-instruct" });
-
-    await prisma().setting.update({ where: { key: "model" }, data: { value: "llama-3.1-8b" } });
-    expect(await findLocalAi({ choice: "lmstudio" })).toMatchObject({ ok: true, data: { model: "llama-3.1-8b" } });
-  });
-
-  it("says when it can't find one", async () => {
-    ai.make = () => {
-      throw AiError.of("unreachable", "ECONNREFUSED");
-    };
-    expect(await findLocalAi({ choice: "ollama" })).toEqual({ ok: true, data: { found: false } });
-    expect(ai.configs.map((config) => config.baseUrl)).toEqual(["http://localhost:11434", "http://host.docker.internal:11434", "http://ollama:11434"]);
-    expect((await loadSettings()).provider).toBeNull();
-  });
-
-  it("remembers the step, and finishes on Done", async () => {
-    await saveSetupGuide({ step: "jobs", finished: false });
-    expect((await loadSettings()).setupGuide).toEqual({ step: "jobs", finished: false });
-  });
+it("rejects legacy setup without changing credentials", async () => {
+ const before=await loadSettings();
+ expect(await connectAi({choice:"anthropic",key:"unrelated"})).toMatchObject({ok:false});
+ expect(await findLocalAi({choice:"ollama"})).toMatchObject({ok:false});
+ expect(await loadSettings()).toEqual(before);
+});
+it("retains setup progress", async () => {
+ expect(await saveSetupGuide({step:"ai",finished:false})).toMatchObject({ok:true});
+ expect((await loadSettings()).setupGuide).toEqual({step:"ai",finished:false});
 });

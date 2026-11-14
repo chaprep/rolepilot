@@ -16,7 +16,12 @@ vi.mock("@/lib/prisma", async () => {
 });
 // Settings → Scoring reads DOSSIER_SCORER, and the AI model scores until Jev is chosen (#274).
 vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
-vi.mock("@/lib/ai/config", () => ({ isAiConfigured: async () => true }));
+vi.mock("@/lib/ai/config", async (original) => {
+ const actual = await original<typeof import("@/lib/ai/config")>();
+ return { ...actual, isAiConfigured: async () => true,
+ resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
+ actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: true ? "router-test" : undefined},secret) };
+});
 vi.mock("@/lib/profile-data", async () => {
   const { demoProfile } = await import("@/lib/demo-profile");
   return { loadProfile: async () => demoProfile() };
@@ -104,3 +109,8 @@ describe("scorePastedPostingJob (public issue 66)", () => {
     expect(await prisma().postingScore.count()).toBe(0);
   });
 });
+
+vi.mock("@/lib/scoring/jev", () => ({scoreWithJev: async (posting: {description:string;title:string}) => {
+ fake.sent.push(`${posting.title}\n${posting.description}`);
+ return {data:{score:78,reasons:["Built a design system at Northwind."],redFlags:["Dutch is required."]},scoredWith:"score-posting@2"};
+}}));

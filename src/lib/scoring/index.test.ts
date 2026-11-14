@@ -1,7 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
-import { AiError } from "@/lib/ai/errors";
-import { MockProvider } from "@/lib/ai/providers/mock";
 import { demoProfile } from "@/lib/demo-profile";
 
 import type { ScoringConfig } from "./config";
@@ -33,41 +31,15 @@ beforeEach(() => {
   vi.mocked(scoreWithJev).mockClear();
 });
 
-describe("scoringProblem (#274)", () => {
-  it("asks for an AI provider, or for Jev's key, whichever scores", async () => {
-    expect(await scoringProblem()).toBeNull();
-    state.aiReady = false;
-    expect(await scoringProblem()).toBe("Choose an AI provider in Settings → AI provider first.");
-
-    state.config = { scorer: "JEV", saved: true, key: null, keyState: "none" };
-    expect(await scoringProblem()).toBe("Enter your TypeSafe key in Settings → Scoring first.");
-    expect(await scoringProblem({ ...state.config, key: "ts", keyState: "set" })).toBeNull();
-  });
+it("uses Jev regardless of the legacy scorer selection", async () => {
+ state.config = { scorer: "AI", saved: false, key: "shared", keyState: "set" };
+ const score = await loadPostingScorer();
+ expect((await score(posting, profile, signal)).data.score).toBe(80);
+ expect(scoreWithJev).toHaveBeenCalledWith(posting, profile, {key:"shared",signal,onUsage:recordUsage});
 });
-
-describe("loadPostingScorer", () => {
-  it("scores with Jev and its key once chosen, without the AI provider", async () => {
-    state.config = { scorer: "JEV", saved: true, key: "ts", keyState: "set" };
-    state.aiReady = false;
-    const score = await loadPostingScorer();
-    expect(await score(posting, profile, signal)).toEqual({ data: { score: 80, reasons: ["Covers: Figma"], redFlags: [] }, scoredWith: "score-posting-jev@1 (jev-1.14.0)" });
-    // Jev's tokens go to the Usage screen (#290).
-    expect(scoreWithJev).toHaveBeenCalledWith(posting, profile, { key: "ts", signal, onUsage: recordUsage });
-  });
-
-  it("scores with the AI model's score-posting otherwise, keeping its prompt version", async () => {
-    const provider = new MockProvider({ reply: () => ({ score: 72, reasons: ["Knows Figma."], redFlags: [] }) });
-    state.provider = provider;
-    const score = await loadPostingScorer();
-    expect(await score(posting, profile, signal)).toEqual({ data: { score: 72, reasons: ["Knows Figma."], redFlags: [] }, scoredWith: "score-posting@2" });
-    expect(provider.calls[0].messages[0].content).toContain("Ledgerly: Designer");
-    expect(scoreWithJev).not.toHaveBeenCalled();
-  });
-
-  it("fails with what's missing", async () => {
-    state.aiReady = false;
-    await expect(loadPostingScorer()).rejects.toThrow(new AiError("config", "Choose an AI provider in Settings → AI provider first."));
-    state.config = { scorer: "JEV", saved: true, key: null, keyState: "unreadable" };
-    await expect(loadPostingScorer()).rejects.toThrow("Your saved TypeSafe key can't be read. Enter it again in Settings → Scoring.");
-  });
+it("requires the shared key for scoring and reports unreadable keys", async () => {
+ expect(await scoringProblem()).toContain("OpenRouter");
+ await expect(loadPostingScorer()).rejects.toThrow("OpenRouter");
+ state.config.keyState="unreadable";
+ await expect(loadPostingScorer()).rejects.toThrow("cannot be read");
 });

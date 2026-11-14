@@ -220,7 +220,7 @@ describe("scoreWithJev", () => {
     );
     const onUsage = vi.fn();
     await scoreWithJev(posting, profile, { key: "ts-key", fetchImpl, baseUrl: "https://typesafe.test", onUsage });
-    expect(onUsage).toHaveBeenCalledWith({ task: "score-posting-jev", provider: "JEV", model: "jev-1.14.0", input: 2_400, output: null });
+    expect(onUsage).toHaveBeenCalledWith({ task: "score-posting-jev", provider: "OPENROUTER", model: "jev-1.14.0", input: 2_400, output: null });
     // Nor does it get them, as TypeSafe's own options.
     expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).not.toHaveProperty("onUsage");
   });

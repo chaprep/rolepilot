@@ -41,7 +41,7 @@ describe("scorePosting (E16-2)", () => {
       expect(text).not.toContain(secret);
     }
     // Judging is faithful and quick, whatever the creativity setting.
-    expect(call.effort).toBe("low");
+    expect(call.effort).toBe("medium");
   });
 
   it("treats a big seniority gap either way as a mismatch, and gives the candidate's years worked out (#279)", async () => {

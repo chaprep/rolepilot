@@ -26,7 +26,12 @@ vi.mock("@/lib/jobs/runner", async (importOriginal) => ({
   startJob: vi.fn(async () => "new-run"),
 }));
 const setup = vi.hoisted(() => ({ ai: true, source: "JSEARCH" as "JSEARCH" | null }));
-vi.mock("@/lib/ai/config", () => ({ isAiConfigured: async () => setup.ai }));
+vi.mock("@/lib/ai/config", async (original) => {
+ const actual = await original<typeof import("@/lib/ai/config")>();
+ return { ...actual, isAiConfigured: async () => setup.ai,
+ resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
+ actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: setup.ai ? "router-test" : undefined},secret) };
+});
 vi.mock("@/lib/job-search/config", () => ({
   loadJobSearchConfig: async () => ({ source: setup.source, saved: true, jsearch: { key: "k", host: "openwebninja", keyState: "set" }, adzuna: { appId: "", key: null, keyState: "none" } }),
   credentialsFor: () => ({ key: "k", host: "openwebninja" }),
@@ -68,7 +73,7 @@ describe("Run now (E16-4)", () => {
     expect(await runAgentNow({})).toMatchObject({ ok: false, error: "Add what to look for in Settings → Job agent first." });
     await prisma().agentSearch.create({ data: { name: "My search", query } });
     setup.ai = false;
-    expect(await runAgentNow({})).toMatchObject({ ok: false, error: "Choose an AI provider in Settings → AI provider first." });
+    expect(await runAgentNow({})).toMatchObject({ ok: false, error: "Enter your OpenRouter key in Settings → AI provider first." });
     setup.ai = true;
     setup.source = null;
     expect(await runAgentNow({})).toMatchObject({ ok: false, error: "Choose a job source in Settings → Job search first." });

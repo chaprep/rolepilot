@@ -90,7 +90,7 @@ export function AgentSection({
       ) : !source ? (
         <SetupNote before="The agent searches the source you choose in " section="jobs" after=", which is off. Choose one first." />
       ) : scoring.ready ? null : scoring.scorer === "JEV" ? (
-        <SetupNote before="The agent scores postings with Jev, which needs your TypeSafe key in " section="scoring" after="." />
+        <SetupNote before="The agent scores postings with Jev through OpenRouter. Add your shared API key in " section="ai" after="." />
       ) : (
         <SetupNote before="The agent scores postings with the AI provider in " section="ai" after=", which isn't set up yet. Choose one first." />
       )}
@@ -167,7 +167,7 @@ export function AgentSection({
 
       <p className="text-meta text-muted">
         One shared daily schedule for all enabled searches, in {timeZone}. Each search requests only the first page, sequentially. At most {AGENT_MAX_SOURCE_REQUESTS_PER_DAY} source requests in any rolling 24 hours, including failed attempts. A run waits until the whole batch fits. Across all searches, each run scores up to {plural(settings.maxScores, "posting", "postings")}
-        {settings.autoDraft ? ` and prepares up to ${plural(settings.maxDrafts, "draft", "drafts")}` : ""}. Scoring uses the provider in Settings → Scoring; drafts use your AI provider. Both receive your profile; the job source only gets the search.
+        {settings.autoDraft ? ` and prepares up to ${plural(settings.maxDrafts, "draft", "drafts")}` : ""}. Scoring uses Jev through OpenRouter; drafts use Luna and Sonnet through the same connection. The models receive task-relevant profile details; the job source only gets the search.
       </p>
     </>
   );

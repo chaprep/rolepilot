@@ -143,7 +143,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const adapted: Quirks = {
           noTemperature: known.noTemperature || (call.temperature !== undefined && /temperature/i.test(message)),
           maxCompletionTokens: known.maxCompletionTokens || /max_tokens/.test(message),
-          noEffort: known.noEffort || (this.reasoningEffort(call) !== undefined && /reasoning_effort/i.test(message)),
+          noEffort: known.noEffort || (!this.requiresEffort() && this.reasoningEffort(call) !== undefined && /reasoning_effort/i.test(message)),
           thinks: known.thinks,
           json: jsonRefused ? (JSON_MODES[JSON_MODES.indexOf(known.json) + 1] ?? known.json) : known.json,
         };
@@ -171,6 +171,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
   protected thinkingRoom(): number {
     return THINKING_TOKENS;
   }
+
+  protected requiresEffort(): boolean { return false; }
 
   private async send(
     call: ChatCall,

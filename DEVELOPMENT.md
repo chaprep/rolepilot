@@ -329,3 +329,13 @@ The number above the hero's buttons is the Docker image's download count. GitHub
 ```bash
 docker compose down -v   # stops everything and deletes the database and node_modules volumes
 ```
+
+## OpenRouter-only local edition
+
+This edition uses one encrypted OpenRouter key from Settings → AI provider, with `DOSSIER_AI_KEY` as fallback. Existing keys are reused only when their saved provider/address identifies OpenRouter. Legacy provider, model, scorer, and TypeSafe settings remain inactive for rollback. Existing upstream provider development notes above describe adapters retained internally, not selectable runtime options.
+
+`src/lib/ai/assignments.ts` defines fixed task models. Luna handles extraction, matching, classification, and emails; Sonnet handles document writing and editing. Both request medium reasoning. Routing happens on each completion request so compound/background jobs follow the same policy. Settings shows assignments without selection controls.
+
+Jev 1.14 scores jobs and tailored resumes using the same key at OpenRouter’s `/api/v1/systemone` endpoint. The existing question/weighting calculations remain unchanged. Connection testing makes three small paid inference calls, one per model. Missing access or credits fails explicitly without substituting another model.
+
+Build a local production image to run modified source; the published upstream image does not contain these changes. Preserve `/data` and `DOSSIER_SECRET` across container replacement.

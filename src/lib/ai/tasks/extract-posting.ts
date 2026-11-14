@@ -55,7 +55,7 @@ export const extractPosting: Task<{ posting: string; today?: Date }, Extracted> 
       schemaName: "extracted_posting",
       // Reading, not writing: no creativity or long thought wanted.
       creativity: "FAITHFUL",
-      effort: "low",
+      effort: "medium",
       signal,
     });
   let answer = await ask();

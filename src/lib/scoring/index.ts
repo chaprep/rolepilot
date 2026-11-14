@@ -1,12 +1,8 @@
 import "server-only";
 
-import { getAiProvider } from "@/lib/ai";
-import { isAiConfigured } from "@/lib/ai/config";
 import { AiError } from "@/lib/ai/errors";
-import { loadTaskOptions } from "@/lib/ai/task-options";
-import { scorePosting } from "@/lib/ai/tasks";
 import type { PostingFit } from "@/lib/fit";
-import { postingText, type FoundPosting } from "@/lib/job-search/search";
+import { type FoundPosting } from "@/lib/job-search/search";
 import type { ProfileData } from "@/lib/profile";
 import { recordUsage } from "@/lib/usage-data";
 
@@ -27,8 +23,7 @@ export const AI_PROVIDER_MISSING = "Choose an AI provider in Settings → AI pro
 /** Why postings can't be scored, in words, or null when the chosen scorer is set up. */
 export async function scoringProblem(config?: ScoringConfig): Promise<string | null> {
   const settled = config ?? (await loadScoringConfig());
-  if (settled.scorer === "JEV") return jevKey(settled).problem;
-  return (await isAiConfigured()) ? null : AI_PROVIDER_MISSING;
+  return jevKey(settled).problem;
 }
 
 /**
@@ -37,17 +32,7 @@ export async function scoringProblem(config?: ScoringConfig): Promise<string | n
  */
 export async function loadPostingScorer(): Promise<PostingScorer> {
   const config = await loadScoringConfig();
-  if (config.scorer === "JEV") {
-    const jev = jevKey(config);
-    if (jev.problem !== null) throw AiError.config(jev.problem);
-    const { key } = jev;
-    return (posting, profile, signal) => scoreWithJev(posting, profile, { key, signal, onUsage: recordUsage });
-  }
-  if (!(await isAiConfigured())) throw AiError.config(AI_PROVIDER_MISSING);
-  const [provider, options] = await Promise.all([getAiProvider(), loadTaskOptions()]);
-  return async (posting, profile, signal) => {
-    const { title, company, place, remote, salary } = posting;
-    const { data, promptVersion } = await scorePosting(provider, { posting: postingText(posting), title, company, place, remote, salary, profile }, { ...options, signal });
-    return { data, scoredWith: promptVersion };
-  };
+  const jev = jevKey(config);
+  if (jev.problem !== null) throw AiError.config(jev.problem);
+  return (posting, profile, signal) => scoreWithJev(posting, profile, { key: jev.key, signal, onUsage: recordUsage });
 }

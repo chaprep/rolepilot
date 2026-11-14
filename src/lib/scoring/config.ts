@@ -1,7 +1,7 @@
 import "server-only";
 
 import { env, type Env } from "@/lib/env";
-import { decryptSecret, SecretUnreadable, TYPESAFE_KEY } from "@/lib/secrets";
+import { resolveAiConfig, keyStateOf } from "@/lib/ai/config";
 import type { SettingsData } from "@/lib/settings";
 import { loadSettings } from "@/lib/settings-data";
 
@@ -19,24 +19,14 @@ export type ScoringConfig = {
   keyState: ScoringKeyState;
 };
 
-const FROM_ENV: Record<NonNullable<Env["DOSSIER_SCORER"]>, Scorer> = { ai: "AI", jev: "JEV" };
-
 export function resolveScoringConfig(
-  saved: Pick<SettingsData, "scorer" | "typesafeKeyEnc">,
-  source: Pick<Env, "DOSSIER_SCORER" | "DOSSIER_TYPESAFE_KEY">,
-  secret?: string,
+  saved: Pick<SettingsData, "scorer" | "typesafeKeyEnc"> & Partial<SettingsData>,
+  source: Partial<Env>, secret?: string,
 ): ScoringConfig {
-  const scorer = saved.scorer ?? (source.DOSSIER_SCORER ? FROM_ENV[source.DOSSIER_SCORER] : "AI");
-  const choice = { scorer, saved: saved.scorer !== null };
-  if (saved.typesafeKeyEnc) {
-    try {
-      return { ...choice, key: decryptSecret(TYPESAFE_KEY, saved.typesafeKeyEnc, secret), keyState: "set" };
-    } catch (error) {
-      if (!(error instanceof SecretUnreadable)) throw error;
-      return { ...choice, key: null, keyState: "unreadable" };
-    }
-  }
-  return source.DOSSIER_TYPESAFE_KEY ? { ...choice, key: source.DOSSIER_TYPESAFE_KEY, keyState: "env" } : { ...choice, key: null, keyState: "none" };
+  const config = resolveAiConfig({ provider: saved.provider ?? null, baseUrl: saved.baseUrl ?? null,
+    model: saved.model ?? null, apiKeyEnc: saved.apiKeyEnc ?? null }, source as Env, secret);
+  return { scorer: "JEV", saved: true, key: config.apiKey,
+    keyState: keyStateOf(saved as SettingsData, config) };
 }
 
 /** The scoring configuration in effect right now. */

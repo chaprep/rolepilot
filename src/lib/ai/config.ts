@@ -1,14 +1,14 @@
 import "server-only";
 
+import { LUNA, OPENROUTER_URL } from "./assignments";
 import { AiProvider } from "@/generated/prisma/enums";
 import { env, type Env } from "@/lib/env";
 import { loadSettings } from "@/lib/settings-data";
 
-import { API_KEY_UNREADABLE, ApiKeyUnreadable, apiKeyState, decryptApiKey } from "./api-key";
+import { API_KEY_UNREADABLE, ApiKeyUnreadable, decryptApiKey } from "./api-key";
 import type { AiSettingsView, KeyState } from "./provider-options";
 
-// Which provider to use and how to reach it (E6-1): what's saved in Settings,
-// or else the DOSSIER_AI_* variables, or else the defaults below.
+// Fixed OpenRouter connection; legacy provider adapters remain available internally.
 
 export type AiConfig = {
   provider: AiProvider;
@@ -30,14 +30,6 @@ export const PROVIDER_DEFAULTS: Record<AiProvider, { baseUrl: string; model: str
   [AiProvider.LMSTUDIO]: { baseUrl: "http://host.docker.internal:1234", model: null, timeoutSeconds: 300 },
 };
 
-const FROM_ENV: Record<NonNullable<Env["DOSSIER_AI_PROVIDER"]>, AiProvider> = {
-  local: AiProvider.LOCAL,
-  openai: AiProvider.OPENAI,
-  anthropic: AiProvider.ANTHROPIC,
-  mistral: AiProvider.MISTRAL,
-  lmstudio: AiProvider.LMSTUDIO,
-};
-
 type SavedSettings = {
   provider: AiProvider | null;
   baseUrl: string | null;
@@ -50,37 +42,26 @@ type AiEnv = Pick<
   "DOSSIER_AI_PROVIDER" | "DOSSIER_AI_URL" | "DOSSIER_AI_MODEL" | "DOSSIER_AI_KEY" | "DOSSIER_AI_TIMEOUT_SECONDS"
 >;
 
-/**
- * Settings win once a provider is saved there; until then the environment
- * decides. The two are never mixed, except that an env key still serves a
- * saved provider of the same kind that has no key of its own.
- */
-export function resolveAiConfig(saved: SavedSettings | null, source: AiEnv, secret?: string): AiConfig {
-  const envProvider = source.DOSSIER_AI_PROVIDER ? FROM_ENV[source.DOSSIER_AI_PROVIDER] : null;
-  const useSaved = Boolean(saved?.provider);
-  const provider = (useSaved ? saved!.provider : envProvider) ?? AiProvider.LOCAL;
-  const defaults = PROVIDER_DEFAULTS[provider];
+/** A saved credential is reused only when it belongs to OpenRouter. */
+function savedOpenRouter(saved: { provider: AiProvider | null; baseUrl?: string | null } | null): boolean {
+  return saved?.provider === AiProvider.OPENAI && Boolean(saved.baseUrl && URL.canParse(saved.baseUrl) && new URL(saved.baseUrl).hostname === "openrouter.ai");
+}
 
+export function resolveAiConfig(saved: SavedSettings | null, source: AiEnv, secret?: string): AiConfig {
+  const useSaved = savedOpenRouter(saved);
   let apiKey: string | null = null;
   let apiKeyProblem: string | null = null;
-  if (useSaved && saved!.apiKeyEnc) {
-    try {
-      apiKey = decryptApiKey(saved!.apiKeyEnc, secret);
-    } catch (error) {
+  if (useSaved && saved?.apiKeyEnc) {
+    try { apiKey = decryptApiKey(saved.apiKeyEnc, secret); }
+    catch (error) {
       if (!(error instanceof ApiKeyUnreadable)) throw error;
       apiKeyProblem = API_KEY_UNREADABLE;
     }
-  } else if (!useSaved || envProvider === provider) {
-    apiKey = source.DOSSIER_AI_KEY ?? null;
-  }
-
+  } else { apiKey = source.DOSSIER_AI_KEY ?? null; }
   return {
-    provider,
-    baseUrl: (useSaved ? saved!.baseUrl : source.DOSSIER_AI_URL) || defaults.baseUrl,
-    model: (useSaved ? saved!.model : source.DOSSIER_AI_MODEL) || defaults.model,
-    apiKey,
-    apiKeyProblem,
-    timeoutMs: (source.DOSSIER_AI_TIMEOUT_SECONDS ?? defaults.timeoutSeconds) * 1000,
+    provider: AiProvider.OPENAI, baseUrl: OPENROUTER_URL, model: LUNA,
+    apiKey, apiKeyProblem,
+    timeoutMs: (source.DOSSIER_AI_TIMEOUT_SECONDS ?? 120) * 1000,
   };
 }
 
@@ -105,27 +86,16 @@ export async function loadAiSettingsView(): Promise<AiSettingsView> {
 }
 
 /** Whether a key is in play for the provider in effect, and where it comes from. */
-export function keyStateOf(saved: { provider: AiProvider | null; apiKeyEnc: string | null } | null, config: AiConfig): KeyState {
-  if (saved?.provider && saved.apiKeyEnc) return apiKeyState(saved.apiKeyEnc);
+export function keyStateOf(saved: { provider: AiProvider | null; apiKeyEnc: string | null; baseUrl?: string | null } | null, config: AiConfig): KeyState {
+  if (config.apiKeyProblem) return "unreadable";
+  if (config.apiKey && saved?.apiKeyEnc && savedOpenRouter(saved)) return "set";
   return config.apiKey ? "env" : "none";
 }
 
-/** Whether an AI provider has been chosen, in Settings or with DOSSIER_AI_PROVIDER. */
+/** Whether the shared OpenRouter credential is usable. */
 export async function isAiConfigured(): Promise<boolean> {
-  if (env.DOSSIER_AI_PROVIDER) return true;
-  return Boolean((await loadSettings()).provider);
+  const config = await loadAiConfig();
+  return Boolean(config.apiKey) && !config.apiKeyProblem;
 }
 
-/**
- * Whether Dossier's own AI model can be called: a provider with its model,
- * and a key for the hosted ones that always need one. Without it, and with
- * the Claude connector on, the AI buttons hand the work to Claude chat
- * (src/lib/connector/handoff.ts, #221).
- */
-export async function isAiUsable(): Promise<boolean> {
-  if (!(await isAiConfigured())) return false;
-  const config = await loadAiConfig();
-  if (!config.model || config.apiKeyProblem) return false;
-  const needsKey = config.provider === AiProvider.ANTHROPIC || config.provider === AiProvider.MISTRAL;
-  return !needsKey || Boolean(config.apiKey);
-}
+export async function isAiUsable(): Promise<boolean> { return isAiConfigured(); }

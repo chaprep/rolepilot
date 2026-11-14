@@ -56,7 +56,7 @@ export const matchRequirements: Task<MatchInput, Match> = async (provider, { req
         schema: answerSchema,
         schemaName: "requirement_matches",
         creativity: "FAITHFUL",
-        effort: "low",
+        effort: "medium",
         signal,
       })
     : { matches: [] };

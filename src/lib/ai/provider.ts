@@ -109,10 +109,10 @@ export abstract class BaseProvider implements AIProvider {
   complete(request: CompletionRequest): Promise<string>;
   complete<T>(request: JsonCompletionRequest<T>): Promise<T>;
   async complete<T>(request: CompletionRequest | JsonCompletionRequest<T>): Promise<string | T> {
-    const model = this.requireModel();
+    const model = this.modelForTask(request.task);
     const schema = "schema" in request ? request.schema : undefined;
     const schemaName = ("schemaName" in request && request.schemaName) || "result";
-    const used = (tokens: TokenCount) => this.onUsage?.({ task: request.task, provider: this.kind, model, ...tokens });
+    const used = (tokens: TokenCount) => this.onUsage?.({ task: request.task, provider: this.usageProvider(), model, ...tokens });
     const call = (messages: ChatMessage[]) =>
       this.guard(model, request.signal, (signal) =>
         this.chat({
@@ -120,7 +120,7 @@ export abstract class BaseProvider implements AIProvider {
           system: request.system,
           messages,
           temperature: request.creativity && this.acceptsTemperature() ? TEMPERATURES[request.creativity] : undefined,
-          effort: request.effort,
+          effort: this.effortForRequest(request),
           json: schema ? { schema, name: schemaName } : undefined,
           maxTokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
           signal,
@@ -169,6 +169,12 @@ export abstract class BaseProvider implements AIProvider {
     });
     return { model, latencyMs: Math.round(performance.now() - started) };
   }
+
+  protected usageProvider(): string { return this.kind; }
+
+  protected modelForTask(task: UsageTask): string { void task; return this.requireModel(); }
+
+  protected effortForRequest(request: CompletionRequest): Effort | undefined { return request.effort; }
 
   private requireModel(): string {
     if (!this.model) throw AiError.config("Choose a model in Settings → AI provider first.");

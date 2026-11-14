@@ -11,7 +11,6 @@ import { SCORER_INFO } from "@/lib/scoring/scorers";
 import { jobRetentionLabel } from "@/lib/settings";
 import { loadScoringConfig, scoringView } from "@/lib/scoring/config";
 import { providerOption } from "@/lib/ai/provider-options";
-import { env } from "@/lib/env";
 import { redirectUri } from "@/lib/google/oauth";
 import { loadSettings } from "@/lib/settings-data";
 import { googleClientView, googleView, requestOrigin } from "@/lib/settings-views";
@@ -20,7 +19,7 @@ import { googleAddressProblem } from "@/lib/setup/google";
 import { setupHref, setupStepFromParam } from "@/lib/setup-guide";
 
 import { ProfileImport } from "../../(app)/profile/import/profile-import";
-import { AiStep } from "./ai-step";
+import { AiProviderSection } from "../../(app)/settings/ai-provider-section";
 import { GoogleStep } from "./google-step";
 import { JobsStep } from "./jobs-step";
 import { ScoringStep } from "./scoring-step";
@@ -114,23 +113,14 @@ export default async function WelcomePage({ searchParams }: PageProps<"/welcome"
 
   if (step === "ai") {
     const [usable, view] = await Promise.all([isAiUsable(), loadAiSettingsView()]);
-    const choice = choiceOf(view.provider, view.baseUrl);
     return (
       <SetupFrame
         step="ai"
-        title="Choose an AI"
+        title="Connect OpenRouter"
         complete={usable}
-        lead="It reads job postings and writes your resumes and cover letters. Pick what matters most to you, and the guide shows you where to go, what to click and what to copy back here."
+        lead="Add your OpenRouter API key. Luna reads postings and handles emails, Sonnet writes documents, and Jev scores job fit."
       >
-        <AiStep
-          current={{
-            usable,
-            name: choice ? aiChoice(choice).name : providerOption(view.provider).name,
-            model: view.model,
-            choice,
-            fromEnv: !settings.provider && Boolean(env.DOSSIER_AI_PROVIDER),
-          }}
-        />
+        <AiProviderSection initial={view} />
       </SetupFrame>
     );
   }

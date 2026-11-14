@@ -40,12 +40,12 @@ afterEach(() => {
 });
 
 describe("askJev (#274)", () => {
-  it("asks TypeSafe's System One API with the key, and returns the answers", async () => {
+  it("asks OpenRouter's System One API with the key, and returns the answers", async () => {
     const fetchImpl = fakeFetch(json({ ...answer, usage: { input_tokens: 42, output_tokens: 3 } }));
-    expect(await ask(fetchImpl)).toEqual(answered);
+    expect(await ask(fetchImpl)).toEqual({ ...answered, usage: { input_tokens: 42, output_tokens: 3 } });
 
     const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(url).toBe("https://openrouter.ai/api/v1/systemone");
     expect(init).toMatchObject({ method: "POST", redirect: "error", cache: "no-store" });
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer ts-key");
     expect(JSON.parse(String(init?.body))).toEqual({ model: JEV_MODEL, ...request });
@@ -55,8 +55,8 @@ describe("askJev (#274)", () => {
     expect(await ask(fakeFetch(json({}, 429), json({}, 529), json(answered)))).toEqual(answered);
 
     const limited = await failure(ask(fakeFetch(json({}, 429), json({}, 429), json({}, 429))));
-    expect(limited).toMatchObject({ kind: "rate-limited", message: "TypeSafe is limiting requests right now. Wait a minute and try again.", detail: "TypeSafe 429" });
-    expect(await failure(ask(fakeFetch(json({}, 529)), { retryDelaysMs: [] }))).toMatchObject({ kind: "busy", message: "TypeSafe is overloaded right now. Try again in a moment." });
+    expect(limited).toMatchObject({ kind: "rate-limited", message: "OpenRouter is limiting requests right now. Wait a minute and try again.", detail: "OpenRouter 429" });
+    expect(await failure(ask(fakeFetch(json({}, 529)), { retryDelaysMs: [] }))).toMatchObject({ kind: "busy", message: "OpenRouter is overloaded right now. Try again in a moment." });
   });
 
   it("waits as long as Retry-After asks, within ten seconds", async () => {
@@ -70,15 +70,15 @@ describe("askJev (#274)", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("fails at once on anything else, without showing TypeSafe's own message", async () => {
+  it("fails at once on anything else, without showing OpenRouter's own message", async () => {
     const cases: [Response, string, string][] = [
-      [json({ detail: "bad key ts-k***" }, 401), "auth", "TypeSafe didn't accept the key. Check it in Settings → Scoring."],
-      [json({}, 403), "auth", "TypeSafe didn't accept the key. Check it in Settings → Scoring."],
+      [json({ detail: "bad key ts-k***" }, 401), "auth", "OpenRouter didn't accept the key. Check it in Settings → AI provider."],
+      [json({}, 403), "auth", "OpenRouter didn't accept the key. Check it in Settings → AI provider."],
       [json({ error: "max_tokens_exceeded" }, 400), "too-long", "The posting and your profile are more than Jev can read at once. Try a shorter posting."],
       [json({}, 413), "too-long", "The posting and your profile are more than Jev can read at once. Try a shorter posting."],
-      [json({ detail: [{ loc: ["questions"] }] }, 422), "provider", "TypeSafe couldn't score this posting. Try again in a moment."],
-      [json({}, 400), "provider", "TypeSafe couldn't score this posting. Try again in a moment."],
-      [json({}, 500), "provider", "TypeSafe couldn't score this posting. Try again in a moment."],
+      [json({ detail: [{ loc: ["questions"] }] }, 422), "provider", "OpenRouter couldn't score this posting. Try again in a moment."],
+      [json({}, 400), "provider", "OpenRouter couldn't score this posting. Try again in a moment."],
+      [json({}, 500), "provider", "OpenRouter couldn't score this posting. Try again in a moment."],
     ];
     for (const [response, kind, message] of cases) {
       const fetchImpl = fakeFetch(response);
@@ -89,8 +89,8 @@ describe("askJev (#274)", () => {
     }
   });
 
-  it("says when TypeSafe can't be reached, was cancelled or took too long", async () => {
-    expect(await failure(ask(fakeFetch(new TypeError("fetch failed"))))).toMatchObject({ kind: "unreachable", message: "Couldn't reach TypeSafe. Check that the server can reach the internet." });
+  it("says when OpenRouter can't be reached, was cancelled or took too long", async () => {
+    expect(await failure(ask(fakeFetch(new TypeError("fetch failed"))))).toMatchObject({ kind: "unreachable", message: "Couldn't reach OpenRouter. Check that the server can reach the internet." });
 
     const controller = new AbortController();
     controller.abort();
@@ -98,7 +98,7 @@ describe("askJev (#274)", () => {
 
     const hanging: typeof fetch = (_url, init) =>
       new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("timed out", "TimeoutError"))));
-    expect(await failure(ask(hanging, { timeoutMs: 5 }))).toMatchObject({ kind: "timeout", message: "TypeSafe took too long to answer. Try again." });
+    expect(await failure(ask(hanging, { timeoutMs: 5 }))).toMatchObject({ kind: "timeout", message: "OpenRouter took too long to answer. Try again." });
   });
 
   it("stops waiting to try again when cancelled", async () => {

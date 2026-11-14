@@ -88,9 +88,9 @@ export const extractProfile: Task<{ resume: string; today?: Date }, ImportedProf
     messages: [{ role: "user", content: resumeForPrompt(resume) }],
     schema: answerSchema,
     schemaName: "extracted_profile",
-    // Reading, not writing: a long think before answering only makes it slow.
+    // OpenRouter tasks use the fixed medium reasoning policy.
     creativity: "FAITHFUL",
-    effort: "low",
+    effort: "medium",
     signal,
   });
   return { data: checkedProfile(answer, resume, today), promptVersion: EXTRACT_PROFILE_VERSION };

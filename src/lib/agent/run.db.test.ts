@@ -1,3 +1,4 @@
+import { AiError } from "@/lib/ai/errors";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { json, stubFetch } from "@/lib/ai/test-http";
@@ -5,7 +6,7 @@ import { demoProfile } from "@/lib/demo-profile";
 import type { FoundPosting, SearchQuery } from "@/lib/job-search/search";
 import type { JobContext } from "@/lib/jobs/runner";
 import { sweepFinishedJobs } from "@/lib/jobs/retention";
-import { encryptSecret, TYPESAFE_KEY } from "@/lib/secrets";
+import { encryptApiKey } from "@/lib/ai/api-key";
 import { saveSettings, loadSettings } from "@/lib/settings-data";
 import { createTestClient, resetDatabase } from "@/test/db";
 
@@ -66,7 +67,12 @@ vi.mock("@/lib/job-search/config", () => ({
   credentialsFor: () => ({ key: "jsearch-key", host: "openwebninja" }),
   requestContext: () => ({}),
 }));
-vi.mock("@/lib/ai/config", () => ({ isAiConfigured: async () => fake.ai }));
+vi.mock("@/lib/ai/config", async (original) => {
+ const actual = await original<typeof import("@/lib/ai/config")>();
+ return { ...actual, isAiConfigured: async () => fake.ai,
+ resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
+ actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: fake.ai ? "router-test" : undefined},secret) };
+});
 vi.mock("@/lib/ai", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ai")>()),
   getAiProvider: async () =>
@@ -286,10 +292,10 @@ describe("runAgentScan (E16-3)", () => {
   it("scores with Jev when Settings → Scoring chose it, without an AI provider (#274)", async () => {
     fake.ai = false;
     await saveSettings({ scorer: "JEV" });
-    expect(await runAgentScan({ manual: false }, context(), now)).toMatchObject({ found: 0, message: "Enter your TypeSafe key in Settings → Scoring first." });
+    expect(await runAgentScan({ manual: false }, context(), now)).toMatchObject({ found: 0, message: "Enter your OpenRouter key in Settings → AI provider first." });
     expect(fake.searches).toBe(0);
 
-    await saveSettings({ typesafeKeyEnc: encryptSecret(TYPESAFE_KEY, "ts_secret") });
+    await saveSettings({ provider: "OPENAI", baseUrl: "https://openrouter.ai/api/v1", apiKeyEnc: encryptApiKey("ts_secret") });
     // Jev at its most sure: every Score at the top for a designer's posting and at the bottom otherwise.
     const requests = stubFetch(({ body }) => {
       const { questions, state } = body as { questions: Record<string, { type: string; criteria?: unknown[] }>; state: { posting: { title: string } } };
@@ -359,7 +365,7 @@ describe("runAgentScan (E16-3)", () => {
     expect(await stop()).toBe("Choose a country for “My search” in Settings → Job agent first.");
     await prisma().agentSearch.update({ where: { id: search.id }, data: { query } });
     fake.ai = false;
-    expect(await stop()).toBe("Choose an AI provider in Settings → AI provider first.");
+    expect(await stop()).toBe("Enter your OpenRouter key in Settings → AI provider first.");
     fake.ai = true;
     fake.source = null;
     expect(await stop()).toBe("Choose a job source in Settings → Job search first.");
@@ -438,4 +444,14 @@ describe("runAgentScan (E16-3)", () => {
     expect((await runAgentScan({ manual: false }, context(), now)).message).toBe("Scored 1 new posting; none reached your minimum score of 70.");
     expect(demoProfile().basics.name).toBe("Jane Doe");
   });
+});
+
+vi.mock("@/lib/scoring/jev", async (original) => {
+ const actual = await original<typeof import("@/lib/scoring/jev")>();
+ return {...actual, scoreWithJev: async (...args: Parameters<typeof actual.scoreWithJev>) => {
+ if (!fake.ai) return actual.scoreWithJev(...args);
+ const title=args[0].title; fake.onScore(title);
+ if(title===fake.failOn) throw AiError.of("invalid-output");
+ return {data:{score:/senior/i.test(title)?90:/designer/i.test(title)?75:40,reasons:[`Fits ${title}.`],redFlags:[]},scoredWith:"score-posting-jev@1"};
+ }};
 });

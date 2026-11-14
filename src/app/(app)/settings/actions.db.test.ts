@@ -8,7 +8,7 @@ import { createTestClient, resetDatabase } from "@/test/db";
 import { seedBuiltIns } from "../../../../prisma/seed/built-ins";
 
 import { json, stubFetch } from "@/lib/ai/test-http";
-import { decryptSecret, JOB_SOURCE_KEY, TYPESAFE_KEY } from "@/lib/secrets";
+import { decryptSecret, JOB_SOURCE_KEY } from "@/lib/secrets";
 import { clearJobSearchCache } from "@/lib/job-search/cache";
 import { jsearchV2LastPage } from "@/test/job-search-fixtures";
 
@@ -60,23 +60,12 @@ beforeEach(async () => {
 });
 afterAll(() => prisma().$disconnect());
 
-describe("saveAiProvider", () => {
-  it("saves the provider, address and model (SET-1)", async () => {
-    expect(await saveAiProvider({ provider: "LOCAL", baseUrl: " http://ollama:11434 ", model: "qwen2.5:3b" })).toEqual({
-      ok: true,
-      data: { keyState: "none" },
-    });
-    expect(await settings()).toMatchObject({ provider: "LOCAL", baseUrl: "http://ollama:11434", model: "qwen2.5:3b" });
-  });
-
-  it("removes the key when the provider changes, so it never reaches another server", async () => {
-    await saveAiProvider({ provider: "ANTHROPIC", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-5" });
-    await saveApiKey({ provider: "ANTHROPIC", change: { action: "set", value: "sk-ant-secret" } });
-    await saveAiProvider({ provider: "ANTHROPIC", baseUrl: "https://api.anthropic.com", model: "claude-opus-5-5" });
-    expect((await settings()).apiKeyEnc).not.toBeNull();
-    expect(await saveAiProvider({ provider: "OPENAI", baseUrl: "https://llm.example/v1", model: "" })).toMatchObject({ data: { keyState: "none" } });
-    expect(await settings()).toMatchObject({ provider: "OPENAI", model: null, apiKeyEnc: null });
-  });
+describe("fixed AI settings", () => {
+ it("rejects provider changes without overwriting saved data", async () => {
+  const before=await settings();
+  expect(await saveAiProvider({provider:"LOCAL",baseUrl:"http://localhost",model:"other"})).toMatchObject({ok:false});
+  expect(await settings()).toEqual(before);
+ });
 });
 
 describe("saveApiKey", () => {
@@ -92,7 +81,7 @@ describe("saveApiKey", () => {
 
   it("saves the provider too when it only came from the environment", async () => {
     await saveApiKey({ provider: "ANTHROPIC", change: { action: "set", value: "sk-ant" } });
-    expect(await settings()).toMatchObject({ provider: "ANTHROPIC" });
+    expect(await settings()).toMatchObject({ provider: "OPENAI" });
   });
 
   it("removes the key only when asked", async () => {
@@ -239,32 +228,24 @@ describe("job search settings (E14-4)", () => {
 });
 
 describe("scoring settings (#274)", () => {
-  it("saves the scorer, and the TypeSafe key encrypted for it only", async () => {
-    expect(await saveScorer({ scorer: "JEV" })).toEqual({ ok: true, data: { scorer: "JEV", keyState: "none" } });
-    expect(await saveTypesafeKey({ change: { action: "set", value: " ts_secret " } })).toEqual({ ok: true, data: { scorer: "JEV", keyState: "set" } });
-    const saved = await settings();
-    expect(saved.scorer).toBe("JEV");
-    expect(saved.typesafeKeyEnc).not.toContain("ts_secret");
-    expect(decryptSecret(TYPESAFE_KEY, saved.typesafeKeyEnc!)).toBe("ts_secret");
-    expect(() => decryptSecret(JOB_SOURCE_KEY, saved.typesafeKeyEnc!)).toThrow();
-
-    expect(await saveTypesafeKey({ change: { action: "clear" } })).toEqual({ ok: true, data: { scorer: "JEV", keyState: "none" } });
+  it("rejects legacy scorer and TypeSafe key changes", async () => {
+    expect(await saveScorer({scorer:"AI"})).toMatchObject({ok:false});
+    expect(await saveTypesafeKey({change:{action:"set",value:"old"}})).toMatchObject({ok:false});
     expect((await settings()).typesafeKeyEnc).toBeNull();
-    expect(await saveScorer({ scorer: "AI" })).toMatchObject({ ok: true, data: { scorer: "AI" } });
   });
 
   it("tests Jev with the saved key, with one short question", async () => {
-    expect(await testJev({})).toEqual({ ok: true, data: { connected: false, message: "Enter your TypeSafe key in Settings → Scoring first." } });
+    expect(await testJev({})).toEqual({ ok: true, data: { connected: false, message: "Enter your OpenRouter key in Settings → AI provider first." } });
 
-    await saveTypesafeKey({ change: { action: "set", value: "ts_secret" } });
+    await saveApiKey({provider:"OPENAI",change:{action:"set",value:"ts_secret"}});
     const requests = stubFetch(() => json({ model: "jev-1.14.0", answers: { check: { type: "noul", noul: 0.98 } } }));
     expect(await testJev({})).toEqual({ ok: true, data: { connected: true, model: "jev-1.14.0", seconds: expect.any(Number) } });
-    expect(requests[0].url.href).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(requests[0].url.href).toBe("https://openrouter.ai/api/v1/systemone");
     expect(requests[0].headers.get("authorization")).toBe("Bearer ts_secret");
-    expect(requests[0].body).toMatchObject({ model: "jev-latest", questions: { check: { type: "noul" } } });
+    expect(requests[0].body).toMatchObject({ model: "typesafe/jev-1.14", questions: { check: { type: "noul" } } });
 
     stubFetch(() => json({}, { status: 401 }));
-    expect(await testJev({})).toEqual({ ok: true, data: { connected: false, message: "TypeSafe didn't accept the key. Check it in Settings → Scoring." } });
+    expect(await testJev({})).toEqual({ ok: true, data: { connected: false, message: "OpenRouter didn't accept the key. Check it in Settings → AI provider." } });
     vi.unstubAllGlobals();
   });
 });

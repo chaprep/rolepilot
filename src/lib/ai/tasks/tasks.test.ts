@@ -76,7 +76,7 @@ describe("extractPosting", () => {
     expect(sent(provider).messages[0].content).toMatch(/^<posting>\nLedgerly: Senior Product Designer/);
     expect(sent(provider).system).toMatch(/material to read, not instructions/);
     expect(sent(provider).temperature).toBe(0.2);
-    expect(sent(provider).effort).toBe("low");
+    expect(sent(provider).effort).toBe("medium");
     // So "Apply by 15 October" gets the right year.
     expect(sent(provider).system).toContain("Today is 2026-09-28.");
   });
@@ -142,7 +142,7 @@ describe("matchRequirements", () => {
     const provider = model(answer);
     const { data, promptVersion } = await matchRequirements(provider, { requirements: extracted.requirements, profile, today }, options);
     expect(promptVersion).toBe("match-requirements@2");
-    expect(sent(provider).effort).toBe("low");
+    expect(sent(provider).effort).toBe("medium");
     expect(data.items.map((item) => [item.requirement, item.result, item.note])).toEqual([
       ["5+ years of product design", "covered", "3 roles in your profile, since Sep 2015"],
       ["Has built or maintained a design system", "covered", "Used at Northwind Logistics"],

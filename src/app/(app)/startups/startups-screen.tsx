@@ -336,7 +336,7 @@ function StartupCard({ startup: initial, headline, aiReady, today }: { startup: 
           </Link>
         ) : !blocked ? (
           <Link href="/settings?section=ai" className="text-meta text-muted underline underline-offset-2 hover:text-ink">
-            Choose an AI provider to write an application
+            Connect OpenRouter to write an application
           </Link>
         ) : null}
         {startup.website && !blocked && (
