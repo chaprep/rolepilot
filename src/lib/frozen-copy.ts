@@ -4,14 +4,12 @@ import { z } from "zod";
 
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import {
-  CustomSectionFormat,
   DateFormat,
   DateStyle,
   Density,
   DocumentKind,
   HeaderStyle,
   HeadingStyle,
-  LanguageLevel,
   PaperSize,
   PhotoPosition,
   PhotoShape,
@@ -22,7 +20,8 @@ import {
 } from "@/generated/prisma/enums";
 import { extractedSchema } from "@/lib/application-data";
 import { prisma } from "@/lib/prisma";
-import { BASICS_FIELDS, type Basics, type ProfileData } from "@/lib/profile";
+import type { ProfileData } from "@/lib/profile";
+import { documentProfileSchema } from "@/lib/document-state";
 import { loadProfile } from "@/lib/profile-data";
 import { sectionOfUnit } from "@/lib/resume-sections";
 import { THEME_STYLE_DEFAULTS, BUILT_IN_THEMES, type ThemeData } from "@/lib/themes";
@@ -38,52 +37,6 @@ import { THEME_FIELDS } from "@/lib/theme-data";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-const text = z.string().default("");
-const list = <T extends z.ZodType>(item: T) => z.array(item).default([]);
-const when = { startYear: z.number().nullable().default(null), startMonth: z.number().nullable().default(null), endYear: z.number().nullable().default(null), endMonth: z.number().nullable().default(null), current: z.boolean().default(false) };
-
-/**
- * The profile as a copy holds it. Every field has a default, so a copy made
- * by an older version keeps reading when the profile gains a field: add new
- * fields here, with one. `satisfies` below fails the build otherwise.
- */
-const frozenProfileSchema = z.object({
-  basics: z.record(z.string(), z.unknown()).transform((raw): Basics => ({
-    ...(Object.fromEntries(BASICS_FIELDS.map((field) => [field, typeof raw[field] === "string" ? raw[field] : ""])) as Record<(typeof BASICS_FIELDS)[number], string>),
-    showAge: raw.showAge === true,
-  })),
-  skills: list(z.object({ id: z.string(), name: text, group: text })),
-  languages: list(z.object({ id: z.string(), name: text, level: z.enum(LanguageLevel) })),
-  experience: list(z.object({ id: z.string(), role: text, company: text, location: text, descriptor: text, volunteering: z.boolean().default(false), bullets: text, skillIds: z.array(z.string()).default([]), ...when })),
-  projects: list(z.object({ id: z.string(), name: text, link: text, bullets: text, skillIds: z.array(z.string()).default([]), ...when })),
-  education: list(z.object({ id: z.string(), degree: text, school: text, notes: text, ...when })),
-  certifications: list(
-    z.object({
-      id: z.string(),
-      name: text,
-      issuer: text,
-      year: z.number().nullable().default(null),
-      month: z.number().nullable().default(null),
-      expiryYear: z.number().nullable().default(null),
-      expiryMonth: z.number().nullable().default(null),
-      credentialId: text,
-      link: text,
-      onResumes: z.boolean().default(true),
-    }),
-  ),
-  publications: list(z.object({ id: z.string(), citation: text, link: text, onResumes: z.boolean().default(true) })),
-  references: list(z.object({ id: z.string(), name: text, relation: text, company: text, email: text, phone: text })),
-  customSections: list(
-    z.object({
-      id: z.string(),
-      title: text,
-      format: z.enum(CustomSectionFormat),
-      items: list(z.object({ id: z.string(), title: text, subtitle: text, details: text, link: text, onResumes: z.boolean().default(true), ...when })),
-    }),
-  ),
-  facts: list(z.object({ id: z.string(), text })),
-}) satisfies z.ZodType<Omit<ProfileData, "photo">, unknown>;
-
 /** A theme as a copy holds it. One that no longer reads gives way to the document's own. */
 const frozenTheme = z
   .object({
@@ -97,6 +50,8 @@ const frozenTheme = z
     align: z.enum(ThemeAlign),
     headingStyle: z.enum(HeadingStyle),
     density: z.enum(Density),
+    marginXmm: z.number().nullable().optional(),
+    marginYmm: z.number().nullable().optional(),
     headerStyle: z.enum(HeaderStyle).default(THEME_STYLE_DEFAULTS.headerStyle),
     sidebarStyle: z.enum(SidebarStyle).default(THEME_STYLE_DEFAULTS.sidebarStyle),
     dateStyle: z.enum(DateStyle).default(THEME_STYLE_DEFAULTS.dateStyle),
@@ -107,7 +62,7 @@ const frozenTheme = z
   .catch(null) satisfies z.ZodType<ThemeData | null, unknown>;
 
 export const frozenCopySchema = z.object({
-  profile: frozenProfileSchema,
+  profile: documentProfileSchema,
   themes: z.object({ RESUME: frozenTheme, COVER_LETTER: frozenTheme }),
   paper: z.enum(PaperSize),
   dateFormat: z.enum(DateFormat),
@@ -152,7 +107,7 @@ async function frozenData(db: Db, applicationId: string, { profile, settings, ba
   const extracted = extractedSchema.safeParse(application.extracted);
   const copy: FrozenCopy = {
     // The schema keeps what it knows, which leaves out the photo.
-    profile: frozenProfileSchema.parse(profile),
+    profile: documentProfileSchema.parse(profile),
     themes: { RESUME: themeOf(DocumentKind.RESUME), COVER_LETTER: themeOf(DocumentKind.COVER_LETTER) },
     paper: settings.paper,
     dateFormat: settings.dateFormat,

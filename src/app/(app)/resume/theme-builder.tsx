@@ -5,7 +5,7 @@ import { useId, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PhotoPosition, ThemeFont } from "@/generated/prisma/enums";
+import { PaperSize, PhotoPosition, ThemeFont } from "@/generated/prisma/enums";
 import { cn } from "@/lib/cn";
 import {
   ACCENTS,
@@ -22,6 +22,8 @@ import {
   accentName,
   hasSidebar,
   readableOnWhite,
+  themeDensity,
+  unitsToMm,
   type ThemeData,
 } from "@/lib/themes";
 
@@ -44,6 +46,7 @@ const FONT_OPTIONS = Object.values(ThemeFont).map((font) => ({
 
 type ThemeBuilderProps = {
   draft: ThemeDraft;
+  paper?: PaperSize;
   onChange: (draft: ThemeDraft) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -51,13 +54,14 @@ type ThemeBuilderProps = {
 };
 
 /** The Customize tab (RES-3): every change shows in the preview as you make it. */
-export function ThemeBuilder({ draft, onChange, onSave, onCancel, saving }: ThemeBuilderProps) {
+export function ThemeBuilder({ draft, paper = PaperSize.A4, onChange, onSave, onCancel, saving }: ThemeBuilderProps) {
   const set = <K extends keyof ThemeDraft>(key: K) => (value: ThemeDraft[K]) => onChange({ ...draft, [key]: value });
   // Minimal's grey and custom colours aren't swatches; keep them on offer while they're the draft's colour.
   const accents = ACCENTS.some((accent) => accent.value === draft.accent)
     ? ACCENTS
     : [{ value: draft.accent, name: accentName(draft.accent) }, ...ACCENTS];
   const split = hasSidebar(draft.layout);
+  const margins = themeDensity(draft, paper);
 
   return (
     <form
@@ -132,6 +136,43 @@ export function ThemeBuilder({ draft, onChange, onSave, onCancel, saving }: Them
       <Choices label="Section titles" value={draft.headingStyle} options={options(HEADING_STYLES)} onChange={set("headingStyle")} />
       <Choices label="Dates" value={draft.dateStyle} options={options(DATE_STYLES)} onChange={set("dateStyle")} />
       <Choices label="Spacing" value={draft.density} options={options(DENSITIES)} onChange={set("density")} />
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-3 text-sm font-medium">Page margins</legend>
+        {([
+          ["marginXmm", "Side margins", margins.paddingX],
+          ["marginYmm", "Top/bottom margins", margins.paddingY],
+        ] as const).map(([key, label, padding]) => {
+          const value = draft[key] ?? Math.round(unitsToMm(padding, paper) * 2) / 2;
+          return (
+            <label key={key} className="flex flex-col gap-2 text-sm">
+              <span className="flex justify-between gap-3">
+                <span>{label}</span>
+                <span className="tabular-nums">{value} mm</span>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={30}
+                step={0.5}
+                value={value}
+                aria-label={label}
+                aria-valuetext={`${value} millimetres`}
+                onChange={(event) => set(key)(Number(event.target.value))}
+                className="w-full accent-ink"
+              />
+            </label>
+          );
+        })}
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={draft.marginXmm == null && draft.marginYmm == null}
+          onClick={() => onChange({ ...draft, marginXmm: null, marginYmm: null })}
+        >
+          Reset margins
+        </Button>
+        <p className="text-xs text-muted">Very small margins may be clipped when printed.</p>
+      </fieldset>
       <div className="flex gap-2 pt-1.5">
         <Button type="submit" className="flex-1" disabled={saving}>
           {saving ? "Saving…" : "Save theme"}

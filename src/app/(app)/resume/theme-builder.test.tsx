@@ -26,6 +26,30 @@ describe("draftFrom", () => {
   });
 });
 
+describe("margin controls", () => {
+  it("shows preset margins and sends explicit half-millimetre changes", () => {
+    const { onChange } = renderBuilder();
+    const sides = screen.getByRole("slider", { name: "Side margins" });
+    expect(sides).toHaveAttribute("min", "0");
+    expect(sides).toHaveAttribute("max", "30");
+    expect(sides).toHaveAttribute("step", "0.5");
+    expect(sides).toHaveValue("17.5");
+    expect(screen.getByRole("button", { name: "Reset margins" })).toBeDisabled();
+    fireEvent.change(sides, { target: { value: "10.5" } });
+    expect(onChange).toHaveBeenCalledWith({ ...draftFrom(editorial), marginXmm: 10.5 });
+    fireEvent.change(screen.getByRole("slider", { name: "Top/bottom margins" }), { target: { value: "0" } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...draftFrom(editorial), marginYmm: 0 });
+  });
+
+  it("shows saved values and resets both overrides", async () => {
+    const { onChange } = renderBuilder({ ...draftFrom(editorial), marginXmm: 0, marginYmm: 30 });
+    expect(screen.getByRole("slider", { name: "Side margins" })).toHaveValue("0");
+    expect(screen.getByRole("slider", { name: "Top/bottom margins" })).toHaveValue("30");
+    await userEvent.click(screen.getByRole("button", { name: "Reset margins" }));
+    expect(onChange).toHaveBeenCalledWith({ ...draftFrom(editorial), marginXmm: null, marginYmm: null });
+  });
+});
+
 describe("ThemeBuilder", () => {
   it("offers every setting, starting from the draft (RES-3)", () => {
     renderBuilder();

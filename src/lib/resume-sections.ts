@@ -63,6 +63,7 @@ export const sectionLayoutSchema = z.object({
   /** Section keys in drawing order; one it doesn't list goes in its usual place (see `arrangedSections`). */
   order: z.array(z.string().max(100)).max(200),
   /** Sections taken off the resume, which keep their content. */
+  side: z.array(z.string().max(100)).max(200).optional(),
   off: z.array(z.string().max(100)).max(200).default([]),
   /** References added to this resume by hand, whatever Settings → "Include references" says. */
   withReferences: z.boolean().optional(),

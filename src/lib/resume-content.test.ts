@@ -3,9 +3,35 @@ import { describe, expect, it } from "vitest";
 import { demoProfile, demoResumeUnits } from "@/lib/demo-profile";
 import type { ProfileData } from "@/lib/profile";
 
-import { contactItems, displayLink, resumeContent, sectionsWithContent } from "./resume-content";
+import { contactItems, displayLink, resumeBody, resumeContent, sectionsWithContent } from "./resume-content";
 
 const today = new Date(2026, 8, 28);
+
+describe("resumeBody", () => {
+  it("keeps paragraphs, explicit bullet lists and their order", () => {
+    expect(resumeBody("Worked on **payments**.\r\nLed the platform team.\r\n\r\n  * Reduced failures.\r\n\t*\tBuilt monitoring.\r\n\r\n\r\nNext paragraph.\n* Last achievement.")).toEqual([
+      { type: "paragraph", text: "Worked on **payments**.\nLed the platform team." },
+      { type: "bullets", items: ["Reduced failures.", "Built monitoring."] },
+      { type: "paragraph", text: "Next paragraph." },
+      { type: "bullets", items: ["Last achievement."] },
+    ]);
+  });
+
+  it("requires an explicit marker and keeps bold and other literal text", () => {
+    expect(resumeBody("**Bold opening**\n*italic*\n*No space\n- Unmarked hyphen\n* **Bold achievement**")).toEqual([
+      { type: "paragraph", text: "**Bold opening**\n*italic*\n*No space\n- Unmarked hyphen" },
+      { type: "bullets", items: ["**Bold achievement**"] },
+    ]);
+  });
+
+  it("ignores empty text and empty bullets, and separates lists at blank lines", () => {
+    expect(resumeBody(" \n\t\n*\n * \n")).toEqual([]);
+    expect(resumeBody("* First\n*\n* Second\n\n* Third")).toEqual([
+      { type: "bullets", items: ["First", "Second"] },
+      { type: "bullets", items: ["Third"] },
+    ]);
+  });
+});
 
 describe("contactItems", () => {
   const { basics } = demoProfile();
@@ -64,6 +90,38 @@ describe("resumeContent", () => {
     });
   });
 
+  it("uses explicit formatting only on the base resume, without modifying the profile", () => {
+    const text = "Platform overview.\n\n* Built **monitoring**.\n* Reduced failures.";
+    const marked = {
+      ...profile,
+      experience: [
+        { ...profile.experience[0], bullets: text },
+        { ...profile.experience[1], volunteering: true, bullets: text },
+      ],
+      projects: [{ ...profile.projects[0], bullets: text }],
+    };
+    const before = structuredClone(marked);
+    const base = resumeContent(marked);
+    const expected = [
+      { type: "paragraph", text: "Platform overview." },
+      { type: "bullets", items: ["Built **monitoring**.", "Reduced failures."] },
+    ];
+    expect(base.experience[0].body).toEqual(expected);
+    expect(base.volunteering[0].body).toEqual(expected);
+    expect(base.projects[0].body).toEqual(expected);
+    const tailored = resumeContent(marked, { units: [
+      { id: "experience:e1", label: "Role", text: "Built monitoring.\nReduced failures." },
+      { id: "experience:e2", label: "Volunteering", text: "Mentored students." },
+      { id: "project:p1", label: "Project", text: "Shipped the tool." },
+    ] });
+    expect(tailored.experience[0].body).toBeUndefined();
+    expect(tailored.experience[0].bullets).toEqual(["Built **monitoring**.", "Reduced failures."]);
+    expect(tailored.volunteering[0].body).toBeUndefined();
+    expect(tailored.projects[0].body).toBeUndefined();
+    expect(tailored.projects[0].bullets).toEqual(["Shipped the tool."]);
+    expect(marked).toEqual(before);
+  });
+
   it("leaves an empty profile empty, apart from a placeholder name", () => {
     const empty: ProfileData = {
       basics: { ...profile.basics, ...Object.fromEntries(Object.keys(profile.basics).map((key) => [key, ""])), showAge: false },
@@ -119,6 +177,7 @@ describe("resumeContent", () => {
         href: "https://github.com/janedoe/tidewater",
         dates: "Jan 2023 – Present",
         bullets: profile.projects[0].bullets.split("\n"),
+        body: [{ type: "paragraph", text: profile.projects[0].bullets }],
         skills: ["Design systems", "Figma", "HTML & CSS"],
       },
     ]);

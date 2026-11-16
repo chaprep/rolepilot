@@ -8,6 +8,7 @@ import { approveCandidate } from "@/lib/agent/draft";
 import { isAiUsable } from "@/lib/ai/config";
 import { profileForPrompt } from "@/lib/ai/tasks/prompt-parts";
 import { scoreFrom } from "@/lib/ai/tasks/score-posting";
+import { readDocumentState } from "@/lib/document-state";
 import { unitsSchema } from "@/lib/application-data";
 import { fitBand } from "@/lib/fit";
 import { countryCodeFor, countryName } from "@/lib/job-search/countries";
@@ -331,11 +332,15 @@ export function createDossierServer(origin: string): McpServer {
           postingUrl: true,
           postingText: true,
           match: true,
-          documents: { select: { kind: true, units: true } },
+          documents: { select: { kind: true, units: true, state: true } },
         },
       });
       if (!application) return failure("That application no longer exists.");
-      const doc = (kind: DocumentKind) => documentText(application.documents.find((document) => document.kind === kind)?.units);
+      const doc = (kind: DocumentKind) => {
+        const row = application.documents.find(document => document.kind === kind);
+        const state = readDocumentState(row?.state);
+        return documentText(row?.units) + (state ? `\n\nCurrent document metadata (contacts omitted):\n${profileForPrompt(withoutSectionsOff(state.profile, state.sections))}` : "");
+      };
       return text({
         id: application.id,
         title: application.title,

@@ -17,6 +17,36 @@ import {
 
 const theme = (id: string) => BUILT_IN_THEMES.find((entry) => entry.id === id)!;
 
+describe("custom page margins", () => {
+  it.each(["A4", "LETTER"] as const)("keeps millimetres consistent in preview and print on %s", (paper) => {
+    const custom = { ...theme("editorial"), marginXmm: 10.5, marginYmm: 8 };
+    const { density } = resolveTheme(custom, undefined, 0, paper);
+    expect(unitsToMm(density.paddingX, paper)).toBe(10.5);
+    expect(unitsToMm(density.paddingY, paper)).toBe(8);
+    expect(printCss(custom, paper)).toContain("margin: 8mm 10.5mm");
+    expect(density.fontSize).toBe(DENSITIES.REGULAR.fontSize);
+    expect(density.gap).toBe(DENSITIES.REGULAR.gap);
+  });
+
+  it("preserves zero and maximum explicit margins through every fit level", () => {
+    const custom = { ...theme("editorial"), marginXmm: 0, marginYmm: 30 };
+    for (let fit = 0; fit <= FIT_LEVELS; fit++) {
+      const { paddingX, paddingY } = resolveTheme(custom, undefined, fit).density;
+      expect(paddingX).toBe(0);
+      expect(unitsToMm(paddingY, "A4")).toBe(30);
+      expect(printCss(custom, "A4", fit)).toContain("margin: 30mm 0mm");
+    }
+  });
+
+  it("keeps legacy defaults and squeezes only the unset margin", () => {
+    const base = theme("editorial");
+    expect(resolveTheme({ ...base, marginXmm: null, marginYmm: null }).density).toEqual(resolveTheme(base).density);
+    const custom = resolveTheme({ ...base, marginXmm: 10 }, undefined, 1).density;
+    expect(custom.paddingY).toBe(squeeze(DENSITIES.REGULAR, 1).paddingY);
+    expect(unitsToMm(custom.paddingX, "A4")).toBe(10);
+  });
+});
+
 describe("resolveTheme", () => {
   it("sizes the name by the heading font", () => {
     expect(resolveTheme(theme("editorial")).name).toEqual({ size: 30, weight: 500 });

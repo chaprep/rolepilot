@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { Tone } from "@/generated/prisma/enums";
 import { useJob } from "@/hooks/use-job";
 import type { DocumentsToWrite } from "@/lib/settings";
-import { withSkillAdded, type Extracted } from "@/lib/application-data";
+import { type ApplicationEvidence, type EvidenceOption, type Extracted } from "@/lib/application-data";
 import type { PostingFit } from "@/lib/fit";
 import { cancel, retry } from "@/lib/jobs/actions";
 import { READ_POSTING_STEPS, WRITE_DOCUMENTS_STEPS } from "@/lib/jobs/application-steps";
@@ -23,7 +23,6 @@ import type { WriteDocumentsResult } from "@/lib/jobs/write-documents";
 
 import { openPendingTab, sendPendingTab } from "@/lib/claude-tab";
 
-import { addSkill } from "../profile/actions";
 
 import { createApplication, fetchPostingText, handOffToClaude, startReadingPosting, startScoringPosting, startWritingDocuments } from "./actions";
 import { DetailsCard } from "./details-card";
@@ -59,6 +58,7 @@ export type Draft = {
   details: Details;
   tone: Tone;
   note: string;
+  evidence?: ApplicationEvidence[];
   /** Which documents to write (#367); missing in drafts from before, which wrote both. */
   write?: DocumentsToWrite;
   writeJobId: string | null;
@@ -140,6 +140,7 @@ function useLeaveGuard(active: boolean, onLeave: () => void) {
 }
 
 export type NewApplicationProps = {
+  evidenceOptions?: EvidenceOption[];
   /** Whether an AI provider is set up; without one, the page points to Settings. */
   aiReady: boolean;
   /** The Claude connector is on and Dossier has no usable AI model: a Claude chat writes it instead (#221). */
@@ -157,7 +158,7 @@ export type NewApplicationProps = {
 };
 
 /** The new application flow (E7): paste → read → review → create. */
-export function NewApplication({
+export function NewApplication({ evidenceOptions = [],
   aiReady,
   writeInClaude = false,
   samplePosting,
@@ -250,7 +251,7 @@ export function NewApplication({
     setStarting(true);
     const result = toastResult(await startReadingPosting({ posting: draft.posting }));
     setStarting(false);
-    if (result.ok) update({ step: "reading", readJobId: result.data, readFor: draft.posting.trim(), read: null, scoreJobId: null, score: null });
+    if (result.ok) update({ step: "reading", readJobId: result.data, readFor: draft.posting.trim(), read: null, evidence: [], scoreJobId: null, score: null });
   };
 
   // Public issue 66: the posting's score, with its reasons, before anything is written.
@@ -297,17 +298,10 @@ export function NewApplication({
     );
   };
 
-  // NEW-5: a missing skill goes into the profile, and the row becomes partly covered.
-  const addToProfile = async (index: number, skill: string) => {
-    const result = toastResult(await addSkill({ name: skill }));
-    if (!result.ok) return;
-    const name = result.data.skill.name;
-    setDraft((current) => {
-      if (!current.read) return current;
-      const items = current.read.match.items.map((item, position) => (position === index ? withSkillAdded(item, name) : item));
-      return { ...current, read: { ...current.read, match: { items } } };
-    });
-    toast(`Added “${name}” to your skills. Attach it to a role under Experience to make it count.`);
+  const addEvidence = async (evidence: ApplicationEvidence) => {
+    setDraft((current) => ({ ...current, evidence: [...(current.evidence ?? []).filter((entry) => entry.requirementIndex !== evidence.requirementIndex), evidence] }));
+    toast("Saved for this application. It will be used when creating the resume.");
+    return true;
   };
 
   // E7-6: write the documents, then create the application from them.
@@ -344,7 +338,7 @@ export function NewApplication({
     if (!draft.read || !draft.readJobId || starting) return;
     setStarting(true);
     const result = toastResult(
-      await startWritingDocuments({ readJobId: draft.readJobId, details: draft.details, match: draft.read.match, tone: draft.tone, note: draft.note, write: draft.write ?? "both" }),
+      await startWritingDocuments({ readJobId: draft.readJobId, details: draft.details, match: draft.read.match, tone: draft.tone, note: draft.note, evidence: draft.evidence ?? [], write: draft.write ?? "both" }),
     );
     setStarting(false);
     if (!result.ok) return;
@@ -475,7 +469,7 @@ export function NewApplication({
           {draft.step === "review" && draft.read && (
             <>
               <DetailsCard details={draft.details} onChange={(details) => update({ details })} />
-              <MatchCard match={draft.read.match} requirements={draft.read.extracted.requirements} onAddSkill={(index, skill) => void addToProfile(index, skill)} />
+              <MatchCard match={draft.read.match} requirements={draft.read.extracted.requirements} onAddEvidence={addEvidence} evidenceOptions={evidenceOptions} evidence={draft.evidence ?? []} />
               <ScoreCard fit={draft.score ?? null} scoring={scoring} step={scoreJob?.step ?? null} onScore={() => void scoreIt()} />
               <TailoringCard
                 write={draft.write ?? "both"}

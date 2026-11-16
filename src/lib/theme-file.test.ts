@@ -5,12 +5,34 @@ import { BUILT_IN_THEMES } from "./themes";
 
 const editorial = BUILT_IN_THEMES[0];
 
+describe("theme margins", () => {
+  it("round-trips custom margins, including zero", () => {
+    expect(parseThemeFile(themeFile({ ...editorial, marginXmm: 0, marginYmm: 10.5 }))).toMatchObject({
+      ok: true, theme: { marginXmm: 0, marginYmm: 10.5 },
+    });
+  });
+
+  it("reads older theme files without margins", () => {
+    const file = themeFile(editorial);
+    const { marginXmm, marginYmm, ...older } = file.theme;
+    expect([marginXmm, marginYmm]).toEqual([null, null]);
+    expect(parseThemeFile({ ...file, version: 3, theme: older })).toMatchObject({
+      ok: true, theme: { marginXmm: null, marginYmm: null },
+    });
+  });
+
+  it.each([-0.5, 30.5, 10.25, Infinity, NaN, "10"])("rejects invalid margins: %s", (marginXmm) => {
+    const file = themeFile(editorial);
+    expect(parseThemeFile({ ...file, theme: { ...file.theme, marginXmm } }).ok).toBe(false);
+  });
+});
+
 describe("theme files (E5-7)", () => {
   it("exports the look without ids, and reads it back", () => {
     const file = themeFile({ ...editorial, name: "Quiet green", accent: "#1F6F5C" });
     expect(file).toEqual({
       format: "dossier-theme",
-      version: 3,
+      version: 4,
       theme: expect.not.objectContaining({ id: expect.anything() }),
     });
     const read = parseThemeFile(JSON.parse(JSON.stringify(file)));
@@ -30,7 +52,7 @@ describe("theme files (E5-7)", () => {
     const look = { name, headFont, bodyFont, accent, layout, align, headingStyle, density };
     expect(parseThemeFile({ format: "dossier-theme", version: 1, theme: look })).toEqual({
       ok: true,
-      theme: { ...look, headerStyle: "PLAIN", sidebarStyle: "PLAIN", dateStyle: "INLINE", photoShape: "CIRCLE", photoPosition: "HEADER_END" },
+      theme: { ...look, marginXmm: null, marginYmm: null, headerStyle: "PLAIN", sidebarStyle: "PLAIN", dateStyle: "INLINE", photoShape: "CIRCLE", photoPosition: "HEADER_END" },
     });
   });
 
@@ -52,7 +74,7 @@ describe("theme files (E5-7)", () => {
     const file = themeFile(editorial);
     expect(parseThemeFile({ hello: "world" })).toEqual({ ok: false, error: "That file isn't a Dossier theme." });
     expect(parseThemeFile(null)).toEqual({ ok: false, error: "That file isn't a Dossier theme." });
-    expect(parseThemeFile({ ...file, version: 4 })).toEqual({ ok: false, error: "That theme comes from a newer version of Dossier. Update this server first." });
+    expect(parseThemeFile({ ...file, version: 5 })).toEqual({ ok: false, error: "That theme comes from a newer version of Dossier. Update this server first." });
     expect(parseThemeFile({ ...file, theme: { ...file.theme, headFont: "COMIC_SANS" } })).toEqual({
       ok: false,
       error: "That theme uses a font Dossier doesn't have (COMIC_SANS).",

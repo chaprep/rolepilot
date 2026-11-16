@@ -5,7 +5,7 @@ import { useId } from "react";
 
 import { FactList } from "@/components/fact-list";
 import { MatchRows } from "@/components/match-rows";
-import type { Match, Requirement } from "@/lib/application-data";
+import type { Match, Requirement, ApplicationEvidence, EvidenceOption } from "@/lib/application-data";
 import type { FactItem } from "@/lib/profile";
 
 import { sectionHref } from "../../profile/sections";
@@ -39,7 +39,7 @@ export function PostingTab({
   posting,
   match,
   requirements,
-  onAddSkill,
+  onAddEvidence, evidenceOptions,
   facts,
   setFacts,
 }: {
@@ -47,7 +47,8 @@ export function PostingTab({
   posting: PostingData;
   match: Match | null;
   requirements: Requirement[];
-  onAddSkill: (index: number, skill: string) => void;
+  onAddEvidence: (evidence: ApplicationEvidence) => Promise<boolean>;
+  evidenceOptions: EvidenceOption[];
   facts: FactItem[];
   setFacts: (change: (facts: FactItem[]) => FactItem[]) => void;
 }) {
@@ -100,7 +101,7 @@ export function PostingTab({
         <span>Pasted {posting.pasted}</span>
       </div>
       <div className="flex w-full max-w-[640px] flex-col gap-[22px] rounded-panel border border-line-card bg-card px-[30px] py-7">
-        {match && match.items.length > 0 && <MatchRows match={match} requirements={requirements} onAddSkill={onAddSkill} />}
+        {match && match.items.length > 0 && <MatchRows match={match} requirements={requirements} onAddEvidence={onAddEvidence} evidenceOptions={evidenceOptions} />}
         <div className={match && match.items.length > 0 ? "flex flex-col gap-2.5 border-t border-line pt-5" : "flex flex-col gap-2.5"}>
           <h2 className="text-[15px] font-medium">Original posting</h2>
           {posting.text.trim() ? (

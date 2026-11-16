@@ -1,3 +1,5 @@
+import { zodResponseFormat } from "openai/helpers/zod";
+import { demoDocumentState } from "@/test/document-state";
 import { describe, expect, it } from "vitest";
 
 import { inEditorOrder, skillNamesIn } from "@/lib/skill-groups";
@@ -14,7 +16,7 @@ import { isoDate } from "./extract-posting";
 import { sameSkill } from "./match-requirements";
 import { COVER_LETTER_APPROACH } from "./prompt-parts";
 import { withoutFrame } from "./write-cover-letter";
-import { resumeUnits } from "./tailor-resume";
+import { acceptedSkills, resumeEvidenceSources, resumeUnits } from "./tailor-resume";
 import { profileForPrompt } from "./prompt-parts";
 import { recipientFromJob } from "./write-cover-letter";
 import { recipient } from "./write-email";
@@ -247,13 +249,13 @@ describe("tailorResume", () => {
     expect(sent(provider).effort).toBeUndefined();
   });
 
-  it("keeps the profile's order of skills when the user set one, and the model's ranking otherwise (public issue 62)", async () => {
+  it("uses job-specific skill ranking even when the profile has a manual order", async () => {
     const ranked = await tailorResume(model(answer), { profile, extracted, match: null, facts: [], posting }, options);
-    const kept = await tailorResume(model(answer), { profile, extracted, match: null, facts: [], posting, keepSkillOrder: true }, options);
+    const kept = await tailorResume(model(answer), { extracted, match: null, facts: [], posting, profile: { ...profile, skills: [...profile.skills].reverse() } }, options);
     const line = (units: { id: string; text: string }[]) => skillNamesIn(units.find((unit) => unit.id === "skills")!.text);
     expect(line(ranked.data)).toEqual(["Design systems", "Figma", "User research"]);
     const own = inEditorOrder(profile.skills).map((skill) => skill.name).filter((name) => ["Design systems", "Figma", "User research"].includes(name));
-    expect(line(kept.data)).toEqual(own);
+    expect(line(kept.data)).toEqual(line(ranked.data));
     expect(own).not.toEqual(["Design systems", "Figma", "User research"]);
   });
 
@@ -267,7 +269,7 @@ describe("tailorResume", () => {
 
   it("returns units, keeping only real roles and the profile's own skills (APP-4)", async () => {
     const { data, promptVersion } = await tailorResume(model(answer), { profile, extracted, match: null, facts: [], posting }, options);
-    expect(promptVersion).toBe("tailor-resume@9");
+    expect(promptVersion).toBe("tailor-resume@10");
     expect(data.map((unit) => unit.id)).toEqual([
       "summary",
       "experience:e1",
@@ -515,7 +517,7 @@ describe("regenerateUnit", () => {
     const unit = resume.find((entry) => entry.id === "experience:e1")!;
     const provider = model({ text: "- Rebuilt the carrier portal\n• Grew the design system\n" });
     const { data, promptVersion } = await regenerateUnit(provider, { kind: "RESUME", unit, document: resume, profile, extracted, tone: "WARM", facts: [], posting }, options);
-    expect(promptVersion).toBe("regenerate-unit@6");
+    expect(promptVersion).toBe("regenerate-unit@7");
     expect(data).toMatchObject({ id: "experience:e1", text: "Rebuilt the carrier portal\nGrew the design system" });
     expect(prompt(provider)).toContain(`Write a new version of "${unit.label}" (experience:e1)`);
     expect(sent(provider).system).not.toContain(COVER_LETTER_APPROACH);
@@ -566,7 +568,7 @@ describe("refineChat", () => {
       declined: false,
     };
     const { data, promptVersion } = await refineChat(model(answer), input, options);
-    expect(promptVersion).toBe("refine-chat@9");
+    expect(promptVersion).toBe("refine-chat@13");
     expect(data).toEqual({
       reply: "I made the letter more formal.",
       tone: "FORMAL",
@@ -579,7 +581,7 @@ describe("refineChat", () => {
     });
   });
 
-  it("never edits a certification or a publication (#293, #218)", async () => {
+  it("edits certifications and publications when the user asks", async () => {
     const answer = {
       reply: "Shortened your certification and publication.",
       edits: [
@@ -591,11 +593,11 @@ describe("refineChat", () => {
     };
     const provider = model(answer);
     const { data } = await refineChat(provider, input, options);
-    expect(data.edits).toEqual([]);
-    expect(sent(provider).system).toMatch(/Never edit a certification, a publication or a custom section/);
+    expect(data.edits.map((edit) => edit.unitId)).toEqual(["certification:c1", "publication:u1"]);
+    expect(sent(provider).system).not.toContain("Never edit a certification");
   });
 
-  it("declines with guidance instead of inventing facts (APP-9)", async () => {
+  it("reports a provider decline honestly without applying edits", async () => {
     const answer = {
       reply: "Your profile doesn't mention fintech work yet. Add it under Experience and I'll use it.",
       edits: [{ document: "RESUME", unitId: "summary", text: "Fintech expert." }],
@@ -604,6 +606,38 @@ describe("refineChat", () => {
     };
     const { data } = await refineChat(model(answer), { ...input, request: "Say I worked at a bank" }, options);
     expect(data).toMatchObject({ declined: true, edits: [], tone: null });
+  });
+
+  it("accepts explicit new skills and details without tailoring restrictions", async () => {
+    const provider = model({ reply: "Updated.", edits: [
+      { document: "RESUME", unitId: "skills", text: "Cloud: Kubernetes" },
+      { document: "RESUME", unitId: "summary", text: "Ten years of Kubernetes experience." },
+    ], tone: null, declined: false });
+    const { data } = await refineChat(provider, { ...input, request: "Add Kubernetes and say I have ten years of experience" }, options);
+    expect(data.edits.map((edit) => edit.text)).toEqual(["Cloud: Kubernetes", "Ten years of Kubernetes experience."]);
+    expect(sent(provider).system).toContain("as authorized content");
+    expect(sent(provider).system).not.toContain("Never invent or embellish");
+    expect(sent(provider).system).not.toContain("For a RESUME skills edit include structured skills");
+  });
+
+  it("clears existing units in all three documents and permits custom section edits", async () => {
+    const resume = [...input.resume, { id: "custom-line:test", label: "Membership", text: "Old membership" }];
+    const provider = model({ reply: "Cleared.", edits: [
+      { document: "RESUME", unitId: "summary", text: "" },
+      { document: "RESUME", unitId: "custom-line:test", text: "New membership" },
+      { document: "COVER_LETTER", unitId: input.letter[0].id, text: "" },
+      { document: "EMAIL", unitId: "body", text: "" },
+      { document: "RESUME", unitId: "nonexistent", text: "Invalid" },
+    ], tone: null, declined: false });
+    const { data } = await refineChat(provider, { ...input, resume, email: [{ id: "body", label: "Body", text: "Old email" }], request: "Clear the summary, opening and email; update my membership" }, options);
+    expect(data.edits.map((edit) => edit.text)).toEqual(["", "New membership", "", ""]);
+    expect(data.edits.every((edit) => edit.previousText)).toBe(true);
+  });
+
+  it("preserves an explicit sign-off when also changing the letter tone", async () => {
+    const provider = model({ reply: "Updated.", edits: [{ document: "COVER_LETTER", unitId: "sign-off", text: "Yours faithfully," }], tone: "FORMAL", declined: false });
+    const { data } = await refineChat(provider, input, options);
+    expect(data.edits.find((edit) => edit.unitId === "sign-off")?.text).toBe("Yours faithfully,");
   });
 
   it("sends the conversation so far and the unit it's about", async () => {
@@ -712,5 +746,92 @@ describe("the profile photo (#224)", () => {
         expect([system, ...messages.map((message) => message.content)].join("\n")).not.toMatch(/data:image|iVBORw0KGgo|"photo"/);
       }
     }
+  });
+});
+
+
+describe("evidence-supported tailored skills", () => {
+  const facts = ["Coordinated design and engineering releases."];
+  const skill = { name: "Cross-functional coordination", group: "Delivery", evidence: [{ sourceId: "application:0", quote: facts[0] }] };
+  it("accepts candidate-supported wording and groups, without changing profile skills", () => {
+    const before = structuredClone(profile);
+    expect(acceptedSkills(profile, [skill, { ...skill, name: "cross-functional coordination" }, "Figma"], facts)).toBe("Delivery: Cross-functional coordination\nFigma");
+    expect(profile).toEqual(before);
+  });
+  it("drops invalid evidence, JD-only sources, unknown names and delimiter injection independently", () => {
+    expect(acceptedSkills(profile, [
+      { ...skill, evidence: [{ sourceId: "posting", quote: "Kubernetes" }] },
+      { ...skill, evidence: [{ sourceId: "application:0", quote: "Invented" }] },
+      { ...skill, evidence: [{ sourceId: "__proto__", quote: "Invented" }] },
+      { ...skill, name: "Kubernetes · Power BI" }, "Kubernetes", skill,
+    ], facts)).toBe("Delivery: Cross-functional coordination");
+  });
+  it("builds evidence only from privacy-filtered candidate information", () => {
+    const sources = JSON.stringify(resumeEvidenceSources(profile, facts));
+    expect(sources).toContain(facts[0]);
+    expect(sources).not.toContain(profile.basics.email);
+    expect(sources).not.toContain("The job");
+  });
+  it("retains evidence-backed additions in initial generation and sends the original JD", async () => {
+    const provider = model({ summary: "Designer.", roles: [], projects: [], education: [], skills: [skill] });
+    const result = await tailorResume(provider, { profile, extracted, match: null, posting, facts }, options);
+    expect(result.data.find((unit) => unit.id === "skills")?.text).toBe("Delivery: Cross-functional coordination");
+    expect(prompt(provider)).toContain("<posting>");
+    expect(prompt(provider)).toContain("Candidate evidence sources:");
+  });
+  it("does not let the JD substantiate a candidate metric", async () => {
+    const provider = model({ summary: "Delivered 9876 releases.", roles: [], projects: [], education: [], skills: [] });
+    const result = await tailorResume(provider, { profile, extracted, match: null, posting: "Must deliver 9876 releases", facts: [] }, options);
+    expect(result.data[0].unverified).toContain("9876");
+  });
+  it("constrains evidence updates even if AI returns edits for other documents or roles", async () => {
+    const provider = model({ reply: "Updated.", tone: "FORMAL", declined: false, edits: [
+      { document: "RESUME", unitId: "skills", text: "ignored", skills: [skill] },
+      { document: "RESUME", unitId: "experience:e1", text: "Do not overwrite this role" },
+      { document: "COVER_LETTER", unitId: "paragraph:1", text: "Do not overwrite the letter" },
+    ] });
+    const result = await refineChat(provider, { request: "Use my evidence", history: [], target: null, viewing: "RESUME", resume: demoResumeUnits(), letter: demoLetterUnits(), profile, extracted, tone: "WARM", facts, posting, evidenceUnits: ["skills", "summary"] }, options);
+    expect(result.data.edits.map((edit) => edit.unitId)).toEqual(["skills"]);
+    expect(result.data.edits[0].text).toContain("Delivery: Cross-functional coordination");
+    expect(result.data.edits[0].text).toContain("Figma");
+    expect(result.data.tone).toBeNull();
+    expect(sent(provider).system).toContain("Never invent or embellish");
+    expect(sent(provider).system).toContain("For a RESUME skills edit include structured skills");
+    expect(sent(provider).system).not.toContain("as authorized content");
+  });
+  it("keeps the previous skills section when a rewrite has no valid evidence", async () => {
+    const unit = { id: "skills", label: "Skills", text: "Figma" };
+    const result = await regenerateUnit(model({ text: "Kubernetes", skills: ["Kubernetes"] }), { kind: "RESUME", unit, document: [unit], profile, extracted, tone: "WARM", facts: [], posting }, options);
+    expect(result.data.text).toBe("Figma");
+  });
+});
+
+
+describe("complete document refinement", () => {
+  const input = { request: "Reduce my resume margins", history: [], target: null, viewing: "RESUME" as const, resume: demoResumeUnits(), letter: demoLetterUnits(), profile, extracted, tone: "WARM" as const, facts: [], posting };
+  it("returns formatting operations and sends current settings without contact details", async () => {
+    const state = demoDocumentState();
+    state.profile.basics.phone = "PRIVATE-PHONE";
+    const operations = [{ type: "settings", document: "RESUME", json: '{"theme":{"marginXmm":8}}' }];
+    const provider = model({ reply: "Reduced margins.", edits: [], operations, tone: null, declined: false });
+    const { data } = await refineChat(provider, { ...input, documentStates: { RESUME: state }, privateFields: [{ document: "RESUME", field: "phone", value: "PRIVATE-PHONE" }] }, options);
+    expect(data.operations).toEqual(operations);
+    expect(() => zodResponseFormat(sent(provider).json!.schema, "refinement")).not.toThrow();
+    expect(JSON.stringify(sent(provider))).not.toContain("PRIVATE-PHONE");
+    expect(sent(provider).system).toContain("Never emit raw HTML/CSS");
+  });
+  it("reveals only requested displayed fields in a second pass", async () => {
+    let calls = 0;
+    const provider = new MockProvider({ reply: () => ++calls === 1 ? { reply: "Need the phone.", privateEditsRequested: true, edits: [], operations: [], requestedFields: [{ document: "RESUME", field: "phone" }], tone: null, declined: false } : { reply: "Updated phone.", privateEditsRequested: true, edits: [], operations: [{ type: "metadata", document: "RESUME", path: "basics.phone", json: '\"new phone\"' }], requestedFields: [], tone: null, declined: false } });
+    await refineChat(provider, { ...input, request: "Replace my phone number", documentStates: { RESUME: demoDocumentState() }, privateFields: [{ document: "RESUME", field: "phone", value: "OLD-PRIVATE-PHONE" }, { document: "RESUME", field: "address", value: "SECRET-ADDRESS" }] }, options);
+    expect(provider.calls).toHaveLength(2);
+    expect(JSON.stringify(provider.calls[0])).not.toContain("OLD-PRIVATE-PHONE");
+    expect(JSON.stringify(provider.calls[1])).toContain("OLD-PRIVATE-PHONE");
+    expect(JSON.stringify(provider.calls)).not.toContain("SECRET-ADDRESS");
+  });
+  it("ignores structure and style operations from automatic evidence updates", async () => {
+    const provider = model({ reply: "Updated.", edits: [], operations: [{ type: "settings", document: "RESUME", json: '{"paper":"LETTER"}' }], tone: null, declined: false });
+    const { data } = await refineChat(provider, { ...input, evidenceUnits: ["summary"] }, options);
+    expect(data.operations).toBeUndefined();
   });
 });

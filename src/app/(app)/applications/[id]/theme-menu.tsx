@@ -1,5 +1,6 @@
 "use client";
 
+import type { CoverLetterLayout } from "@/lib/cover-letter-format";
 import { Fragment } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -57,4 +58,18 @@ export function ThemeMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+
+export function LetterFormatMenu({ current, onChange }: { current: CoverLetterLayout; onChange: (layout: CoverLetterLayout) => void }) {
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild><Button variant="text" size="sm" aria-label="Letter format">{current === "SIDEBAR" ? "Sidebar" : "Classic"} format <span aria-hidden="true" className="text-[10px]">▼</span></Button></DropdownMenuTrigger>
+    <DropdownMenuContent align="start">
+      <DropdownMenuLabel>Format for this cover letter</DropdownMenuLabel>
+      <DropdownMenuRadioGroup value={current} onValueChange={value => { if ((value === "CLASSIC" || value === "SIDEBAR") && value !== current) onChange(value); }}>
+        <DropdownMenuRadioItem value="CLASSIC">Classic</DropdownMenuRadioItem>
+        <DropdownMenuRadioItem value="SIDEBAR">Sidebar</DropdownMenuRadioItem>
+      </DropdownMenuRadioGroup>
+    </DropdownMenuContent>
+  </DropdownMenu>;
 }

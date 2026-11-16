@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ProfileData } from "@/lib/profile";
 
 import { DocumentKind } from "@/generated/prisma/enums";
 
@@ -171,3 +172,28 @@ export type Trimmed = z.infer<typeof trimmedSchema>;
 /** ChatMessage.edits */
 export const editsSchema = z.array(unitEditSchema);
 export type UnitEdit = z.infer<typeof unitEditSchema>;
+
+/** User-supplied evidence scoped to one JD; the id makes submissions retryable. */
+export const applicationEvidenceSchema = z.object({
+  id: z.uuid(),
+  requirementIndex: z.number().int().min(0),
+  text: z.string().trim().min(1, "Describe your supporting experience.").max(800),
+  targetUnitId: z.string().nullable(),
+});
+export type ApplicationEvidence = z.infer<typeof applicationEvidenceSchema>;
+export type EvidenceOption = { id: string; label: string };
+
+export function evidenceOptions(profile: ProfileData): EvidenceOption[] {
+  return [
+    ...profile.experience.map((entry) => ({ id: `experience:${entry.id}`, label: `${entry.role} at ${entry.company}` })),
+    ...profile.projects.map((entry) => ({ id: `project:${entry.id}`, label: entry.name })),
+  ];
+}
+
+/** Human-readable facts remain compatible with the existing editor and backups. */
+export function applicationEvidenceText(skill: string, evidence: ApplicationEvidence, options: EvidenceOption[]): string | null {
+  const context = evidence.targetUnitId ? options.find((entry) => entry.id === evidence.targetUnitId) : null;
+  if ((evidence.targetUnitId && !context) || !skill.trim() || skill.length > 100) return null;
+  const text = `JD skill: ${skill.trim()}\nContext: ${context ? `${context.label} (${context.id})` : "General capability; do not attribute to a role or project"}\nEvidence: ${evidence.text}`;
+  return text.length <= 1000 ? text : null;
+}

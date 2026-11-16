@@ -1,3 +1,4 @@
+import { demoDocumentState } from "@/test/document-state";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DocumentKind } from "@/generated/prisma/enums";
@@ -246,4 +247,20 @@ describe("withSectionFromProfile (#299)", () => {
 it("loads the profile through a transaction too", async () => {
   const profile = await prisma().$transaction((tx) => loadProfile(tx));
   expect(profile.experience.map((entry) => entry.id)).toEqual(["e1"]);
+});
+
+
+it("keeps a local resume independent without changing an unedited letter's profile fallback", async () => {
+  const id = await draft();
+  const before = await loadDocuments(id);
+  const state = demoDocumentState(); state.profile.basics.name = "Application-only name";
+  await prisma().document.update({ where: { applicationId_kind: { applicationId: id, kind: "RESUME" } }, data: { state } });
+  const after = await loadDocuments(id);
+  expect(after.resume?.state?.profile.basics.name).toBe("Application-only name");
+  expect(after.profile.basics.name).toBe(before.profile.basics.name);
+  expect(after.letter?.state).toBeNull();
+  await prisma().profileField.upsert({ where: { key: "name" }, create: { key: "name", value: "Updated global name" }, update: { value: "Updated global name" } });
+  const later = await loadDocuments(id);
+  expect(later.resume?.state?.profile.basics.name).toBe("Application-only name");
+  expect(later.profile.basics.name).toBe("Updated global name");
 });

@@ -1,12 +1,14 @@
+import type { DocumentStyle } from "@/lib/document-state";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 
+import { DocumentText, PlainDocumentText } from "@/components/document-text";
 import { CitationText } from "@/components/citation";
 import { PhotoPosition, PhotoShape, type PaperSize, type ThemeLayout } from "@/generated/prisma/enums";
 import { cn } from "@/lib/cn";
 import { documentLabels } from "@/lib/document-labels";
 import { documentLanguage } from "@/lib/document-language";
 import type { ProfileData } from "@/lib/profile";
-import { resumeContent, type ResumeContent, type ResumeOptions, type ResumeRole } from "@/lib/resume-content";
+import { resumeContent, type ResumeBodyBlock, type ResumeContent, type ResumeOptions, type ResumeRole } from "@/lib/resume-content";
 import { customKey, DEFAULT_SECTION_LAYOUT, inSidebar, sectionHeading, type SectionLayout, shownSections } from "@/lib/resume-sections";
 import { skillLine } from "@/lib/skill-groups";
 import { PHOTO_SHAPES, resolveTheme, type ThemeData } from "@/lib/themes";
@@ -16,6 +18,7 @@ import styles from "./document.module.css";
 
 type ResumeDocumentProps = ResumeOptions & {
   theme: ThemeData;
+  formatting?: Record<string, DocumentStyle>;
   profile: ProfileData;
   paper: PaperSize;
   /** Overrides the theme's layout, e.g. a tailored resume in a single column. */
@@ -49,8 +52,9 @@ const sampleText = (content: ResumeContent) =>
  * Sections without content are left out. Each tailored part is drawn by
  * `renderUnit` with its unit id, for editing it in place (E8-3).
  */
-export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAULT_SECTION_LAYOUT, language, renderUnit = plainUnit, fit = 0, ...options }: ResumeDocumentProps) {
-  const resolved = resolveTheme(theme, layout, fit);
+export function ResumeDocument({ formatting, theme, profile, paper, layout, sections = DEFAULT_SECTION_LAYOUT, language, renderUnit = plainUnit, fit = 0, ...options }: ResumeDocumentProps) {
+  const resolved = resolveTheme(theme, layout, fit, paper);
+  const Text = formatting ? DocumentText : PlainDocumentText;
   const labels = documentLabels(language);
   const content = resumeContent(profile, options, labels);
   const { lang, dir } = documentLanguage(language, sampleText(content));
@@ -63,19 +67,11 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
       {renderUnit({
         id: `experience:${entry.id}`,
         className: styles.entry,
-        head: <EntryHead title={entry.role} at={entry.company} dates={entry.dates} timeline={resolved.timeline} />,
+        head: <EntryHead enhanced={Boolean(formatting)} title={entry.role} at={entry.company} dates={entry.dates} timeline={resolved.timeline} />,
         children: (
           <>
-            {entry.descriptor && <p className={styles.descriptor}>{entry.descriptor}</p>}
-            {entry.bullets.length > 0 && (
-              <ul className={styles.bullets}>
-                {entry.bullets.map((bullet, index) => (
-                  <li key={index}>
-                    <CitationText text={bullet} />
-                  </li>
-                ))}
-              </ul>
-            )}
+            {entry.descriptor && <p className={styles.descriptor}><Text text={entry.descriptor} /></p>}
+            <EntryBody enhanced={Boolean(formatting)} bodyFormat={formatting?.[`unit:experience:${entry.id}`]?.bodyFormat ?? formatting?.[`section:${profile.experience.find(item => item.id === entry.id)?.volunteering ? "volunteering" : "experience"}`]?.bodyFormat ?? formatting?.document?.bodyFormat} body={entry.body} bullets={entry.bullets} />
             {entry.skills.length > 0 && (
               <p className={styles.entrySkills}>
                 <span className={styles.accent}>{`${labels.skills} · `}</span>
@@ -92,7 +88,7 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
   const sidebarTop = [
     position === PhotoPosition.SIDEBAR && photo("sidebar"),
     resolved.split && content.contacts.length > 0 && (
-      <DocumentSection key="contact" title={labels.contact}>
+      <DocumentSection sectionKey={formatting ? "contact" : undefined} key="contact" title={labels.contact}>
         <ul className={styles.contactList}>
           {content.contacts.map((item, index) => (
             <li key={index}>
@@ -106,22 +102,22 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
 
   const drawn: Record<string, ReactNode> = {
     summary: content.summary && (
-      <DocumentSection key="summary" title={sectionHeading(sections, "summary", labels.profile)}>
-        {renderUnit({ id: "summary", children: <p className={styles.summary}>{content.summary}</p> })}
+      <DocumentSection sectionKey={formatting ? "summary" : undefined} key="summary" title={sectionHeading(sections, "summary", labels.profile)}>
+        {renderUnit({ id: "summary", children: <p className={styles.summary}><Text text={content.summary} /></p> })}
       </DocumentSection>
     ),
     experience: content.experience.length > 0 && (
-      <DocumentSection key="experience" title={sectionHeading(sections, "experience", labels.experience)}>
+      <DocumentSection sectionKey={formatting ? "experience" : undefined} key="experience" title={sectionHeading(sections, "experience", labels.experience)}>
         {content.experience.map(role)}
       </DocumentSection>
     ),
     volunteering: content.volunteering.length > 0 && (
-      <DocumentSection key="volunteering" title={sectionHeading(sections, "volunteering", labels.volunteering)}>
+      <DocumentSection sectionKey={formatting ? "volunteering" : undefined} key="volunteering" title={sectionHeading(sections, "volunteering", labels.volunteering)}>
         {content.volunteering.map(role)}
       </DocumentSection>
     ),
     projects: content.projects.length > 0 && (
-      <DocumentSection key="projects" title={sectionHeading(sections, "projects", labels.projects)}>
+      <DocumentSection sectionKey={formatting ? "projects" : undefined} key="projects" title={sectionHeading(sections, "projects", labels.projects)}>
         {content.projects.map((project) => (
           <Fragment key={project.id}>
             {renderUnit({
@@ -129,6 +125,7 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
               className: styles.entry,
               head: (
                 <EntryHead
+                  enhanced={Boolean(formatting)}
                   title={project.name}
                   at={project.link && <DocumentLink link={project.link} href={project.href} />}
                   dates={project.dates}
@@ -137,15 +134,7 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
               ),
               children: (
                 <>
-                  {project.bullets.length > 0 && (
-                    <ul className={styles.bullets}>
-                      {project.bullets.map((bullet, index) => (
-                        <li key={index}>
-                          <CitationText text={bullet} />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <EntryBody enhanced={Boolean(formatting)} bodyFormat={formatting?.[`unit:project:${project.id}`]?.bodyFormat ?? formatting?.["section:projects"]?.bodyFormat ?? formatting?.document?.bodyFormat} body={project.body} bullets={project.bullets} />
                   {project.skills.length > 0 && (
                     <p className={styles.entrySkills}>
                       <span className={styles.accent}>{`${labels.skills} · `}</span>
@@ -160,27 +149,27 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
       </DocumentSection>
     ),
     education: content.education.length > 0 && (
-      <DocumentSection key="education" title={sectionHeading(sections, "education", labels.education)}>
+      <DocumentSection sectionKey={formatting ? "education" : undefined} key="education" title={sectionHeading(sections, "education", labels.education)}>
         {content.education.map((entry) => (
           <Fragment key={entry.id}>
             {renderUnit({
               id: `education:${entry.id}`,
               className: styles.entry,
-              head: <EntryHead title={entry.degree} at={entry.school} dates={entry.dates} timeline={resolved.timeline} />,
-              children: entry.notes && <p className={styles.muted}>{entry.notes}</p>,
+              head: <EntryHead enhanced={Boolean(formatting)} title={entry.degree} at={entry.school} dates={entry.dates} timeline={resolved.timeline} />,
+              children: entry.notes && <p className={styles.muted}><Text text={entry.notes} /></p>,
             })}
           </Fragment>
         ))}
       </DocumentSection>
     ),
     certifications: content.certifications.length > 0 && (
-      <DocumentSection key="certifications" title={sectionHeading(sections, "certifications", labels.certifications)}>
+      <DocumentSection sectionKey={formatting ? "certifications" : undefined} key="certifications" title={sectionHeading(sections, "certifications", labels.certifications)}>
         {content.certifications.map((entry) => (
           <Fragment key={entry.id}>
             {renderUnit({
               id: `certification:${entry.id}`,
               className: styles.entry,
-              head: <EntryHead title={entry.name} at={entry.issuer} dates={entry.date} timeline={resolved.timeline} />,
+              head: <EntryHead enhanced={Boolean(formatting)} title={entry.name} at={entry.issuer} dates={entry.date} timeline={resolved.timeline} />,
               children: (entry.details.length > 0 || entry.link) && (
                 <p className={styles.muted}>
                   {[...entry.details, ...(entry.link ? [<DocumentLink key="link" link={entry.link} href={entry.href} />] : [])].map((part, index) => (
@@ -197,7 +186,7 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
       </DocumentSection>
     ),
     publications: content.publications.length > 0 && (
-      <DocumentSection key="publications" title={sectionHeading(sections, "publications", labels.publications)}>
+      <DocumentSection sectionKey={formatting ? "publications" : undefined} key="publications" title={sectionHeading(sections, "publications", labels.publications)}>
         {content.publications.map((entry) => (
           <Fragment key={entry.id}>
             {renderUnit({
@@ -220,26 +209,26 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
       </DocumentSection>
     ),
     references: content.references.length > 0 && (
-      <DocumentSection key="references" title={sectionHeading(sections, "references", labels.references)}>
+      <DocumentSection sectionKey={formatting ? "references" : undefined} key="references" title={sectionHeading(sections, "references", labels.references)}>
         <div className={styles.references}>
           {content.references.map((reference) => (
-            <div key={reference.id}>
-              <p className={styles.entryTitle}>{reference.name}</p>
-              {reference.role && <p className={styles.muted}>{reference.role}</p>}
-              {reference.contact && <p>{reference.contact}</p>}
+            <div data-unit={formatting ? `reference:${reference.id}` : undefined} key={reference.id}>
+              <p className={styles.entryTitle}><Text text={reference.name} /></p>
+              {reference.role && <p className={styles.muted}><Text text={reference.role} /></p>}
+              {reference.contact && <p><Text text={reference.contact} /></p>}
             </div>
           ))}
         </div>
       </DocumentSection>
     ),
     skills: content.skills && (
-      <DocumentSection key="skills" title={sectionHeading(sections, "skills", labels.skills)}>
-        {renderUnit({ id: "skills", children: <SkillLines text={content.skills} /> })}
+      <DocumentSection sectionKey={formatting ? "skills" : undefined} key="skills" title={sectionHeading(sections, "skills", labels.skills)}>
+        {renderUnit({ id: "skills", children: <SkillLines enhanced={Boolean(formatting)} text={content.skills} /> })}
       </DocumentSection>
     ),
     languages: content.languages && (
-      <DocumentSection key="languages" title={sectionHeading(sections, "languages", labels.languages)}>
-        {renderUnit({ id: "languages", children: <p>{content.languages}</p> })}
+      <DocumentSection sectionKey={formatting ? "languages" : undefined} key="languages" title={sectionHeading(sections, "languages", labels.languages)}>
+        {renderUnit({ id: "languages", children: <p><Text text={content.languages} /></p> })}
       </DocumentSection>
     ),
   };
@@ -247,14 +236,14 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
   for (const section of content.customSections) {
     const key = customKey(section.id);
     drawn[key] = (
-      <DocumentSection key={key} title={sectionHeading(sections, key, section.title)}>
-        <CustomSectionItems section={section} timeline={resolved.timeline} renderUnit={renderUnit} />
+      <DocumentSection sectionKey={formatting ? key : undefined} key={key} title={sectionHeading(sections, key, section.title)}>
+        <CustomSectionItems formatting={formatting} enhanced={Boolean(formatting)} section={section} timeline={resolved.timeline} renderUnit={renderUnit} />
       </DocumentSection>
     );
   }
 
   const order = shownSections(sections, Object.keys(drawn).filter((key) => drawn[key]));
-  const isSidebar = (key: string) => inSidebar(key, profile.customSections);
+  const isSidebar = (key: string) => sections.side ? sections.side.includes(key) : inSidebar(key, profile.customSections);
   const sidebar = [...sidebarTop, ...order.filter(isSidebar).map((key) => drawn[key])];
   const main = order.filter((key) => !isSidebar(key)).map((key) => drawn[key]);
 
@@ -271,8 +260,8 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
 
   const title = (
     <>
-      <h1 className={styles.name}>{content.name}</h1>
-      {content.headline && <p className={styles.headline}>{content.headline}</p>}
+      <h1 className={styles.name}><Text text={content.name} /></h1>
+      {content.headline && <p data-headline={formatting ? true : undefined} className={styles.headline}><Text text={content.headline} /></p>}
       {!resolved.split && content.contacts.length > 0 && <ContactLine items={content.contacts} />}
     </>
   );
@@ -280,8 +269,8 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
   const beside = content.photo && (position === PhotoPosition.HEADER_START || position === PhotoPosition.HEADER_END);
 
   return (
-    <DocumentPage theme={resolved} paper={paper} lang={lang} dir={dir} label="Resume">
-      <header className={cn(styles.header, beside && styles.headerWithPhoto)}>
+    <DocumentPage formatting={formatting} theme={resolved} paper={paper} lang={lang} dir={dir} label="Resume">
+      <header data-document-header={formatting ? true : undefined} className={cn(styles.header, beside && styles.headerWithPhoto)}>
         {position === PhotoPosition.ABOVE_NAME && photo("header", styles.photoAbove)}
         {position === PhotoPosition.HEADER_START && photo("header")}
         {beside ? <div className={styles.headerText}>{title}</div> : title}
@@ -289,7 +278,7 @@ export function ResumeDocument({ theme, profile, paper, layout, sections = DEFAU
       </header>
       <div className={styles.columns}>
         {columns.map((column, index) => (
-          <div key={index} className={cn(styles.column, column === panel && styles.sidebarPanel)}>
+          <div data-column={formatting ? true : undefined} key={index} className={cn(styles.column, column === panel && styles.sidebarPanel)}>
             {column}
           </div>
         ))}
@@ -332,17 +321,18 @@ const breakAfterDash = (dates: string) =>
  * the line, or before it in a timeline column (the dates come first then, so
  * they float into the column next to the title).
  */
-function EntryHead({ title, at, dates, timeline }: { title: string; at: ReactNode; dates: string; timeline: boolean }) {
+function EntryHead({ title, at, dates, timeline, enhanced = false }: { enhanced?: boolean; title: string; at: ReactNode; dates: string; timeline: boolean }) {
+  const Text = enhanced ? DocumentText : PlainDocumentText;
   const datesSpan = dates && <span className={styles.dates}>{timeline ? breakAfterDash(dates) : dates}</span>;
   return (
     <div className={styles.entryHead}>
       {timeline && datesSpan}
       <p>
-        <span className={styles.entryTitle}>{title}</span>
+        <span className={styles.entryTitle}><Text text={title} /></span>
         {at && (
           <>
             {title && ", "}
-            {at}
+            {typeof at === "string" ? <Text text={at} /> : at}
           </>
         )}
       </p>
@@ -352,9 +342,10 @@ function EntryHead({ title, at, dates, timeline }: { title: string; at: ReactNod
 }
 
 /** A custom section's items in its format (#298). */
-function CustomSectionItems({ section, timeline, renderUnit }: { section: ResumeContent["customSections"][number]; timeline: boolean; renderUnit: UnitRenderer }) {
+function CustomSectionItems({ section, timeline, renderUnit, enhanced = false, formatting }: { formatting?: Record<string, DocumentStyle>; enhanced?: boolean; section: ResumeContent["customSections"][number]; timeline: boolean; renderUnit: UnitRenderer }) {
+  const Text = enhanced ? DocumentText : CitationText;
   if (section.format === "INLINE") {
-    return renderUnit({ id: `custom-inline:${section.id}`, children: <p>{section.items.map((item) => item.title).join(" · ")}</p> });
+    return renderUnit({ id: `custom-inline:${section.id}`, children: <p>{enhanced ? <DocumentText text={section.items.map((item) => item.title).join(" · ")} /> : section.items.map((item) => item.title).join(" · ")}</p> });
   }
   return section.items.map((item) => (
     <Fragment key={item.id}>
@@ -364,7 +355,7 @@ function CustomSectionItems({ section, timeline, renderUnit }: { section: Resume
             className: styles.publication,
             children: (
               <p>
-                <CitationText text={item.title} />
+                <Text text={item.title} />
                 {item.link && (
                   <>
                     {" "}
@@ -377,13 +368,13 @@ function CustomSectionItems({ section, timeline, renderUnit }: { section: Resume
         : renderUnit({
             id: `custom-entry:${item.id}`,
             className: styles.entry,
-            head: <EntryHead title={item.title} at={item.subtitle} dates={item.dates} timeline={timeline} />,
+            head: <EntryHead enhanced={enhanced} title={item.title} at={item.subtitle} dates={item.dates} timeline={timeline} />,
             children: (
               <>
-                {item.bullets.length > 0 && (
+                {enhanced ? <EntryBody enhanced bullets={item.bullets} bodyFormat={formatting?.[`unit:custom-entry:${item.id}`]?.bodyFormat ?? formatting?.[`section:custom:${section.id}`]?.bodyFormat ?? formatting?.document?.bodyFormat} /> : item.bullets.length > 0 && (
                   <ul className={styles.bullets}>
                     {item.bullets.map((bullet, index) => (
-                      <li key={index}>{bullet}</li>
+                      <li key={index}>{enhanced ? <DocumentText text={bullet} /> : bullet}</li>
                     ))}
                   </ul>
                 )}
@@ -412,8 +403,28 @@ function DocumentLink({ link, href }: { link: string; href: string | null }) {
   );
 }
 
+function EntryBody({ body, bullets, enhanced = false, bodyFormat }: Pick<ResumeRole, "body" | "bullets"> & { enhanced?: boolean; bodyFormat?: "bullets" | "paragraphs" }) {
+  const Text = enhanced ? DocumentText : CitationText;
+  const blocks: ResumeBodyBlock[] = body ?? (bodyFormat === "paragraphs" ? bullets.map(text => ({ type: "paragraph", text })) : bullets.length ? [{ type: "bullets", items: bullets }] : []);
+  return blocks.map((block, index) =>
+    block.type === "paragraph" ? (
+      <p key={index} className={styles.bodyParagraph}>
+        <Text text={block.text} />
+      </p>
+    ) : (
+      <ul key={index} className={styles.bullets}>
+        {block.items.map((bullet, itemIndex) => (
+          <li key={itemIndex}>
+            <Text text={bullet} />
+          </li>
+        ))}
+      </ul>
+    ),
+  );
+}
+
 /** The Skills section: a line per group, led by the group's name (#280). */
-function SkillLines({ text }: { text: string }) {
+function SkillLines({ text, enhanced = false }: { text: string; enhanced?: boolean }) {
   return text
     .split("\n")
     .map((line) => line.trim())
@@ -423,7 +434,7 @@ function SkillLines({ text }: { text: string }) {
       return (
         <p key={index} className={styles.skillLine}>
           {label && <strong className={styles.skillLabel}>{label}: </strong>}
-          {skills}
+          {enhanced ? <DocumentText text={skills} /> : skills}
         </p>
       );
     });

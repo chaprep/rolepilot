@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { acceptedSkills, RESUME_RULES, resumeEvidenceSources, tailoredSkillsSchema } from "./tailor-resume";
 
 import { DocumentKind, type Tone } from "@/generated/prisma/enums";
 import { SIGN_OFF_UNIT, type Extracted, type Unit } from "@/lib/application-data";
@@ -8,7 +9,7 @@ import type { ProfileData } from "@/lib/profile";
 import { TONES } from "@/lib/tones";
 import { bulletLines, isBulletUnit } from "@/lib/unit-text";
 
-import { guardSources, guardUnits } from "../fact-guard";
+import { guardSources, guardUnits, resumeFactSources } from "../fact-guard";
 
 import {
   applicationFacts,
@@ -19,13 +20,14 @@ import {
   languageRule,
   NO_EM_DASHES,
   profileForPrompt,
+  postingForPrompt,
   system,
   truthfulness,
   UNTRUSTED_POSTING,
   type Task,
 } from "./prompt-parts";
 
-export const REGENERATE_UNIT_VERSION = "regenerate-unit@6";
+export const REGENERATE_UNIT_VERSION = "regenerate-unit@7";
 
 /** What the letter's frame parts are, for the model (E8-11). */
 const FRAME_PARTS: Record<string, string> = {
@@ -48,7 +50,7 @@ const DOCUMENT_NAMES: Record<DocumentKind, string> = {
   [DocumentKind.EMAIL]: "application email",
 };
 
-const answerSchema = z.object({ text: z.string() });
+const answerSchema = z.object({ text: z.string(), skills: tailoredSkillsSchema.nullable().optional() });
 
 export type RegenerateInput = {
   kind: DocumentKind;
@@ -87,6 +89,8 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
       kind !== DocumentKind.RESUME && `Tone: ${TONES[tone].label}. ${TONES[tone].description}`,
       kind === DocumentKind.COVER_LETTER && FRAME_PARTS[unit.id],
       kind === DocumentKind.EMAIL && EMAIL_PARTS[unit.id],
+      kind === DocumentKind.RESUME && RESUME_RULES,
+      kind === DocumentKind.RESUME && unit.id === "skills" && "Return the full grouped skills list in skills; text is ignored for this section.",
       truthfulness(options.strict),
       candidateFacts(profile, facts),
       CREATIVITY[options.creativity],
@@ -101,6 +105,8 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
           `The candidate's profile:\n${profileForPrompt(profile)}`,
           `The job:\n${jobForPrompt(extracted, null)}`,
           `The whole ${what} now:\n${JSON.stringify(document, null, 2)}`,
+          kind === DocumentKind.RESUME && `Original posting (reference only):\n${postingForPrompt(posting)}`,
+          kind === DocumentKind.RESUME && `Candidate evidence sources:\n${JSON.stringify(resumeEvidenceSources(profile, facts))}`,
           applicationFacts(facts),
           `Write a new version of "${unit.label}" (${unit.id}). Its current text:\n${unit.text}`,
         ]
@@ -113,7 +119,7 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
     creativity: options.creativity,
     signal: options.signal,
   });
-  const text = bullets ? bulletLines(answer.text) : answer.text.trim();
+  const text = kind === DocumentKind.RESUME && unit.id === "skills" ? acceptedSkills(profile, answer.skills ?? [], facts) : bullets ? bulletLines(answer.text) : answer.text.trim();
   // An English sign-off stays the tone's.
   const english = /^english$/i.test(options.language ?? extracted.language ?? "English");
   const updated = { ...unit, text: unit.id === SIGN_OFF_UNIT && english ? TONES[tone].signOff : text || unit.text };
@@ -122,7 +128,7 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
     data:
       options.strict && !isFrameUnit(unit.id)
         ? // The email's greeting names its recipient, from the posting or typed in by the user.
-          guardUnits([updated], guardSources(profile, extracted, kind === DocumentKind.EMAIL ? [posting, emailParts(document).to].join("\n") : posting, facts))[0]
+          guardUnits([updated], kind === DocumentKind.RESUME ? resumeFactSources(profile, facts) : guardSources(profile, extracted, kind === DocumentKind.EMAIL ? [posting, emailParts(document).to].join("\n") : posting, facts))[0]
         : { ...updated, unverified: undefined },
     promptVersion: REGENERATE_UNIT_VERSION,
   };

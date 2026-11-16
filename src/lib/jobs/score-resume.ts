@@ -2,11 +2,12 @@ import "server-only";
 
 import { z } from "zod";
 
+import { readDocumentState } from "@/lib/document-state";
+import { profileOfApplication } from "@/lib/frozen-copy";
 import { DocumentKind } from "@/generated/prisma/enums";
 import { AiError } from "@/lib/ai/errors";
 import { unitsSchema } from "@/lib/application-data";
 import { prisma } from "@/lib/prisma";
-import { loadProfile } from "@/lib/profile-data";
 import { sectionLayoutSchema, withoutSectionsOff } from "@/lib/resume-sections";
 import { resumeFitSchema, tailoredProfile, type ResumeFit } from "@/lib/resume-fit";
 import { loadPostingScorer } from "@/lib/scoring";
@@ -30,15 +31,22 @@ export const scoreResumeJob = defineJob({
     await step("Scoring the resume");
     const application = await prisma.application.findUniqueOrThrow({
       where: { id: applicationId },
-      include: { documents: { where: { kind: DocumentKind.RESUME }, select: { units: true } } },
+      include: { documents: { where: { kind: DocumentKind.RESUME }, select: { units: true, state: true, updatedAt: true } } },
     });
     const units = unitsSchema.safeParse(application.documents[0]?.units);
     // Said as it is, like an AI provider that isn't set up.
     if (!units.success) throw AiError.config("This application has no tailored resume to score. Write it first.");
 
-    const [fullProfile, settings, score] = await Promise.all([loadProfile(), loadSettings(), loadPostingScorer()]);
+    const [fullProfile, settings, score] = await Promise.all([profileOfApplication(application.frozen), loadSettings(), loadPostingScorer()]);
     const sections = sectionLayoutSchema.safeParse(application.sections);
-    const profile = tailoredProfile(withoutSectionsOff(fullProfile, sections.success ? sections.data : settings.resumeSections), units.data);
+    const state = readDocumentState(application.documents[0].state);
+    const profile = tailoredProfile(withoutSectionsOff(state?.profile ?? fullProfile, state?.sections ?? (sections.success ? sections.data : settings.resumeSections)), units.data);
+    const languageText = units.data.find(unit => unit.id === "languages")?.text.trim();
+    if (languageText) {
+      // The scorer receives the actual written language claim without guessing a proficiency enum.
+      profile.basics.summary += `\nLanguages as written on this resume: ${languageText}`;
+      profile.languages = [];
+    }
     const { data, scoredWith } = await score(
       {
         title: application.role || application.title,
@@ -52,7 +60,12 @@ export const scoreResumeJob = defineJob({
       signal,
     );
     const fit: ResumeFit = { ...data, scoredWith, scoredAt: new Date().toISOString() };
-    await prisma.application.update({ where: { id: applicationId }, data: { resumeFit: fit } });
+    await prisma.$transaction(async (tx) => {
+      // Lock the same document row as edits before publishing the score.
+      const { count } = await tx.document.updateMany({ where: { applicationId, kind: DocumentKind.RESUME, updatedAt: application.documents[0].updatedAt }, data: { updatedAt: application.documents[0].updatedAt } });
+      if (!count) throw AiError.config("The resume changed while scoring. Score it again.");
+      await tx.application.update({ where: { id: applicationId }, data: { resumeFit: fit } });
+    });
     return fit;
   },
 });

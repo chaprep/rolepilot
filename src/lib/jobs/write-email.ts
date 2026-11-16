@@ -11,6 +11,8 @@ import { extractedOf, matchSchema, unitsSchema, type Unit } from "@/lib/applicat
 import { emailParts } from "@/lib/application-email";
 import { updateDocuments } from "@/lib/document-units";
 import { saveVersion } from "@/lib/document-versions";
+import { tailoredProfile } from "@/lib/resume-fit";
+import { readDocumentState } from "@/lib/document-state";
 import { isParagraph } from "@/lib/letter-frame";
 import { prisma } from "@/lib/prisma";
 import { loadFactTexts, loadProfile } from "@/lib/profile-data";
@@ -48,10 +50,13 @@ export const writeEmailJob = defineJob({
     const match = matchSchema.safeParse(application.match);
 
     const [provider, options, profile, facts] = await Promise.all([getAiProvider(), loadTaskOptions(), loadProfile(), loadFactTexts(applicationId)]);
+    const resumeState = readDocumentState(application.documents.find(document => document.kind === "RESUME")?.state);
+    const emailState = readDocumentState(application.documents.find(document => document.kind === "EMAIL")?.state);
+    const localProfile = resumeState ? tailoredProfile(resumeState.profile, unitsOf(DocumentKind.RESUME) ?? []) : profile;
     const { data, promptVersion } = await writeEmail(
       provider,
       {
-        profile,
+        profile: emailState ? { ...localProfile, basics: { ...localProfile.basics, ...emailState.profile.basics, summary: localProfile.basics.summary } } : localProfile,
         extracted: extractedOf(application),
         match: match.success ? match.data : null,
         tone: application.tone,
@@ -61,7 +66,7 @@ export const writeEmailJob = defineJob({
         letter: (unitsOf(DocumentKind.COVER_LETTER) ?? []).filter(isParagraph).map((unit) => unit.text),
       },
       // In the language of the resume and the letter it goes with.
-      { ...options, language: application.language || options.language, signal },
+      { ...options, language: emailState?.language || resumeState?.language || application.language || options.language, signal },
     );
 
     const startupTo = startupAddress(application.startup?.emails);

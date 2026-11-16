@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { toastResult } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import type { DocumentKind, VersionCause } from "@/generated/prisma/enums";
+import type { DocumentState } from "@/lib/document-state";
 import type { Unit } from "@/lib/application-data";
 import { formatShortDate } from "@/lib/dates";
 import { DOCUMENT_LABELS } from "@/lib/file-name";
@@ -15,7 +16,7 @@ import { listVersions, loadVersion } from "./actions";
 type Version = { id: string; cause: VersionCause; detail: string; createdAt: string };
 
 /** A version as the preview shows it (E8-10). */
-export type ViewedVersion = { document: DocumentKind; id: string; units: Unit[]; label: string; when: string };
+export type ViewedVersion = { document: DocumentKind; id: string; units: Unit[]; state?: DocumentState | null; label: string; when: string };
 
 /** "29 Sep, 14:05", in the browser's time zone, dated as elsewhere in the app. */
 export function versionTime(iso: string): string {
@@ -81,7 +82,7 @@ export function VersionHistory({
     const result = toastResult(await loadVersion({ id: applicationId, versionId: version.id }));
     setOpening(null);
     if (!result.ok) return;
-    onView({ document: result.data.document, id: version.id, units: result.data.units, label: versionLabel(version), when: versionTime(version.createdAt) });
+    onView({ document: result.data.document, id: version.id, units: result.data.units, state: result.data.state, label: versionLabel(version), when: versionTime(version.createdAt) });
   };
 
   const name = DOCUMENT_LABELS[document ?? "RESUME"].toLowerCase();

@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 
 import { isAiConfigured, isAiUsable } from "@/lib/ai/config";
 import { handsOffToClaude } from "@/lib/connector/handoff";
+import { loadProfile } from "@/lib/profile-data";
+import { evidenceOptions } from "@/lib/application-data";
+import { withoutSectionsOff } from "@/lib/resume-sections";
 import { DEMO_POSTING } from "@/lib/demo-profile";
 import { postingText } from "@/lib/job-search/search";
 import { prisma } from "@/lib/prisma";
@@ -25,8 +28,10 @@ export default async function NewApplicationPage({ searchParams }: PageProps<"/n
     // "Write to them" on Startups (#222): what's known about the startup, without its addresses.
     typeof startupId === "string" ? getStartup(startupId) : null,
   ]);
+  const options = evidenceOptions(withoutSectionsOff(await loadProfile(), settings.resumeSections));
   return (
     <NewApplication
+      evidenceOptions={options}
       aiReady={aiReady}
       writeInClaude={writeInClaude}
       defaultTone={settings.defaultTone}

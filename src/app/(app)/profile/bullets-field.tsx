@@ -7,7 +7,7 @@ import { toggleMark } from "@/lib/citation";
 import { cn } from "@/lib/cn";
 
 /**
- * "What you did" for a role or project: a point per line, with B (and
+ * "What you did" for a role or project: * marks a bullet on the base resume, with B (and
  * Ctrl+B) for **bold**, as in a publication's citation (#368). Tailored
  * resumes keep the bold of the words they keep.
  */
@@ -66,7 +66,8 @@ export function BulletsField({ value, onChange, placeholder }: { value: string; 
         className={cn(controlClassName, "resize-y px-3 py-[11px] leading-[1.6]")}
       />
       <p id={`${id}-hint`} className="text-label text-muted">
-        Select words and press B to set them in bold, like a result: here they show as **bold**.
+        On the base resume, start a line with * followed by a space for a bullet. Leave it unmarked for a paragraph; use a blank line between paragraphs.
+        {" "}Select words and press B to set them in bold: here they show as **bold**.
       </p>
     </div>
   );

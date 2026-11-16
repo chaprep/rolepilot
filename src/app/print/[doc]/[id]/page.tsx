@@ -22,7 +22,7 @@ export default async function PrintTailoredDocumentPage({ params }: PageProps<"/
 
   return (
     <>
-      <style>{printCss(document.theme, settings.paper)}</style>
+      <style>{printCss(document.state?.theme ?? document.theme, document.state?.paper ?? settings.paper)}</style>
       {doc === "resume" ? (
         <TailoredResume
           resume={document}
@@ -40,6 +40,7 @@ export default async function PrintTailoredDocumentPage({ params }: PageProps<"/
           profile={profile}
           paper={settings.paper}
           company={application.company}
+          role={application.role}
           location={application.location}
           tone={application.tone}
           date={letterDate}

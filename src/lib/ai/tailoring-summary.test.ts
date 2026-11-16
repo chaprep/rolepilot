@@ -39,12 +39,12 @@ describe("tailoringSummary (E7-6)", () => {
       "Reworded your Northwind Logistics and Fieldnote roles for this job",
       "Kept your certification word for word",
       "Kept your publication word for word",
-      "Ordered your skills by what Ledgerly asks for",
+      "Selected and phrased your skills for this job",
       "Left out references, since the posting doesn't ask for them",
       "Wrote a warm cover letter",
-      "Worth being ready to talk about “Experience with payments or fintech”, since it isn't in your profile",
+      "Review the initial profile-match gaps: “Experience with payments or fintech”. Application evidence may address them",
     ]);
-    expect(summary.foot).toBe("Nothing invented: every line comes from your profile.");
+    expect(summary.foot).toBe("Written from your profile and application facts. Review the details before sending.");
   });
 
   it("mentions projects it reworded (PRO-13)", () => {
@@ -92,10 +92,10 @@ describe("tailoringSummary (E7-6)", () => {
       note: "Lean on research.",
       references: "included",
     });
-    expect(summary.list).toContain("Left out Prototyping, HTML & CSS and Workshop facilitation, which this job isn't about");
+    expect(summary.list).toContain("Selected and phrased your skills for this job");
     expect(summary.list).toContain("Included your references, since the posting asks for them");
     expect(summary.list).toContain("Took your note into account: “Lean on research.”");
-    expect(summary.list).toContain("Marked 2 details to check (not in your profile or the posting)");
+    expect(summary.list).toContain("Marked 2 details to check against the source information");
     expect(summary.foot).toBe("Double-check the marked details before you send anything.");
   });
 

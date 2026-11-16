@@ -83,6 +83,14 @@ describe("the job runner", () => {
     expect(row.finishedAt).not.toBeNull();
   });
 
+  it("queues an explicitly identified submission only once", async () => {
+    const first = await startJob(gated, { name: "Once", fail: "no" }, { id: "stable-submission" });
+    expect(await startJob(gated, { name: "Once", fail: "no" }, { id: "stable-submission" })).toBe(first);
+    await release("Once");
+    await eventually(async () => (await status(first)).toBe("DONE"));
+    expect(await prisma().job.count()).toBe(1);
+  });
+
   it("keeps AI errors' plain words and hides everything else", async () => {
     const ai = await startJob(gated, { name: "Ai", fail: "ai" });
     const other = await startJob(gated, { name: "Other", fail: "error" });

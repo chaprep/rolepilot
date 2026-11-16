@@ -11,14 +11,14 @@ import { formatDocumentDate } from "@/lib/settings";
 // paragraphs. Letters written before E8-11 don't have them: they're drawn
 // from the profile, in the letter's language, until one is edited.
 
-export const FRAME_UNITS = ["sender", "date", "recipient", "greeting", "signature"] as const;
+export const FRAME_UNITS = ["sender", "headline", "contacts", "date", "recipient", "greeting", "signature"] as const;
 export type FrameUnitId = (typeof FRAME_UNITS)[number];
-export type Frame = Record<FrameUnitId, string>;
+export type Frame = Record<Exclude<FrameUnitId, "headline" | "contacts">, string> & Partial<Record<"headline" | "contacts", string>>;
 
-export const FRAME_LABELS: Frame = { sender: "Sender", date: "Date", recipient: "Recipient", greeting: "Greeting", signature: "Signature" };
+export const FRAME_LABELS: Record<FrameUnitId, string> = { headline: "Role title", contacts: "Contact details", sender: "Sender", date: "Date", recipient: "Recipient", greeting: "Greeting", signature: "Signature" };
 
-/** Parts with contact details: never sent to an AI model. */
-export const PRIVATE_FRAME_UNITS: ReadonlySet<string> = new Set<FrameUnitId>(["sender", "signature"]);
+/** Parts with contact details: omitted from ordinary AI context; refinement can read explicitly requested fields. */
+export const PRIVATE_FRAME_UNITS: ReadonlySet<string> = new Set<FrameUnitId>(["sender", "contacts", "signature"]);
 
 /** Parts the AI writes, in the letter's language, and can write again. */
 export const WRITTEN_FRAME_UNITS: ReadonlySet<string> = new Set<FrameUnitId>(["recipient", "greeting"]);
@@ -95,6 +95,8 @@ export function withFrame(units: Unit[], frame: Partial<Frame>): Unit[] {
   const signOff = byId.get(SIGN_OFF_UNIT);
   return [
     ...part("sender"),
+    ...part("headline"),
+    ...part("contacts"),
     ...part("date"),
     ...part("recipient"),
     ...part("greeting"),

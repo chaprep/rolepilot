@@ -1,0 +1,2 @@
+ALTER TABLE "Theme" ADD COLUMN "marginXmm" REAL;
+ALTER TABLE "Theme" ADD COLUMN "marginYmm" REAL;

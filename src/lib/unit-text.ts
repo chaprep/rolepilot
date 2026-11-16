@@ -36,7 +36,7 @@ export function isCustomUnit(unitId: string): boolean {
   return unitId.startsWith("custom-entry:") || unitId.startsWith("custom-line:") || unitId.startsWith("custom-inline:");
 }
 
-/** Whether a unit is copied from the profile word for word, a publication, a certification or a custom section: never written by the AI. */
+/** Whether automatic tailoring/regeneration preserves the profile text. Explicit chat edits may change these units. */
 export function isVerbatimUnit(unitId: string): boolean {
   return isPublicationUnit(unitId) || isCertificationUnit(unitId) || isCustomUnit(unitId);
 }

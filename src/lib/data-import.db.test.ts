@@ -1,3 +1,5 @@
+import { demoDocumentState } from "@/test/document-state";
+import { readDocumentState, documentChangesSchema } from "@/lib/document-state";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { decryptApiKey, encryptApiKey } from "@/lib/ai/api-key";
@@ -38,6 +40,34 @@ beforeEach(async () => {
   await prisma().setting.create({ data: { key: "apiKeyEnc", value: encryptApiKey("sk-current", secret) } });
 });
 afterAll(() => prisma().$disconnect());
+
+describe("theme margin backups", () => {
+  it("preserves margins and restores older backups with preset defaults", async () => {
+    await prisma().theme.update({ where: { id: "mine" }, data: { marginXmm: 0, marginYmm: 10.5 } });
+    const file = await asFile();
+    await importExport(prisma(), file);
+    expect(await prisma().theme.findUniqueOrThrow({ where: { id: "mine" } })).toMatchObject({ marginXmm: 0, marginYmm: 10.5 });
+    const older = { ...file, schemaVersion: 11, themes: file.themes.map((entry) => ({ ...entry, marginXmm: undefined, marginYmm: undefined })) };
+    const parsed = parseExport(JSON.stringify(older));
+    if (!parsed.ok) throw new Error(parsed.error);
+    await importExport(prisma(), parsed.data);
+    expect(await prisma().theme.findUniqueOrThrow({ where: { id: "mine" } })).toMatchObject({ marginXmm: null, marginYmm: null });
+  });
+});
+
+it("round-trips the letter template and defaults older backups to Classic", async () => {
+  const letter = await prisma().document.findFirstOrThrow({ where: { kind: "COVER_LETTER" } });
+  await prisma().document.update({ where: { id: letter.id }, data: { initialLetterLayout: "SIDEBAR" } });
+  const file = await asFile();
+  expect(file.schemaVersion).toBe(14);
+  await importExport(prisma(), file);
+  expect((await prisma().document.findUniqueOrThrow({ where: { id: letter.id } })).initialLetterLayout).toBe("SIDEBAR");
+  const older = { ...file, schemaVersion: 13, applications: file.applications.map(app => ({ ...app, documents: app.documents.map(doc => ({ ...doc, initialLetterLayout: undefined })) })) };
+  const parsed = parseExport(JSON.stringify(older));
+  if (!parsed.ok) throw new Error(parsed.error);
+  await importExport(prisma(), parsed.data);
+  expect((await prisma().document.findUniqueOrThrow({ where: { id: letter.id } })).initialLetterLayout).toBeNull();
+});
 
 describe("importExport (E10-6)", () => {
   it("restores everything as it was exported", async () => {
@@ -459,4 +489,19 @@ describe("parseExport (E10-6)", () => {
     const damaged = { ...good, applications: [{ ...good.applications[0], status: "MAYBE" }] };
     expect(parseExport(JSON.stringify(damaged))).toMatchObject({ ok: false, error: expect.stringMatching(/^That export is damaged or incomplete \(applications\.0\.status/) });
   });
+});
+
+
+it("round-trips independent documents, complete versions and formatting Undo records", async () => {
+  const row = await prisma().document.findFirstOrThrow();
+  const state = demoDocumentState(); state.theme.marginXmm = 7;
+  await prisma().document.update({ where: { id: row.id }, data: { state } });
+  const version = await prisma().documentVersion.create({ data: { documentId: row.id, units: row.units!, state, cause: "REFINED" } });
+  const changes = [{ document: row.kind, beforeUnits: row.units, afterUnits: row.units, beforeState: null, afterState: state }];
+  const message = await prisma().chatMessage.create({ data: { applicationId: row.applicationId, role: "AI", text: "Formatted.", documentChanges: changes } });
+  const file = await asFile();
+  await importExport(prisma(), file);
+  expect(readDocumentState((await prisma().document.findUniqueOrThrow({ where: { id: row.id } })).state)?.theme.marginXmm).toBe(7);
+  expect(readDocumentState((await prisma().documentVersion.findUniqueOrThrow({ where: { id: version.id } })).state)?.theme.marginXmm).toBe(7);
+  expect(documentChangesSchema.parse((await prisma().chatMessage.findUniqueOrThrow({ where: { id: message.id } })).documentChanges)).toHaveLength(1);
 });

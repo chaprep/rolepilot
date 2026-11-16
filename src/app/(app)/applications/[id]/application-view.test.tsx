@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,7 +12,7 @@ import { retry } from "@/lib/jobs/actions";
 import type { JobView } from "@/lib/jobs/runner";
 
 import {
-  addMatchSkill,
+  addApplicationEvidence,
   addNote,
   deleteNote,
   leaveOutUnit,
@@ -25,6 +25,9 @@ import {
   saveUnit,
   sendMessage,
   setApplicationTheme,
+  saveApplicationTheme,
+  setApplicationSections,
+  setCoverLetterLayout,
   setFollowThemeLayout,
   setShowPhoto,
   startRegenerating,
@@ -38,7 +41,10 @@ import {
 import { ApplicationView, type ApplicationViewProps } from "./application-view";
 
 vi.mock("./actions", () => ({
+  saveApplicationTheme: vi.fn(),
+  setApplicationSections: vi.fn(async () => ({ ok: true, data: null })),
   setApplicationTheme: vi.fn(async () => ({ ok: true, data: null })),
+  setCoverLetterLayout: vi.fn(async () => ({ ok: true, data: null })),
   setFollowThemeLayout: vi.fn(async () => ({ ok: true, data: null })),
   setShowPhoto: vi.fn(async () => ({ ok: true, data: null })),
   saveUnit: vi.fn(async ({ text }: { text: string }) => ({ ok: true, data: { text } })),
@@ -46,7 +52,7 @@ vi.mock("./actions", () => ({
   restoreUnit: vi.fn(async () => ({ ok: true, data: null })),
   sendMessage: vi.fn(async () => ({ ok: true, data: { jobId: "reply-1" } })),
   undoMessage: vi.fn(async () => ({ ok: true, data: { edited: [{ document: "RESUME", unitId: "summary" }] } })),
-  addMatchSkill: vi.fn(async () => ({ ok: true, data: { name: "Kubernetes" } })),
+  addApplicationEvidence: vi.fn(async () => ({ ok: true, data: { fact: { id: "evidence-1", text: "Used Kubernetes" }, jobId: "evidence-job", retry: false, notice: "Evidence saved. Updating this application’s resume." } })),
   addNote: vi.fn(async () => ({ ok: true, data: null })),
   updateNote: vi.fn(async () => ({ ok: true, data: null })),
   deleteNote: vi.fn(async () => ({ ok: true, data: { body: "Called John.", createdAt: "2026-10-03T13:00:00.000Z", updatedAt: "2026-10-03T13:00:00.000Z" } })),
@@ -134,13 +140,13 @@ const props: ApplicationViewProps = {
   rewriting: [],
   messages: [],
   refining: null,
-  suggestions: { resume: ["Make the summary shorter"], letter: ["Make it more formal"], email: ["Shorter, under 100 words"] },
 };
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/applications/app-1");
   vi.mocked(setFollowThemeLayout).mockClear();
   vi.mocked(setApplicationTheme).mockClear();
+  vi.mocked(setCoverLetterLayout).mockClear();
   vi.mocked(saveUnit).mockClear();
   vi.mocked(startRegenerating).mockClear();
   vi.mocked(restoreUnit).mockClear();
@@ -184,7 +190,7 @@ describe("the document tabs (E8-2)", () => {
 
   it("shows the tailored resume in its theme, in a single column by default", () => {
     render(<ApplicationView {...props} />);
-    expect(screen.getByText(/^Tailored resume ·/)).toHaveTextContent("Tailored resume · Editorial theme");
+    expect(screen.getByText(/^Tailored resume ·/)).toHaveTextContent("Tailored resume · Editorial");
     const resume = screen.getByRole("article", { name: "Resume" });
     expect(resume.querySelector('[data-unit="summary"]')).toHaveTextContent(demoResumeUnits()[0].text);
     // Editorial is a single-column theme: nothing to switch.
@@ -234,17 +240,12 @@ describe("the document tabs (E8-2)", () => {
     render(<ApplicationView {...props} />);
     expect(screen.queryByRole("switch", { name: "Sidebar layout" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Editorial theme" }));
-    const menu = screen.getByRole("menu");
-    expect(within(menu).getByRole("menuitemradio", { name: "Editorial" })).toHaveAttribute("aria-checked", "true");
-    expect(within(menu).getByRole("menuitemradio", { name: "Modern base theme" })).toBeInTheDocument();
-    expect(within(menu).getAllByRole("menuitemradio").map((item) => item.textContent).slice(-2)).toEqual(["Atlas", "Mine"]);
-    expect(within(menu).getByRole("separator")).toBeInTheDocument();
-
-    // Shown in the new theme while it's saved: Modern has a sidebar, so its layout switch appears.
-    await user.click(within(menu).getByRole("menuitemradio", { name: "Modern base theme" }));
+    await user.click(screen.getByRole("tab", { name: "Resume controls" }));
+    expect(screen.queryByRole("button", { name: "Editorial theme" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Editorial theme, in use" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Modern theme" }));
     expect(setApplicationTheme).toHaveBeenCalledWith({ id: "app-1", themeId: "modern" });
-    expect(screen.getByRole("button", { name: "Modern theme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Modern theme, in use" })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Sidebar layout" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Cover letter" }));
     expect(screen.getByRole("button", { name: "Modern theme" })).toBeInTheDocument();
@@ -332,17 +333,17 @@ describe("editing a unit (E8-3)", () => {
     expect(toast).toHaveBeenLastCalledWith("Put back.");
   });
 
-  it("keeps a publication as written: Edit and Leave out, no Regenerate or Ask AI (#218)", () => {
+  it("allows Ask AI on a publication while keeping automatic regeneration off", () => {
     render(<ApplicationView {...props} />);
     const publication = screen.getByRole("group", { name: /^Publication “Doe, J\./ });
-    expect(within(publication).getAllByRole("button").map((button) => button.textContent)).toEqual(["Edit", "Leave out"]);
+    expect(within(publication).getAllByRole("button").map((button) => button.textContent)).toEqual(["Edit", "Ask AI", "Leave out"]);
     expect(within(publication).getByText("Doe, J.").tagName).toBe("STRONG");
   });
 
-  it("keeps a certification as written: Edit and Leave out, no Regenerate or Ask AI (#293)", () => {
+  it("allows Ask AI on a certification while keeping automatic regeneration off", () => {
     render(<ApplicationView {...props} />);
     const certification = screen.getByRole("group", { name: /^Certification “Certified Accessibility Specialist”/ });
-    expect(within(certification).getAllByRole("button").map((button) => button.textContent)).toEqual(["Edit", "Leave out"]);
+    expect(within(certification).getAllByRole("button").map((button) => button.textContent)).toEqual(["Edit", "Ask AI", "Leave out"]);
   });
 
   it("leaves nothing out of the cover letter", () => {
@@ -548,23 +549,32 @@ describe("the Refine with AI panel (E8-5)", () => {
     expect(within(log).getByText("About: Summary")).toBeInTheDocument();
   });
 
-  it("changes its subtitle and suggestions with the tab", async () => {
+  it("keeps the heading in the conversation scroll area and the composer outside it", () => {
+    render(<ApplicationView {...props} />);
+    const log = within(panel()).getByRole("log", { name: "Conversation" });
+    expect(within(log).getByRole("heading", { name: "Refine with AI" })).toBeInTheDocument();
+    expect(within(log).getByText(/^Ask for content, structure or formatting changes to this resume/)).toBeInTheDocument();
+    expect(log).not.toContainElement(input());
+    expect(log).not.toContainElement(within(panel()).getByRole("button", { name: "Send" }));
+  });
+
+  it("changes its subtitle with the tab without showing suggestion buttons", async () => {
     const user = userEvent.setup();
     render(<ApplicationView {...props} />);
-    expect(within(panel()).getByText(/^Ask for changes to your tailored resume/)).toBeInTheDocument();
-    expect(within(panel()).getByRole("button", { name: "Make the summary shorter" })).toBeInTheDocument();
+    expect(within(panel()).getByText(/^Ask for content, structure or formatting changes to this resume/)).toBeInTheDocument();
+    expect(within(panel()).queryByRole("button", { name: "Make the summary shorter" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Cover letter" }));
-    expect(within(panel()).getByText(/^Ask for changes to your cover letter/)).toBeInTheDocument();
-    expect(within(panel()).getByRole("button", { name: "Make it more formal" })).toBeInTheDocument();
+    expect(within(panel()).getByText(/^Ask for content, structure or formatting changes to this cover letter/)).toBeInTheDocument();
+    expect(within(panel()).queryByRole("button", { name: "Make it more formal" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: /Job posting/ }));
     expect(within(panel()).getByText("Switch to the resume, cover letter or email to make changes.")).toBeInTheDocument();
     expect(within(panel()).queryByRole("button", { name: /Make/ })).not.toBeInTheDocument();
   });
 
-  it("sends a suggestion about the document on screen, then thinks", async () => {
+  it("sends a typed request about the document on screen, then thinks", async () => {
     const user = userEvent.setup();
     render(<ApplicationView {...props} />);
-    await user.click(screen.getByRole("button", { name: "Make the summary shorter" }));
+    await user.type(input(), "Make the summary shorter{Enter}");
     expect(sendMessage).toHaveBeenCalledWith({ id: "app-1", text: "Make the summary shorter", viewing: "RESUME", target: null });
     expect(within(panel()).getByText("Thinking…")).toBeInTheDocument();
   });
@@ -732,17 +742,18 @@ describe("the Job posting tab (E8-7)", () => {
     expect(screen.getByText("Pasted 27 Sep")).toBeInTheDocument();
   });
 
-  it("adds a missing skill to the profile", async () => {
+  it("collects application-only evidence and queues a resume update", async () => {
     const user = userEvent.setup();
     open();
-    await user.click(screen.getByRole("button", { name: "+ Add to profile" }));
-    expect(addMatchSkill).toHaveBeenCalledWith({ id: "app-1", index: 1 });
-    expect(toast).toHaveBeenCalledWith("Added “Kubernetes” to your skills. Attach it to a role under Experience to make it count.");
+    await user.click(screen.getAllByRole("button", { name: "Add for this application" })[1]);
+    await user.type(screen.getByLabelText("Supporting experience"), "Deployed Kubernetes services.");
+    await user.click(screen.getByRole("button", { name: "Save for this application" }));
+    expect(addApplicationEvidence).toHaveBeenCalledWith({ id: "app-1", evidence: expect.objectContaining({ requirementIndex: 1, text: "Deployed Kubernetes services.", targetUnitId: null }) });
   });
 
   it("links to the saved posting in a new tab", () => {
     open({ posting: { ...props.posting, url: "https://jobs.ledgerly.com/senior-designer" } });
-    const link = within(screen.getByRole("tabpanel")).getByRole("link", { name: "jobs.ledgerly.com/senior-designer (opens in a new tab)" });
+    const link = within(screen.getByRole("tabpanel", { name: /Job posting/ })).getByRole("link", { name: "jobs.ledgerly.com/senior-designer (opens in a new tab)" });
     expect(link).toHaveAttribute("href", "https://jobs.ledgerly.com/senior-designer");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
@@ -751,7 +762,7 @@ describe("the Job posting tab (E8-7)", () => {
   it("shows only the posting when it wasn't matched", () => {
     open({ match: null });
     expect(screen.queryByRole("heading", { name: "How you match" })).not.toBeInTheDocument();
-    expect(within(screen.getByRole("tabpanel")).queryByRole("link", { name: /opens in a new tab/ })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("tabpanel", { name: /Job posting/ })).queryByRole("link", { name: /opens in a new tab/ })).not.toBeInTheDocument();
   });
 });
 
@@ -912,7 +923,7 @@ describe("version history (E8-10)", () => {
     const user = userEvent.setup();
     vi.mocked(listVersions).mockResolvedValue({ ok: true, data: [written] });
     const older = demoResumeUnits().map((unit) => (unit.id === "summary" ? { ...unit, text: "An older summary." } : unit));
-    vi.mocked(loadVersion).mockResolvedValue({ ok: true, data: { document: "RESUME", units: older } });
+    vi.mocked(loadVersion).mockResolvedValue({ ok: true, data: { document: "RESUME", units: older, state: null } });
     render(<ApplicationView {...props} />);
 
     await user.click(screen.getAllByRole("button", { name: "History" })[0]);
@@ -921,6 +932,9 @@ describe("version history (E8-10)", () => {
     expect(screen.getByRole("note")).toHaveTextContent("You're looking at the version from");
     expect(screen.getByRole("note")).toHaveTextContent("Written by the AI.");
     expect(screen.getByText("An older summary.")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Resume controls" }));
+    expect(screen.getByText("Return to the current resume to change its theme or sections.")).toBeVisible();
+    expect(screen.queryByRole("tab", { name: "Customize" })).not.toBeInTheDocument();
     // No editing tools on an earlier version.
     expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
 
@@ -1006,11 +1020,11 @@ describe("the Email tab", () => {
     );
   });
 
-  it("says when the posting gives no address, and only edits the recipient", () => {
+  it("says when the posting gives no address, and allows editing or asking AI about the recipient", () => {
     render(<ApplicationView {...props} initialTab="email" email={[{ ...email[0], text: "" }, email[1], email[2]]} />);
     const recipient = screen.getByRole("group", { name: "Recipient" });
     expect(recipient).toHaveTextContent("The posting doesn't give an address. Edit to add one.");
-    expect(within(recipient).getAllByRole("button").map((button) => button.textContent)).toEqual(["Edit"]);
+    expect(within(recipient).getAllByRole("button").map((button) => button.textContent)).toEqual(["Edit", "Ask AI"]);
     expect(screen.queryByRole("button", { name: "Copy the recipient" })).not.toBeInTheDocument();
     expect(within(screen.getByRole("group", { name: "Subject" })).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Edit",
@@ -1053,8 +1067,9 @@ describe("the Email tab", () => {
     unmount();
 
     render(<ApplicationView {...props} initialTab="email" email={email} />);
-    expect(within(panel()).getByText(/^Ask for changes to your email/)).toBeInTheDocument();
-    await user.click(within(panel()).getByRole("button", { name: "Shorter, under 100 words" }));
+    expect(within(panel()).getByText(/^Ask for changes to this application/)).toBeInTheDocument();
+    expect(within(panel()).queryByRole("button", { name: "Shorter, under 100 words" })).not.toBeInTheDocument();
+    await user.type(within(panel()).getByRole("textbox", { name: "Ask for a change" }), "Shorter, under 100 words{Enter}");
     expect(sendMessage).toHaveBeenCalledWith({ id: "app-1", text: "Shorter, under 100 words", viewing: "EMAIL", target: null });
   });
 
@@ -1073,5 +1088,76 @@ describe("the Email tab", () => {
     await user.click(screen.getByRole("button", { name: "History" }));
     expect(await screen.findByRole("heading", { name: "History of the email" })).toBeInTheDocument();
     expect(listVersions).toHaveBeenLastCalledWith({ id: "app-1", document: "EMAIL" });
+  });
+});
+
+
+describe("the resume sidebar", () => {
+  const openControls = async () => userEvent.click(screen.getByRole("tab", { name: "Resume controls" }));
+
+  it("keeps an unfinished AI message and returns to it from Ask AI", async () => {
+    render(<ApplicationView {...props} />);
+    await userEvent.type(screen.getByRole("textbox", { name: "Ask for a change" }), "Keep this draft");
+    await openControls();
+    expect(screen.queryByRole("textbox", { name: "Ask for a change" })).not.toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole("group", { name: "Summary" })).getByRole("button", { name: "Ask AI" }));
+    expect(screen.getByRole("textbox", { name: "Ask for a change" })).toHaveValue("Keep this draft");
+    expect(screen.getByRole("textbox", { name: "Ask for a change" })).toHaveFocus();
+  });
+
+  it("preserves customization across views and tabs, and cancels without saving", async () => {
+    render(<ApplicationView {...props} />);
+    await openControls();
+    await userEvent.click(screen.getByRole("tab", { name: "Customize" }));
+    const name = screen.getByRole("textbox", { name: "Theme name" });
+    await userEvent.clear(name);
+    await userEvent.type(name, "Application copy");
+    await userEvent.click(screen.getByRole("tab", { name: "Refine with AI" }));
+    await openControls();
+    await userEvent.click(screen.getByRole("tab", { name: "Sections" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Customize" }));
+    expect(screen.getByRole("textbox", { name: "Theme name" })).toHaveValue("Application copy");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(saveApplicationTheme).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: "Themes" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps a failed customization draft and saves a new application theme on retry", async () => {
+    vi.mocked(saveApplicationTheme).mockResolvedValueOnce({ ok: false, error: "Try again." })
+      .mockResolvedValueOnce({ ok: true, data: { ...theme("editorial"), id: "new-copy", name: "My theme", builtIn: false } });
+    render(<ApplicationView {...props} />);
+    await openControls();
+    await userEvent.click(screen.getByRole("tab", { name: "Customize" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save theme" }));
+    expect(screen.getByRole("textbox", { name: "Theme name" })).toHaveValue("My theme");
+    await userEvent.click(screen.getByRole("button", { name: "Save theme" }));
+    expect(saveApplicationTheme).toHaveBeenLastCalledWith(expect.objectContaining({ applicationId: "app-1", name: "My theme" }));
+    expect(screen.getByRole("tab", { name: "Themes" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "My theme theme" })).toBeInTheDocument();
+  });
+
+  it("moves sections through the existing application save action", async () => {
+    render(<ApplicationView {...props} />);
+    await openControls();
+    await userEvent.click(screen.getByRole("tab", { name: "Sections" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Summary" }));
+    expect(setApplicationSections).toHaveBeenCalledWith(expect.objectContaining({ id: "app-1", off: ["summary"] }));
+  });
+
+  it("swipes between views without treating vertical or input gestures as navigation", () => {
+    render(<ApplicationView {...props} />);
+    const swipe = (target: Element, dx: number, dy = 0) => {
+      fireEvent.touchStart(target, { touches: [{ clientX: 100, clientY: 100 }] });
+      fireEvent.touchEnd(target, { changedTouches: [{ clientX: 100 + dx, clientY: 100 + dy }] });
+    };
+    const input = screen.getByRole("textbox", { name: "Ask for a change" });
+    swipe(input, 100);
+    expect(input).toBeVisible();
+    swipe(screen.getByRole("log"), 20, 120);
+    expect(input).toBeVisible();
+    swipe(screen.getByRole("log"), 100);
+    expect(screen.getByRole("tab", { name: "Themes" })).toBeVisible();
+    swipe(screen.getByRole("tab", { name: "Themes" }).closest('[role=tabpanel]')!, -100);
+    expect(input).toBeVisible();
   });
 });

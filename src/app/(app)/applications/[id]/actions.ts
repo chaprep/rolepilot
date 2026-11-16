@@ -8,9 +8,11 @@ import { ChatRole, DocumentKind, VersionCause } from "@/generated/prisma/enums";
 import { action, ActionError } from "@/lib/action";
 import { isAiConfigured } from "@/lib/ai/config";
 import { profileUnits } from "@/lib/ai/tasks/tailor-resume";
-import { editsSchema, extractedSchema, matchSchema, trimmedSchema, unitsSchema, withSkillAdded } from "@/lib/application-data";
-import { loadDocuments, readJson } from "@/lib/application-documents";
+import { editsSchema, trimmedSchema, unitsSchema, applicationEvidenceSchema, applicationEvidenceText, evidenceOptions } from "@/lib/application-data";
+import { loadDocuments, snapshotDocumentState, readJson } from "@/lib/application-documents";
 import { WRITTEN_EMAIL_UNITS } from "@/lib/application-email";
+import { applyDocumentOperation, documentChangesSchema, documentStateSchema, readDocumentState, type DocumentState } from "@/lib/document-state";
+import { coverLetterLayoutSchema } from "@/lib/cover-letter-format";
 import { documentLabels } from "@/lib/document-labels";
 import { frozenCopySchema, frozenProfile, readFrozenCopy, withSectionFromProfile } from "@/lib/frozen-copy";
 import { updateDocuments } from "@/lib/document-units";
@@ -28,10 +30,12 @@ import { scoreResumeJob, scoreResumeJobKey } from "@/lib/jobs/score-resume";
 import { scoringProblem } from "@/lib/scoring";
 import { prisma } from "@/lib/prisma";
 import { loadProfile } from "@/lib/profile-data";
-import { findOrCreateSkill } from "@/lib/profile-entries";
+import { nextSort } from "@/lib/profile-entries";
 import { profileUpdate } from "@/lib/profile-update";
-import { sectionLayoutSchema, sectionOfUnit } from "@/lib/resume-sections";
+import { sectionLayoutSchema, sectionOfUnit, withoutSectionsOff } from "@/lib/resume-sections";
 import { loadSettings } from "@/lib/settings-data";
+import { themeFieldsSchema } from "@/lib/theme-file";
+import type { ThemeData } from "@/lib/themes";
 import { THEME_FIELDS } from "@/lib/theme-data";
 import { cleanUnitText, isPublicationUnit, isVerbatimUnit, unitName } from "@/lib/unit-text";
 
@@ -40,11 +44,16 @@ const PART_GONE = "That part of the document no longer exists. Reload the page t
 
 const refresh = (id: string) => revalidatePath(`/applications/${id}`);
 
+async function updateLocalResume(id: string, change: (state: DocumentState) => void) {
+  await updateDocuments(id, async (_documents, _tx, states) => { if (states.RESUME) change(states.RESUME); });
+}
+
 /** The Resume tab's layout switch (APP-4): the theme's own layout, or a single column. */
 export const setFollowThemeLayout = action(
   z.object({ id: z.string().min(1), follow: z.boolean() }),
   async ({ id, follow }) => {
     const { count } = await prisma.application.updateMany({ where: { id }, data: { followThemeLayout: follow } });
+    await updateLocalResume(id, state => { state.followThemeLayout = follow; });
     if (count === 0) throw new ActionError(GONE);
     refresh(id);
     return null;
@@ -54,6 +63,7 @@ export const setFollowThemeLayout = action(
 /** The Resume tab's Photo switch (#224): show the profile photo on this resume or not, whatever the profile says. */
 export const setShowPhoto = action(z.object({ id: z.string().min(1), show: z.boolean() }), async ({ id, show }) => {
   const { count } = await prisma.application.updateMany({ where: { id }, data: { showPhoto: show } });
+  await updateLocalResume(id, state => { state.showPhoto = show; });
   if (count === 0) throw new ActionError(GONE);
   refresh(id);
   return null;
@@ -65,6 +75,7 @@ export const setApplicationSections = action(z.object({ id: z.string().min(1), o
   if (!application) throw new ActionError(GONE);
   const withReferences = readJson(sectionLayoutSchema, application.sections)?.withReferences;
   await prisma.application.update({ where: { id }, data: { sections: { order, off, ...(titles ? { titles } : {}), ...(withReferences ? { withReferences } : {}) } } });
+  await updateLocalResume(id, state => { state.sections = { ...state.sections, order, off, titles }; });
   refresh(id);
   return null;
 });
@@ -73,8 +84,10 @@ export const setApplicationSections = action(z.object({ id: z.string().min(1), o
 export const followBaseSections = action(z.object({ id: z.string().min(1) }), async ({ id }) => {
   const application = await prisma.application.findUnique({ where: { id }, select: { frozen: true } });
   if (!application) throw new ActionError(GONE);
-  const sections = application.frozen === null ? Prisma.DbNull : (await loadSettings()).resumeSections;
+  const baseSections = (await loadSettings()).resumeSections;
+  const sections = application.frozen === null ? Prisma.DbNull : baseSections;
   await prisma.application.update({ where: { id }, data: { sections } });
+  await updateLocalResume(id, state => { state.sections = baseSections; });
   refresh(id);
   return null;
 });
@@ -95,7 +108,16 @@ export const addApplicationSection = action(z.object({ id: z.string().min(1), ke
   const fresh = profileUnits(profile, documentLabels(application.language)).filter((unit) => sectionOfUnit(unit.id, profile) === key);
   const added = new Set(fresh.map((unit) => unit.id));
   const copy = readFrozenCopy(application.frozen);
-  await updateDocuments(id, async (documents, tx) => {
+  await updateDocuments(id, async (documents, tx, states) => {
+    const local = states.RESUME;
+    if (local) {
+      // Import only the explicitly selected section; keep other local entries and metadata.
+      const merged = withSectionFromProfile({ profile: local.profile, themes: { RESUME: local.theme, COVER_LETTER: local.theme }, paper: local.paper, dateFormat: local.dateFormat, includeReferences: local.includeReferences, followedBase: false }, profile, key);
+      local.profile = { ...merged.profile, photo: local.profile.photo };
+      local.sections.off = local.sections.off.filter(entry => entry !== key);
+      if (!local.sections.order.includes(key)) local.sections.order.push(key);
+      if (key === "references") local.includeReferences = true;
+    }
     const units = documents[DocumentKind.RESUME];
     if (!units) throw new ActionError(PART_GONE);
     // A sent resume is drawn from its copy, so the section has to reach that too (#299). Taking one back on that it still holds changes nothing.
@@ -145,26 +167,28 @@ export const updateFromProfile = action(z.object({ id: z.string().min(1) }), asy
   const { application, liveProfile, resume, includeReferences } = await loadDocuments(id);
   if (!resume) throw new ActionError(PART_GONE);
   const copy = readFrozenCopy(application.frozen);
-  const update = profileUpdate({ copy: copy?.profile ?? null, live: liveProfile, units: resume.units, trimmed: resume.trimmed ?? null, language: application.language, includeReferences });
+  const update = profileUpdate({ copy: resume.state?.profile ?? copy?.profile ?? null, live: liveProfile, units: resume.units, trimmed: resume.trimmed ?? null, language: application.language, includeReferences });
   if (!update.changed) return null;
 
-  await updateDocuments(id, async (documents, tx) => {
+  await updateDocuments(id, async (documents, tx, states) => {
     documents[DocumentKind.RESUME] = update.units;
+    if (states.RESUME && update.copy) states.RESUME.profile = { ...update.copy, photo: states.RESUME.profile.photo, facts: [] };
     if (copy && update.copy) await tx.application.update({ where: { id }, data: { frozen: { ...copy, profile: update.copy } as unknown as Prisma.InputJsonValue } });
   });
   refresh(id);
-  return { profile: copy?.profile ?? null, units: resume.units };
+  return { profile: copy?.profile ?? null, units: resume.units, ...(resume.state ? { state: resume.state } : {}) };
 });
 
 /** Undo after "Update from profile". */
 export const undoUpdateFromProfile = action(
-  z.object({ id: z.string().min(1), profile: frozenCopySchema.shape.profile.nullable(), units: unitsSchema }),
-  async ({ id, profile, units }) => {
+  z.object({ id: z.string().min(1), profile: frozenCopySchema.shape.profile.nullable(), units: unitsSchema, state: documentStateSchema.nullable().optional() }),
+  async ({ id, profile, units, state }) => {
     const application = await prisma.application.findUnique({ where: { id }, select: { frozen: true } });
     if (!application) throw new ActionError(GONE);
     const copy = readFrozenCopy(application.frozen);
-    await updateDocuments(id, async (documents, tx) => {
+    await updateDocuments(id, async (documents, tx, states) => {
       documents[DocumentKind.RESUME] = units;
+      if (state !== undefined) states.RESUME = state;
       if (copy && profile) await tx.application.update({ where: { id }, data: { frozen: { ...copy, profile } as unknown as Prisma.InputJsonValue } });
     });
     refresh(id);
@@ -172,30 +196,85 @@ export const undoUpdateFromProfile = action(
   },
 );
 
+/** Format selection is a local document edit, with the same history and Undo as refinement. */
+export const setCoverLetterLayout = action(z.object({ id: z.string().min(1), layout: coverLetterLayoutSchema }), async ({ id, layout }) => {
+  const loaded = await loadDocuments(id);
+  if (!loaded.letter) throw new ActionError("Write the cover letter before choosing a format.");
+  const letter = loaded.letter;
+  if ((letter.state?.coverLetterLayout ?? letter.initialLetterLayout ?? "CLASSIC") === layout) return null;
+  const seed = snapshotDocumentState(loaded, DocumentKind.COVER_LETTER);
+  await updateDocuments(id, async (documents, tx, states) => {
+    const current = documents.COVER_LETTER;
+    const row = loaded.application.documents.find(document => document.kind === "COVER_LETTER")!;
+    const fresh = await tx.document.findUniqueOrThrow({ where: { id: row.id }, select: { updatedAt: true, themeId: true } });
+    if (!current || JSON.stringify(current) !== JSON.stringify(letter.units) || JSON.stringify(states.COVER_LETTER ?? null) !== JSON.stringify(letter.state ?? null) || fresh.updatedAt.getTime() !== row.updatedAt.getTime() || fresh.themeId !== row.themeId) throw new ActionError("The letter changed while selecting its format. Try again.");
+    const nextUnits = structuredClone(current);
+    const nextState = applyDocumentOperation(seed, nextUnits, { type: "settings", document: "COVER_LETTER", json: JSON.stringify({ coverLetterLayout: layout }) });
+    await tx.chatMessage.create({ data: { applicationId: id, role: "AI", text: `Changed the cover-letter format to ${layout === "SIDEBAR" ? "Sidebar" : "Classic"}.`, writtenWith: "letter-format@1", documentChanges: [{ document: "COVER_LETTER", beforeUnits: current, afterUnits: nextUnits, beforeState: states.COVER_LETTER ?? null, afterState: nextState }] as unknown as Prisma.InputJsonValue } });
+    documents.COVER_LETTER = nextUnits;
+    states.COVER_LETTER = nextState;
+  }, { version: { cause: VersionCause.REFINED, detail: `Cover-letter format: ${layout === "SIDEBAR" ? "Sidebar" : "Classic"}` } });
+  refresh(id);
+  return null;
+});
+
 /**
  * The Theme menu on the Resume and Cover letter tabs (#226, public issue 10):
  * gives the application's resume and cover letter another theme, together.
  * Only their look changes, so nothing is written again.
  */
-export const setApplicationTheme = action(z.object({ id: z.string().min(1), themeId: z.string().min(1) }), async ({ id, themeId }) => {
-  if (!(await prisma.theme.count({ where: { id: themeId } }))) {
-    throw new ActionError("That theme doesn't exist anymore. Reload the page to see your themes.");
-  }
-  const application = await prisma.application.findUnique({ where: { id }, select: { frozen: true } });
-  if (!application) throw new ActionError(GONE);
-  await prisma.document.updateMany({
-    where: { applicationId: id, kind: { in: [DocumentKind.RESUME, DocumentKind.COVER_LETTER] } },
-    data: { themeId },
+async function applyApplicationTheme(id: string, choice: string | z.infer<typeof themeFieldsSchema>) {
+  if (!(await prisma.application.count({ where: { id } }))) throw new ActionError(GONE);
+  const loaded = await loadDocuments(id);
+  return prisma.$transaction(async (tx) => {
+    const application = await tx.application.findUnique({ where: { id }, select: { frozen: true } });
+    if (!application) throw new ActionError(GONE);
+    const selected = typeof choice === "string"
+      ? await tx.theme.findUnique({ where: { id: choice }, select: THEME_FIELDS })
+      : await tx.theme.create({ data: choice, select: THEME_FIELDS });
+    if (!selected) throw new ActionError("That theme doesn't exist anymore. Reload the page to see your themes.");
+    const themeId = selected.id;
+    const letterSeed = loaded.letter?.initialLetterLayout === "SIDEBAR" && !loaded.letter.state ? snapshotDocumentState(loaded, DocumentKind.COVER_LETTER) : null;
+    await tx.document.updateMany({
+      where: { applicationId: id, kind: { in: [DocumentKind.RESUME, DocumentKind.COVER_LETTER] } },
+      data: { themeId },
+    });
+    const selectedTheme = selected;
+    await updateDocuments(id, async (_documents, _tx, states) => {
+      if (!states.COVER_LETTER && letterSeed) states.COVER_LETTER = letterSeed;
+      for (const kind of [DocumentKind.RESUME, DocumentKind.COVER_LETTER]) if (states[kind]) {
+        states[kind]!.theme = selectedTheme;
+        states[kind]!.styles = {};
+      }
+    }, { transaction: tx });
+    // A sent resume is drawn in the theme it was sent with, until it's given another here (#299).
+    const copy = readFrozenCopy(application.frozen);
+    if (copy) {
+      const theme = selected;
+      await tx.application.update({ where: { id }, data: { frozen: { ...copy, themes: { RESUME: theme, COVER_LETTER: theme } } as unknown as Prisma.InputJsonValue } });
+    }
+    return selected;
   });
-  // A sent resume is drawn in the theme it was sent with, until it's given another here (#299).
-  const copy = readFrozenCopy(application.frozen);
-  if (copy) {
-    const theme = await prisma.theme.findUniqueOrThrow({ where: { id: themeId }, select: THEME_FIELDS });
-    await prisma.application.update({ where: { id }, data: { frozen: { ...copy, themes: { RESUME: theme, COVER_LETTER: theme } } as unknown as Prisma.InputJsonValue } });
-  }
+}
+
+export const setApplicationTheme = action(z.object({ id: z.string().min(1), themeId: z.string().min(1) }), async ({ id, themeId }) => {
+  await applyApplicationTheme(id, themeId);
   refresh(id);
   return null;
 });
+
+/** Save a new library theme and apply it here without changing the base theme. */
+export const saveApplicationTheme = action(
+  themeFieldsSchema.extend({ applicationId: z.string().min(1) }),
+  async ({ applicationId, ...fields }, { toast }): Promise<ThemeData> => {
+    const theme = await applyApplicationTheme(applicationId, fields);
+    toast(`Saved “${theme.name}” for this application.`);
+    refresh(applicationId);
+    revalidatePath("/resume");
+    return theme;
+  },
+);
+
 
 /**
  * The next interview's date and time (E9-9), or null to remove it. It shows
@@ -392,6 +471,24 @@ const listOf = (names: string[]) => (names.length <= 1 ? names.join("") : `${nam
  */
 export const undoMessage = action(z.object({ id: z.string().min(1), messageId: z.string().min(1) }), async ({ id, messageId }) => {
   const message = await prisma.chatMessage.findFirst({ where: { id: messageId, applicationId: id, role: ChatRole.AI } });
+  const complete = message?.documentChanges ? documentChangesSchema.parse(message.documentChanges) : [];
+  if (message && complete.length) {
+    if (message.undone) throw new ActionError("That's already undone.");
+    await updateDocuments(id, async (documents, tx, states) => {
+      for (const change of complete) {
+        if (JSON.stringify(documents[change.document]) !== JSON.stringify(change.afterUnits) || JSON.stringify(states[change.document] ?? null) !== JSON.stringify(change.afterState)) throw new ActionError("This document changed since. Undo would overwrite newer edits; use its history instead.");
+      }
+      for (const change of complete) {
+        documents[change.document] = change.beforeUnits;
+        states[change.document] = change.beforeState;
+      }
+      if (message.previousTone) await tx.application.update({ where: { id }, data: { tone: message.previousTone } });
+      const { count } = await tx.chatMessage.updateMany({ where: { id: messageId, undone: false }, data: { undone: true } });
+      if (!count) throw new ActionError("That's already undone.");
+    }, { version: { cause: VersionCause.UNDONE } });
+    refresh(id);
+    return { edited: complete.flatMap(change => change.beforeUnits.map(unit => ({ document: change.document, unitId: unit.id }))) };
+  }
   const edits = message && editsSchema.safeParse(message.edits);
   if (!message || !edits?.success || edits.data.length === 0) throw new ActionError("There's nothing to undo in that message.");
   if (message.undone) throw new ActionError("That's already undone.");
@@ -421,26 +518,37 @@ export const undoMessage = action(z.object({ id: z.string().min(1), messageId: z
   return { edited: edits.data.map(({ document, unitId }) => ({ document, unitId })) };
 });
 
-/**
- * "+ Add to profile" on the Job posting tab (E8-7, NEW-5): adds a missing
- * skill to the profile, and the requirement becomes partly covered.
- */
-export const addMatchSkill = action(z.object({ id: z.string().min(1), index: z.number().int().min(0) }), async ({ id, index }) => {
-  const application = await prisma.application.findUnique({ where: { id }, select: { match: true, extracted: true } });
-  if (!application) throw new ActionError(GONE);
-  const match = matchSchema.safeParse(application.match);
-  const extracted = extractedSchema.safeParse(application.extracted);
-  const item = match.success ? match.data.items[index] : undefined;
-  const requirement = extracted.success ? extracted.data.requirements[index] : undefined;
-  if (!match.success || !item || item.result !== "gap" || requirement?.kind !== "skill" || !requirement.skill) {
-    throw new ActionError("That requirement can't be added to your profile. Reload the page to see what's there now.");
-  }
-
-  const { skill } = await findOrCreateSkill(requirement.skill.trim());
-  const items = match.data.items.map((entry, position) => (position === index ? withSkillAdded(entry, skill.name) : entry));
-  await prisma.application.update({ where: { id }, data: { match: { items } } });
+/** Evidence belongs to the application; no profile write occurs here. */
+export const addApplicationEvidence = action(z.object({ id: z.string().min(1), evidence: applicationEvidenceSchema }), async ({ id, evidence }) => {
+  const loaded = await loadDocuments(id);
+  const requirement = loaded.extracted?.requirements[evidence.requirementIndex];
+  const options = evidenceOptions(withoutSectionsOff(loaded.resume?.state?.profile ?? loaded.profile, loaded.sections)).filter((option) => loaded.resume?.units.some((unit) => unit.id === option.id));
+  const text = requirement?.kind === "skill" && requirement.skill ? applicationEvidenceText(requirement.skill, evidence, options) : null;
+  if (!text) throw new ActionError("That evidence no longer matches this posting or role. Reload and review it.");
+  const factId = `application-evidence:${id}:${evidence.id}`;
+  const jobId = `application-evidence-job:${id}:${evidence.id}`;
+  const messageId = `application-evidence-message:${id}:${evidence.id}`;
+  const previousJob = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!previousJob && (await findUnfinishedJobs(refineJobKey(id))).length) throw new ActionError("Wait for the current update to finish.");
+  const fact = await prisma.$transaction(async (tx) => {
+    const existing = await tx.fact.findUnique({ where: { id: factId } });
+    if (existing) {
+      if (existing.applicationId !== id || existing.text !== text) throw new ActionError("This submission was already saved. Close the form and add a new example to change it.");
+      return { id: existing.id, text: existing.text };
+    }
+    if (await tx.fact.count({ where: { applicationId: id } }) >= 50) throw new ActionError("Remove an application fact before adding another.");
+    return tx.fact.create({ data: { id: factId, applicationId: id, text, sort: await nextSort(tx.fact) }, select: { id: true, text: true } });
+  });
   refresh(id);
-  return { name: skill.name };
+  if (!loaded.resume) return { fact, jobId: null, retry: false, notice: "Evidence saved for this application. It will be used when you create its resume." };
+  if (!(await isAiConfigured())) return { fact, jobId: null, retry: true, notice: "Evidence saved; resume not updated. Configure AI, then try again." };
+  try {
+    await prisma.chatMessage.upsert({ where: { id: messageId }, create: { id: messageId, applicationId: id, role: ChatRole.USER, text: `Use my supporting experience for ${requirement!.skill} in this resume only.\n${text}` }, update: {} });
+    await startJob(refineJob, { applicationId: id, messageId, request: `Use the submitted evidence for ${requirement!.skill}. Update only this resume, preserving other content.`, target: null, viewing: DocumentKind.RESUME, evidence: { factId, targetUnitId: evidence.targetUnitId } }, { id: jobId, key: refineJobKey(id), applicationId: id });
+    return { fact, jobId, retry: false, notice: previousJob?.status === "DONE" ? "This evidence was already applied. Use Undo in the chat to restore the previous text." : "Evidence saved. Updating this application's resume." };
+  } catch {
+    return { fact, jobId: null, retry: true, notice: "Evidence saved; resume not updated. Your text is kept. Try again." };
+  }
 });
 
 // Private notes (E8-9, APP-14). They stay on this server and never go into
@@ -557,10 +665,10 @@ export const listVersions = action(z.object({ id: z.string().min(1), document: z
 export const loadVersion = action(z.object({ id: z.string().min(1), versionId: z.string().min(1) }), async ({ id, versionId }) => {
   const version = await prisma.documentVersion.findFirst({
     where: { id: versionId, document: { applicationId: id } },
-    select: { units: true, document: { select: { kind: true } } },
+    select: { units: true, state: true, document: { select: { kind: true } } },
   });
   if (!version) throw new ActionError(VERSION_GONE);
-  return { document: version.document.kind, units: unitsSchema.parse(version.units) };
+  return { document: version.document.kind, units: unitsSchema.parse(version.units), state: readDocumentState(version.state) };
 });
 
 /**
@@ -571,7 +679,7 @@ export const loadVersion = action(z.object({ id: z.string().min(1), versionId: z
 export const restoreVersion = action(z.object({ id: z.string().min(1), versionId: z.string().min(1) }), async ({ id, versionId }, { toast }) => {
   const version = await prisma.documentVersion.findFirst({
     where: { id: versionId, document: { applicationId: id } },
-    select: { units: true, createdAt: true, document: { select: { id: true, kind: true } } },
+    select: { units: true, state: true, createdAt: true, document: { select: { id: true, kind: true } } },
   });
   if (!version) throw new ActionError(VERSION_GONE);
   const { kind } = version.document;
@@ -579,15 +687,16 @@ export const restoreVersion = action(z.object({ id: z.string().min(1), versionId
 
   const stillLeftOut = await updateDocuments(
     id,
-    async (documents, tx) => {
+    async (documents, tx, states) => {
       const current = documents[kind];
       if (!current) throw new ActionError(PART_GONE);
-      if (JSON.stringify(current) === JSON.stringify(units)) throw new ActionError("That's the version you have now.");
-      const newest = await tx.documentVersion.findFirst({ where: { documentId: version.document.id }, orderBy: { createdAt: "desc" }, select: { units: true } });
-      if (!newest || JSON.stringify(unitsSchema.parse(newest.units)) !== JSON.stringify(current)) {
+      if (JSON.stringify(current) === JSON.stringify(units) && (!version.state || JSON.stringify(states[kind]) === JSON.stringify(readDocumentState(version.state)))) throw new ActionError("That's the version you have now.");
+      const newest = await tx.documentVersion.findFirst({ where: { documentId: version.document.id }, orderBy: { createdAt: "desc" }, select: { units: true, state: true } });
+      if (!newest || JSON.stringify(unitsSchema.parse(newest.units)) !== JSON.stringify(current) || JSON.stringify(readDocumentState(newest.state)) !== JSON.stringify(states[kind] ?? null)) {
         await saveVersion(tx, version.document.id, current, { cause: VersionCause.BEFORE_RESTORE });
       }
       documents[kind] = units;
+      if (version.state) states[kind] = readDocumentState(version.state);
       // Parts left out that the restored version has again are no longer left out.
       if (kind !== DocumentKind.RESUME) return null;
       const row = await tx.document.findUniqueOrThrow({ where: { id: version.document.id }, select: { trimmed: true } });

@@ -134,19 +134,13 @@ exports[`ResumeDocument > renders the demo profile in Atlas 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -185,16 +179,12 @@ exports[`ResumeDocument > renders the demo profile in Atlas 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -228,13 +218,11 @@ exports[`ResumeDocument > renders the demo profile in Atlas 1`] = `
               Studio Brik
             </p>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -288,16 +276,12 @@ exports[`ResumeDocument > renders the demo profile in Atlas 1`] = `
               </a>
             </p>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -632,19 +616,13 @@ exports[`ResumeDocument > renders the demo profile in Chronicle 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -683,16 +661,12 @@ exports[`ResumeDocument > renders the demo profile in Chronicle 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -726,13 +700,11 @@ exports[`ResumeDocument > renders the demo profile in Chronicle 1`] = `
               Studio Brik
             </p>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -786,16 +758,12 @@ exports[`ResumeDocument > renders the demo profile in Chronicle 1`] = `
               </a>
             </p>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -1130,19 +1098,13 @@ exports[`ResumeDocument > renders the demo profile in Classic 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -1181,16 +1143,12 @@ exports[`ResumeDocument > renders the demo profile in Classic 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -1224,13 +1182,11 @@ exports[`ResumeDocument > renders the demo profile in Classic 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -1284,16 +1240,12 @@ exports[`ResumeDocument > renders the demo profile in Classic 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -1681,19 +1633,13 @@ exports[`ResumeDocument > renders the demo profile in Console 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -1732,16 +1678,12 @@ exports[`ResumeDocument > renders the demo profile in Console 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -1775,13 +1717,11 @@ exports[`ResumeDocument > renders the demo profile in Console 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -1835,16 +1775,12 @@ exports[`ResumeDocument > renders the demo profile in Console 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -2145,19 +2081,13 @@ exports[`ResumeDocument > renders the demo profile in Editorial 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -2196,16 +2126,12 @@ exports[`ResumeDocument > renders the demo profile in Editorial 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -2239,13 +2165,11 @@ exports[`ResumeDocument > renders the demo profile in Editorial 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -2299,16 +2223,12 @@ exports[`ResumeDocument > renders the demo profile in Editorial 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -2643,19 +2563,13 @@ exports[`ResumeDocument > renders the demo profile in Folio 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -2694,16 +2608,12 @@ exports[`ResumeDocument > renders the demo profile in Folio 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -2737,13 +2647,11 @@ exports[`ResumeDocument > renders the demo profile in Folio 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -2797,16 +2705,12 @@ exports[`ResumeDocument > renders the demo profile in Folio 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -3194,19 +3098,13 @@ exports[`ResumeDocument > renders the demo profile in Ledger 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -3245,16 +3143,12 @@ exports[`ResumeDocument > renders the demo profile in Ledger 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -3288,13 +3182,11 @@ exports[`ResumeDocument > renders the demo profile in Ledger 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -3348,16 +3240,12 @@ exports[`ResumeDocument > renders the demo profile in Ledger 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -3658,19 +3546,13 @@ exports[`ResumeDocument > renders the demo profile in Minimal 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -3709,16 +3591,12 @@ exports[`ResumeDocument > renders the demo profile in Minimal 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -3752,13 +3630,11 @@ exports[`ResumeDocument > renders the demo profile in Minimal 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -3812,16 +3688,12 @@ exports[`ResumeDocument > renders the demo profile in Minimal 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -4209,19 +4081,13 @@ exports[`ResumeDocument > renders the demo profile in Modern 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -4260,16 +4126,12 @@ exports[`ResumeDocument > renders the demo profile in Modern 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -4303,13 +4165,11 @@ exports[`ResumeDocument > renders the demo profile in Modern 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -4363,16 +4223,12 @@ exports[`ResumeDocument > renders the demo profile in Modern 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -4673,19 +4529,13 @@ exports[`ResumeDocument > renders the demo profile in Signal 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -4724,16 +4574,12 @@ exports[`ResumeDocument > renders the demo profile in Signal 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -4767,13 +4613,11 @@ exports[`ResumeDocument > renders the demo profile in Signal 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -4827,16 +4671,12 @@ exports[`ResumeDocument > renders the demo profile in Signal 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -5117,19 +4957,13 @@ exports[`ResumeDocument > renders the demo profile in Studio 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -5168,16 +5002,12 @@ exports[`ResumeDocument > renders the demo profile in Studio 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -5211,13 +5041,11 @@ exports[`ResumeDocument > renders the demo profile in Studio 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -5271,16 +5099,12 @@ exports[`ResumeDocument > renders the demo profile in Studio 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -5741,19 +5565,13 @@ exports[`ResumeDocument > renders the demo profile in Technical 1`] = `
           >
             Freight platform for European carriers, 300 people
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Led the redesign of the carrier portal used daily by 4,000+ dispatchers
-            </li>
-            <li>
-              Built and maintained the design system across six product teams
-            </li>
-            <li>
-              Mentored three junior designers through their first year
-            </li>
-          </ul>
+            Led the redesign of the carrier portal used daily by 4,000+ dispatchers
+Built and maintained the design system across six product teams
+Mentored three junior designers through their first year
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -5792,16 +5610,12 @@ exports[`ResumeDocument > renders the demo profile in Technical 1`] = `
           >
             Note-taking app for field researchers
           </p>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Designed the mobile note-taking app from first prototype to 120k users
-            </li>
-            <li>
-              Ran monthly research sessions with field researchers
-            </li>
-          </ul>
+            Designed the mobile note-taking app from first prototype to 120k users
+Ran monthly research sessions with field researchers
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -5835,13 +5649,11 @@ exports[`ResumeDocument > renders the demo profile in Technical 1`] = `
               Sep 2015 – May 2018
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Delivered web projects for cultural institutions and municipalities
-            </li>
-          </ul>
+            Delivered web projects for cultural institutions and municipalities
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >
@@ -5895,16 +5707,12 @@ exports[`ResumeDocument > renders the demo profile in Technical 1`] = `
               Jan 2023 – Present
             </span>
           </div>
-          <ul
-            class="_bullets_fa1ef7"
+          <p
+            class="_bodyParagraph_fa1ef7"
           >
-            <li>
-              Built an open-source Figma plugin that turns design tokens into CSS variables
-            </li>
-            <li>
-              Maintain it with two contributors; used by design teams at several logistics startups
-            </li>
-          </ul>
+            Built an open-source Figma plugin that turns design tokens into CSS variables
+Maintain it with two contributors; used by design teams at several logistics startups
+          </p>
           <p
             class="_entrySkills_fa1ef7"
           >

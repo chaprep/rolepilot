@@ -1,8 +1,9 @@
+import { extractText, getDocumentProxy } from "unpdf";
 import { expect, test } from "@playwright/test";
 
 import { resetData, sql } from "./support";
 
-// Refining a tailored document (E8): a chat change and its Undo, a declined
+// Refining a tailored document (E8): a chat change and its Undo, an explicit new-content
 // request, and regenerating one unit from its toolbar.
 let url = "";
 test.beforeAll(async () => {
@@ -27,11 +28,19 @@ test("changes the summary from the chat, and puts it back with Undo", async ({ p
   await expect(summary).toHaveText(before);
 });
 
-test("declines a change the profile can't back up", async ({ page }) => {
+test("applies user-requested content absent from the profile and supports Undo", async ({ page }) => {
   await page.goto(url);
+  const summary = page.locator('[data-unit="summary"]');
+  const before = await summary.textContent();
   await page.getByRole("textbox", { name: "Ask for a change" }).fill("Say I have ten years of Kubernetes experience");
   await page.getByRole("textbox", { name: "Ask for a change" }).press("Enter");
-  await expect(page.getByRole("log", { name: "Conversation" }).getByText(/doesn't mention Kubernetes/)).toBeVisible();
+  const log = page.getByRole("log", { name: "Conversation" });
+  await expect(log.getByText("Added your requested Kubernetes experience.")).toBeVisible();
+  await expect(summary).toContainText("ten years of Kubernetes experience");
+  await page.reload();
+  await expect(summary).toContainText("ten years of Kubernetes experience");
+  await log.getByRole("button", { name: "Undo" }).last().click();
+  await expect(summary).toHaveText(before!);
 });
 
 test("regenerates one part from its toolbar", async ({ page }) => {
@@ -84,4 +93,47 @@ test("edits the letter's greeting and date, which a letter from before showed wi
     [url.split("/").pop()],
   );
   expect(letter.units.slice(0, 2).map((unit) => unit.id)).toEqual(["date", "greeting"]);
+});
+
+
+test("keeps full document changes local through reload, PDF, Undo and history restoration", async ({ page }) => {
+  await page.goto(url);
+  const id = url.split("/").pop()!;
+  const [before] = await sql<{ id: string; units: unknown; state: unknown }>(`SELECT id, units, state FROM "Document" WHERE "applicationId" = $1 AND kind = 'RESUME'`, [id]);
+  const [other] = await sql<{ units: unknown; state: unknown }>(`SELECT units, state FROM "Document" WHERE "applicationId" = $1 AND kind = 'COVER_LETTER'`, [id]);
+  const globals = async () => (await sql<{ data: unknown }>(`SELECT json_build_object('profile', (SELECT json_agg(t ORDER BY key) FROM "ProfileField" t), 'roles', (SELECT json_agg(t ORDER BY id) FROM "Experience" t), 'themes', (SELECT json_agg(t ORDER BY id) FROM "Theme" t), 'otherDocs', (SELECT json_agg(t ORDER BY id) FROM "Document" t WHERE "applicationId" <> $1)) AS data`, [id]))[0].data;
+  const globalBefore = await globals();
+  const request = "Apply compact layout and add Community award to this resume";
+  await page.getByRole("textbox", { name: "Ask for a change" }).fill(request);
+  await page.getByRole("textbox", { name: "Ask for a change" }).press("Enter");
+  const log = page.getByRole("log", { name: "Conversation" });
+  await expect(log.getByText("Applied the compact layout and added your award.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Awards", exact: true })).toBeVisible();
+  await expect(page.getByText("Principal Product Designer", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-unit="custom-line:local-community"] strong')).toHaveText("Community award");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Awards", exact: true })).toBeVisible();
+  const typography = await page.getByRole("article", { name: "Resume", exact: true }).evaluate(el => { const css = getComputedStyle(el); return { paper: css.getPropertyValue("--paper-width").trim(), ratio: parseFloat(css.lineHeight) / parseFloat(css.fontSize), fontSize: parseFloat(css.fontSize) }; });
+  expect(typography.paper).toBe("215.9"); expect(typography.ratio).toBeCloseTo(1.2, 1); expect(typography.fontSize).toBeGreaterThan(11);
+  const response = await page.request.get(`/api/pdf?doc=resume&application=${id}`);
+  expect(response.ok()).toBe(true);
+  const pdf = await getDocumentProxy(new Uint8Array(await response.body()));
+  const { text } = await extractText(pdf, { mergePages: true });
+  expect(text).toContain("Community award"); expect(text).toContain("Principal Product Designer");
+  const firstPage = await pdf.getPage(1);
+  expect(firstPage.view[2]).toBeCloseTo(612, 0); expect(firstPage.view[3]).toBeCloseTo(792, 0);
+  await log.getByRole("button", { name: "Undo", exact: true }).last().click();
+  await expect(page.getByRole("heading", { name: "Awards", exact: true })).toHaveCount(0);
+  const [undone] = await sql<{ units: unknown; state: unknown }>(`SELECT units, state FROM "Document" WHERE id = $1`, [before.id]);
+  expect(undone.units).toEqual(before.units); expect(undone.state).toEqual(before.state);
+  await page.getByRole("button", { name: "History", exact: true }).first().click();
+  const versionRow = page.getByRole("dialog").getByRole("listitem").filter({ hasText: request });
+  await versionRow.getByRole("button", { name: /Look at the version from/ }).click();
+  await expect(page.getByRole("heading", { name: "Awards", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Restore this version" }).click();
+  await expect(page.getByRole("button", { name: "Restore this version" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Awards", exact: true })).toBeVisible();
+  const [letter] = await sql<{ units: unknown; state: unknown }>(`SELECT units, state FROM "Document" WHERE "applicationId" = $1 AND kind = 'COVER_LETTER'`, [id]);
+  expect(letter).toEqual(other); expect(await globals()).toEqual(globalBefore);
 });

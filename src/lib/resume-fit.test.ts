@@ -29,3 +29,12 @@ describe("tailoredProfile (#370)", () => {
     expect(tailoredProfile(profile, []).skills).toEqual(profile.skills);
   });
 });
+
+
+it("scores accepted new skill names as written without mutating profile skills", () => {
+  const profile = demoProfile();
+  const before = structuredClone(profile.skills);
+  const scored = tailoredProfile(profile, [{ id: "skills", label: "Skills", text: "Delivery: Cross-functional coordination · Figma" }]);
+  expect(scored.skills.map((skill) => skill.name)).toEqual(["Cross-functional coordination", "Figma"]);
+  expect(profile.skills).toEqual(before);
+});

@@ -64,7 +64,7 @@ describe("an application written in Claude chat (#221)", () => {
     const { applicationId } = await saveWrittenApplication(written());
     const application = await prisma().application.findUniqueOrThrow({
       where: { id: applicationId },
-      include: { documents: { select: { kind: true, units: true, writtenWith: true } } },
+      include: { documents: { select: { kind: true, units: true, writtenWith: true, initialLetterLayout: true } } },
     });
     expect(application).toMatchObject({ status: "DRAFT", company: "Acme", role: "Senior Product Designer", location: "Berlin", postingUrl: "https://jobs.example/acme-design" });
 
@@ -79,6 +79,8 @@ describe("an application written in Claude chat (#221)", () => {
     expect(units.filter((unit) => unit.id.startsWith("publication:")).map((unit) => unit.text)).toEqual(shown.map((entry) => entry.citation));
 
     const letter = application.documents.find((document) => document.kind === "COVER_LETTER")!.units as { id: string; text: string }[];
+    expect(application.documents.find(document => document.kind === "COVER_LETTER")?.initialLetterLayout).toBe("SIDEBAR");
+    expect(letter.find(unit => unit.id === "headline")?.text).toBe("Senior Product Designer");
     expect(letter.find((unit) => unit.id === "greeting")?.text).toBe("Dear Acme team,");
     // The greeting and sign-off belong to the frame, not the paragraphs.
     expect(letter.find((unit) => unit.id === "paragraph:1")?.text).toBe("I'd like to help Acme design its product.");

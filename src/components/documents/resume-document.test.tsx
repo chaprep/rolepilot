@@ -15,6 +15,59 @@ const today = new Date(2026, 8, 28);
 const sectionTitles = () => screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
 
 describe("ResumeDocument", () => {
+  it("renders profile paragraphs and explicit bullets in order for roles, volunteering and projects", () => {
+    const text = "Platform **overview**.\nContinued description.\n\n* Built **monitoring**.\n* Reduced failures.\n\nFinal paragraph.\n* Last achievement.";
+    const mixed = {
+      ...profile,
+      experience: [
+        { ...profile.experience[0], descriptor: "", skillIds: [], bullets: text },
+        { ...profile.experience[1], volunteering: true, descriptor: "", skillIds: [], bullets: text },
+      ],
+      projects: [{ ...profile.projects[0], skillIds: [], bullets: text }],
+    };
+    const { container } = render(<ResumeDocument theme={theme("editorial")} profile={mixed} paper="A4" today={today} />);
+    for (const id of ["experience:e1", "experience:e2", "project:p1"]) {
+      const entry = container.querySelector(`[data-unit="${id}"]`)!;
+      const blocks = [...entry.querySelectorAll(":scope > p, :scope > ul")];
+      expect(blocks.map((block) => block.tagName)).toEqual(["P", "UL", "P", "UL"]);
+      expect(blocks[0]).toHaveTextContent("Platform overview. Continued description.");
+      expect(blocks[0].textContent).toContain("\n");
+      expect(blocks[0].querySelector("strong")).toHaveTextContent("overview");
+      expect(within(blocks[1] as HTMLElement).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Built monitoring.", "Reduced failures."]);
+      expect(blocks[1].querySelector("strong")).toHaveTextContent("monitoring");
+      expect(blocks[2]).toHaveTextContent("Final paragraph.");
+      expect(blocks[3]).toHaveTextContent("Last achievement.");
+    }
+  });
+
+  it("keeps tailored descriptions as bullets even when the profile contains marked mixed text", () => {
+    const mixed = {
+      ...profile,
+      experience: [{ ...profile.experience[0], descriptor: "", skillIds: [], bullets: "Overview.\n\n* Built **monitoring**." }],
+      projects: [{ ...profile.projects[0], skillIds: [], bullets: "Project overview.\n\n* Shipped the tool." }],
+    };
+    const { container } = render(<ResumeDocument theme={theme("editorial")} profile={mixed} paper="A4" today={today} units={[
+      { id: "experience:e1", label: "Role", text: "Built monitoring.\nReduced failures." },
+      { id: "project:p1", label: "Project", text: "Shipped the tool." },
+    ]} />);
+    for (const id of ["experience:e1", "project:p1"]) {
+      const entry = container.querySelector(`[data-unit="${id}"]`)!;
+      expect(entry.querySelector(":scope > p")).toBeNull();
+      expect(entry.querySelectorAll("ul")).toHaveLength(1);
+    }
+    expect(container.querySelector('[data-unit="experience:e1"] strong')).toHaveTextContent("monitoring");
+    expect(container).not.toHaveTextContent("Overview.");
+  });
+
+  it("renders unmarked existing descriptions as paragraphs and omits empty bullet markers", () => {
+    const plain = { ...profile, experience: [{ ...profile.experience[0], descriptor: "", skillIds: [], bullets: "**Existing description**\nAnother line.\n\n*\n* " }] };
+    const { container } = render(<ResumeDocument theme={theme("editorial")} profile={plain} paper="A4" today={today} />);
+    const entry = container.querySelector('[data-unit="experience:e1"]')!;
+    expect(entry.querySelectorAll(":scope > p")).toHaveLength(1);
+    expect(entry.querySelector("ul")).toBeNull();
+    expect(entry.querySelector("strong")).toHaveTextContent("Existing description");
+  });
+
   it.each(themes.map((entry) => [entry.name, entry] as const))("renders the demo profile in %s", (_, entry) => {
     const { container } = render(<ResumeDocument theme={entry} profile={profile} paper="A4" today={today} />);
     expect(container.firstChild).toMatchSnapshot();
@@ -118,10 +171,10 @@ describe("ResumeDocument", () => {
       const { unmount } = render(<ResumeDocument theme={theme("editorial")} profile={profile} paper="A4" units={units} today={today} />);
       const line = screen.getByText("Freight platform for European carriers, 300 people");
       expect(line.previousElementSibling).toHaveTextContent("Senior Product Designer, Northwind Logistics");
-      expect(line.nextElementSibling?.tagName).toBe("UL");
+      expect(line.nextElementSibling?.tagName).toBe(units ? "UL" : "P");
       // A role without one has nothing between its title and its points.
       const studio = screen.getByText("UX Designer").closest("[data-unit]")!;
-      expect(studio.querySelector("ul")?.previousElementSibling).toHaveTextContent("UX Designer, Studio Brik");
+      expect(studio.querySelector(units ? "ul" : ":scope > p")?.previousElementSibling).toHaveTextContent("UX Designer, Studio Brik");
       unmount();
     }
   });
@@ -186,7 +239,7 @@ describe("ResumeDocument", () => {
   });
 
   it("sets marked words of a bullet in bold, without the asterisks (#368)", () => {
-    const bold = { ...profile, experience: profile.experience.map((entry, index) => (index === 0 ? { ...entry, bullets: "Scaled the system by **40%**" } : entry)) };
+    const bold = { ...profile, experience: profile.experience.map((entry, index) => (index === 0 ? { ...entry, bullets: "* Scaled the system by **40%**" } : entry)) };
     render(<ResumeDocument theme={theme("editorial")} profile={bold} paper="A4" today={today} />);
     const strong = screen.getByText("40%");
     expect(strong.tagName).toBe("STRONG");

@@ -1,11 +1,14 @@
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 
 import type { PaperSize } from "@/generated/prisma/enums";
+import { DocumentText } from "@/components/document-text";
 import { cn } from "@/lib/cn";
 import { hasRightToLeft, type TextDirection } from "@/lib/document-language";
 import { CONTACT_SEPARATOR } from "@/lib/resume-content";
 import { contactHref } from "@/lib/web-link";
 import { PAPER_SIZES, SIDEBAR, type ResolvedTheme } from "@/lib/themes";
+
+import { documentStyleRules, type DocumentStyle } from "@/lib/document-state";
 
 import styles from "./document.module.css";
 
@@ -67,7 +70,9 @@ export function DocumentPage({
   className,
   label,
   children,
+  formatting,
 }: {
+  formatting?: Record<string, DocumentStyle>;
   theme: ResolvedTheme;
   paper: PaperSize;
   /** The document's language tag, e.g. "fa"; picks Chinese, Japanese or Korean glyphs. */
@@ -81,11 +86,13 @@ export function DocumentPage({
   return (
     <article
       aria-label={label}
+      data-document={formatting ? label === "Cover letter" ? "letter" : "resume" : undefined}
       lang={lang}
       dir={dir}
       className={cn(styles.page, themeClasses(theme), className)}
       style={themeStyle(theme, paper)}
     >
+      {formatting && Object.keys(formatting).length > 0 && <style>{documentStyleRules(label === "Cover letter" ? "letter" : "resume", formatting, paper)}</style>}
       {children}
     </article>
   );
@@ -109,10 +116,10 @@ export const plainUnit: UnitRenderer = ({ id, className, head, children }) => (
 );
 
 /** A section with a themed title. */
-export function DocumentSection({ title, children }: { title: string; children: ReactNode }) {
+export function DocumentSection({ title, children, sectionKey }: { title: string; children: ReactNode; sectionKey?: string }) {
   return (
-    <section className={styles.section}>
-      <h2 className={styles.sectionTitle}>{title}</h2>
+    <section className={styles.section} data-section={sectionKey}>
+      <h2 className={styles.sectionTitle}>{sectionKey ? <DocumentText text={title} /> : title}</h2>
       {children}
     </section>
   );

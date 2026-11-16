@@ -71,11 +71,13 @@ const answers: Record<string, (messages: Message[]) => unknown> = {
 
   tailored_resume: (messages) => {
     const profile = section(messages[1].content, "The candidate's profile:\n") as Profile;
+    const sources = section(messages[1].content, "Candidate evidence sources:\n") as Record<string, string>;
+    const extra = Object.entries(sources ?? {}).filter(([id, text]) => id.startsWith("application:") && text.startsWith("JD skill:")).map(([sourceId, text]) => ({ name: text.split("\n")[0].slice(10).trim(), group: "Additional skills", evidence: [{ sourceId, quote: text.split("Evidence: ")[1] }] }));
     return {
       summary: profile.summary,
       roles: profile.experience.map((entry) => ({ id: entry.id, bullets: entry.bullets })),
       projects: profile.projects.map((entry) => ({ id: entry.id, bullets: entry.bullets })),
-      skills: profile.skills,
+      skills: profile.skills.map((name, index) => ({ name, group: "Core skills", evidence: [{ sourceId: `skills:${index}`, quote: name }] })).concat(extra),
       education: profile.education.map((entry) => ({ id: entry.id, notes: entry.notes })),
     };
   },
@@ -120,8 +122,32 @@ const answers: Record<string, (messages: Message[]) => unknown> = {
 
   refinement: (messages) => {
     const request = messages.at(-1)!.content;
+    if (/Apply compact layout and add Community award/.test(request)) {
+      const states = section(messages[1].content, "Current independent document inputs (use these over global defaults):\n") as { RESUME: { profile: { experience: { id: string }[] } } };
+      return { reply: "Applied the compact layout and added your award.", edits: [], tone: null, declined: false, operations: [
+        { type: "settings", document: "RESUME", json: JSON.stringify({ theme: { marginXmm: 8, marginYmm: 8 }, paper: "LETTER" }) },
+        { type: "style", document: "RESUME", target: "document", json: JSON.stringify({ fontSize: 11, lineHeight: 1.2, sectionGapMm: 4 }) },
+        { type: "style", document: "RESUME", target: "name", json: JSON.stringify({ fontSize: 22 }) },
+        { type: "metadata", document: "RESUME", path: `experience.${states.RESUME.profile.experience[0].id}.role`, json: JSON.stringify("Principal Product Designer") },
+        { type: "entry", document: "RESUME", collection: "customSections", action: "upsert", id: "local-awards", json: JSON.stringify({ title: "Awards", format: "LINES", items: [{ id: "local-community", title: "Community award", onResumes: true }] }), beforeId: null },
+        { type: "unit", document: "RESUME", action: "upsert", id: "custom-line:local-community", label: "Community award", text: "**Community award** for __mentoring__.", beforeId: null },
+      ] };
+    }
+    if (/Use the submitted evidence/.test(request)) {
+      const sources = section(messages[1].content, "Candidate evidence sources:\n") as Record<string, string>;
+      const resume = section(messages[1].content, "The resume's units:\n") as Unit[];
+      const summary = resume.find((unit) => unit.id === "summary")!;
+      const focused = section(messages[1].content, "Submitted candidate evidence (use this example for this update):\n") as string;
+      const [sourceId, text] = Object.entries(sources).find(([id, text]) => id.startsWith("application:") && text === focused)!;
+      const skill = text.split("\n")[0].slice(10).trim();
+      const quote = text.split("Evidence: ")[1];
+      return { reply: "Added your supporting experience to this resume.", edits: [
+        { document: "RESUME", unitId: "summary", text: `${summary.text} ${quote}` },
+        { document: "RESUME", unitId: "skills", text: "", skills: [{ name: skill, group: "Additional skills", evidence: [{ sourceId, quote }] }, ...Object.entries(sources).filter(([id]) => id.startsWith("skills:")).map(([sourceId, name]) => ({ name, group: "Core skills", evidence: [{ sourceId, quote: name }] }))] },
+      ], tone: null, declined: false };
+    }
     if (/kubernetes/i.test(request)) {
-      return { reply: "Your profile doesn't mention Kubernetes, so I left it out. Add it to your profile first.", edits: [], tone: null, declined: true };
+      return { reply: "Added your requested Kubernetes experience.", edits: [{ document: "RESUME", unitId: "summary", text: "Designer with ten years of Kubernetes experience." }], tone: null, declined: false };
     }
     if (request.includes("(I'm looking at the email.)")) {
       const email = section(messages[1].content, "The email's units:\n") as Unit[];

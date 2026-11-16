@@ -108,3 +108,34 @@ describe("the letter's own frame (E8-11)", () => {
     expect(screen.queryByText("Dear Ledgerly team,")).not.toBeInTheDocument();
   });
 });
+
+describe("Sidebar letter format", () => {
+  it.each(["A4", "LETTER"] as const)("renders all content on %s with independent identity and contact blocks", paper => {
+    const name = "Alexandra Long-Surname de la Cruz";
+    const role = "Senior Director of International Product Strategy";
+    const email = "alexandra.long.contact.address@example.com";
+    const { container } = render(<CoverLetterDocument {...letter} paper={paper} layout="SIDEBAR" role={role} units={[
+      { id: "sender", label: "Sender", text: `${name}\nLondon · ${email}` },
+      { id: "paragraph:1", label: "Opening", text: "A complete **important** paragraph." },
+    ]} />);
+    const page = screen.getByRole("article", { name: "Cover letter" });
+    expect(page.querySelector("aside [data-unit='sender']")).toHaveTextContent(name);
+    expect(page.querySelector("aside [data-unit='headline']")).toHaveTextContent(role);
+    expect(page.querySelector("aside [data-unit='contacts']")).toHaveTextContent(email);
+    expect(page.querySelector("[data-unit='paragraph:1'] strong")).toHaveTextContent("important");
+    expect(page.querySelectorAll("[data-unit='signature']")).toHaveLength(1);
+    expect(page.style.getPropertyValue("--accent")).toBe("#243B53");
+    expect(container.textContent).toContain("A complete important paragraph.");
+  });
+
+  it("uses the profile headline when the job role is missing and omits an empty contact block", () => {
+    render(<CoverLetterDocument {...letter} layout="SIDEBAR" basics={{ ...basics, headline: "Product Designer" }} units={[
+      { id: "sender", label: "Sender", text: "Jane Doe" },
+      { id: "contacts", label: "Contact details", text: "" },
+      { id: "paragraph:1", label: "Opening", text: "The full body remains." },
+    ]} />);
+    expect(screen.getByText("Product Designer")).toBeInTheDocument();
+    expect(screen.getByRole("article").querySelector("[data-unit='contacts']")).toBeNull();
+    expect(screen.getByText("The full body remains.")).toBeInTheDocument();
+  });
+});

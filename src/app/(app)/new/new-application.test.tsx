@@ -269,21 +269,23 @@ describe("how you match (E7-4)", () => {
     const rows = within(screen.getByRole("list", { name: "Requirements" })).getAllByRole("listitem");
     expect(rows.map((row) => row.textContent)).toEqual([
       "✓Covered: 5+ years of product design3 roles in your profile, since Sep 2015",
-      "–Not covered: Accessibility know-howNot in your profile yet+ Add to profile",
-      "~Partly covered: Strong prototyping in FigmaIn your skills, but not linked to a role yet",
+      "–Not covered: Accessibility know-howNot in your profile yetAdd for this application",
+      "~Partly covered: Strong prototyping in FigmaIn your skills, but not linked to a role yetAdd for this application",
       "–Not covered: Experience with paymentsNothing in your profile, so I'll address it honestly in the letter",
     ]);
-    expect(screen.getByText(/^Gaps aren't dealbreakers\./)).toBeInTheDocument();
+    expect(screen.getByText(/^This compares your profile with the job/)).toBeInTheDocument();
   });
 
-  it("adds a missing skill to the profile, which makes it partly covered (NEW-5)", async () => {
+  it("keeps supporting experience in this draft without adding a profile skill", async () => {
     await review();
-    await userEvent.click(screen.getByRole("button", { name: "+ Add to profile" }));
-    expect(addSkill).toHaveBeenCalledWith({ name: "Accessibility" });
-    expect(toast).toHaveBeenCalledWith("Added “Accessibility” to your skills. Attach it to a role under Experience to make it count.");
-    expect(screen.getByText("3 of 4 covered by your profile")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "+ Add to profile" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Add for this application" })[0]);
+    await userEvent.type(screen.getByLabelText("Supporting experience"), "Tested accessibility with screen readers.");
+    await userEvent.click(screen.getByRole("button", { name: "Save for this application" }));
+    expect(addSkill).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Edit application evidence" })).toBeInTheDocument();
+    expect(JSON.parse(sessionStorage.getItem("dossier:new-application")!).draft.evidence[0]).toMatchObject({ requirementIndex: 1, text: "Tested accessibility with screen readers." });
   });
+
 });
 
 describe("tailoring (E7-5)", () => {
@@ -347,6 +349,7 @@ describe("creating the application (E7-6)", () => {
       match: { items: [] },
       tone: "WARM",
       note: "Lean on research.",
+      evidence: [],
       write: "both",
     });
     expect(screen.getByRole("heading", { name: "Putting your application together…" })).toBeInTheDocument();

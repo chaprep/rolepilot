@@ -44,6 +44,14 @@ describe("updateDocuments", () => {
     expect(letterAfter.updatedAt).toEqual(letterBefore.updatedAt);
   });
 
+  it("clears an old score only when resume content changes", async () => {
+    await prisma().application.update({ where: { id: "app-1" }, data: { resumeFit: { score: 82 } } });
+    await updateDocuments("app-1", async (documents) => { documents.COVER_LETTER![0].text = "Hello"; });
+    expect((await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } })).resumeFit).toEqual({ score: 82 });
+    await updateDocuments("app-1", async (documents) => { documents.RESUME![0].text = "Changed"; });
+    expect((await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } })).resumeFit).toBeNull();
+  });
+
   // SQLite runs one transaction at a time: nobody else can save in between.
   it.skipIf(testsUseSqlite())("starts over when a document changed in between, so nothing is overwritten unseen", async () => {
     const seen: string[] = [];

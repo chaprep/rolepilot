@@ -113,18 +113,23 @@ export function isFinished(job: Pick<JobView, "status">): boolean {
 export async function startJob<I, R>(
   definition: JobDefinition<I, R>,
   input: NoInfer<I>,
-  options: { key?: string; applicationId?: string } = {},
+  options: { key?: string; applicationId?: string; id?: string } = {},
 ): Promise<string> {
   defineJob(definition);
   const job = await prisma.job.create({
     data: {
+      ...(options.id ? { id: options.id } : {}),
       type: definition.type,
       key: options.key,
       applicationId: options.applicationId,
       input: definition.input.parse(input) as Prisma.InputJsonValue,
     },
     select: { id: true },
+  }).catch((error: unknown) => {
+    if (options.id && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return null;
+    throw error;
   });
+  if (!job) return options.id!;
   enqueue(job.id);
   return job.id;
 }

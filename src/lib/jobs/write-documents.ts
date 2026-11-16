@@ -34,23 +34,24 @@ export const writeDocumentsJob = defineJob({
     match: matchSchema,
     tone: z.enum(Tone),
     note: z.string().max(2000),
+    evidenceFacts: z.array(z.string().max(1000)).max(49).optional(),
     /** Which documents to write (#367); the job agent and the connector write both. */
     write: z.enum(DOCUMENTS_TO_WRITE).default("both"),
   }),
   result: z.object({ resume: unitsSchema, resumeWith: z.string(), letter: unitsSchema, letterWith: z.string() }),
-  async run({ posting, extracted, match, tone, note, write }, { step, signal }) {
+  async run({ posting, extracted, match, tone, note, write, evidenceFacts = [] }, { step, signal }) {
     await step(write === "letter" ? WRITE_DOCUMENTS_STEPS[1] : WRITE_DOCUMENTS_STEPS[0]);
     const [provider, options, fullProfile, settings] = await Promise.all([getAiProvider(), loadTaskOptions(), loadProfile(), loadSettings()]);
     // A section that's off on the base resume isn't written about (#297).
     const profile = withoutSectionsOff(fullProfile, settings.resumeSections);
     // "Anything I should know?" is the application's first fact (APP-15).
-    const facts = note.trim() ? [note.trim()] : [];
+    const facts = [...(note.trim() ? [note.trim()] : []), ...evidenceFacts];
     const skipped = { data: [], promptVersion: "" };
-    // Skills in the user's own order once they set one (public issue 62).
+    // Tailored skills use the job-specific grouping; profile ordering stays unchanged.
     const resume =
       write === "letter"
         ? skipped
-        : await tailorResume(provider, { profile, extracted, match, facts, posting, keepSkillOrder: settings.skillOrder === "manual" }, { ...options, signal });
+        : await tailorResume(provider, { profile, extracted, match, facts, posting }, { ...options, signal });
 
     if (write === "both") await step(WRITE_DOCUMENTS_STEPS[1]);
     const letter = write === "resume" ? skipped : await writeCoverLetter(provider, { profile, extracted, match, tone, facts, posting }, { ...options, signal });

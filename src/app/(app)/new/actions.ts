@@ -6,13 +6,16 @@ import { JobStatus, Tone } from "@/generated/prisma/enums";
 import { DOCUMENTS_TO_WRITE } from "@/lib/settings";
 import { action, ActionError } from "@/lib/action";
 import { createApplicationFromDocuments } from "@/lib/application-create";
-import { matchSchema } from "@/lib/application-data";
+import { applicationEvidenceSchema, applicationEvidenceText, evidenceOptions, matchSchema } from "@/lib/application-data";
 import { handOffPastedPosting } from "@/lib/connector/handoff";
 import { readPostingJob } from "@/lib/jobs/read-posting";
 import { scorePastedPostingJob } from "@/lib/jobs/score-posting";
 import { startJob } from "@/lib/jobs/runner";
 import { writeDocumentsJob } from "@/lib/jobs/write-documents";
 import { fetchPosting } from "@/lib/posting-fetch";
+import { loadProfile } from "@/lib/profile-data";
+import { loadSettings } from "@/lib/settings-data";
+import { withoutSectionsOff } from "@/lib/resume-sections";
 import { prisma } from "@/lib/prisma";
 
 /** "Read the posting →": starts reading it in the background and returns the job's id (E7-2). */
@@ -71,10 +74,19 @@ export const startWritingDocuments = action(
     match: matchSchema,
     tone: z.enum(Tone),
     note: z.string().trim().max(2000),
+    evidence: z.array(applicationEvidenceSchema).max(49).optional(),
     write: z.enum(DOCUMENTS_TO_WRITE).default("both"),
   }),
-  async ({ readJobId, details, match, tone, note, write }) => {
+  async ({ readJobId, details, match, tone, note, write, evidence = [] }) => {
     const reading = await finishedReading(readJobId);
+    const [profile, settings] = await Promise.all([loadProfile(), loadSettings()]);
+    const options = evidenceOptions(withoutSectionsOff(profile, settings.resumeSections));
+    const evidenceFacts = evidence.map((entry) => {
+      const requirement = reading.result.extracted.requirements[entry.requirementIndex];
+      const text = requirement?.kind === "skill" && requirement.skill ? applicationEvidenceText(requirement.skill, entry, options) : null;
+      if (!text) throw new ActionError("That evidence no longer matches this posting or role. Review it before creating the application.");
+      return text;
+    });
     const orNull = (value: string) => value || null;
     const extracted = {
       ...reading.result.extracted,
@@ -86,7 +98,7 @@ export const startWritingDocuments = action(
       salary: orNull(details.salary),
       deadline: orNull(details.deadline),
     };
-    return startJob(writeDocumentsJob, { readJobId, posting: reading.input.posting, extracted, match, tone, note, write });
+    return startJob(writeDocumentsJob, { readJobId, posting: reading.input.posting, extracted, match, tone, note, write, evidenceFacts });
   },
 );
 
@@ -153,6 +165,7 @@ export const createApplication = action(
       postingUrl: postingLink(postingUrl),
       tone: input.tone,
       note: input.note,
+      evidenceFacts: input.evidenceFacts ?? [],
       claim: { kind: "manual", writeJobId, readJobId: input.readJobId, postingId: postingId ?? null, startupId: startupId ?? null },
     });
   },

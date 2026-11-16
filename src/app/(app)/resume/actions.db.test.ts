@@ -102,6 +102,19 @@ describe("saveTheme", () => {
   });
 });
 
+describe("saved theme margins", () => {
+  it("saves, loads, copies and resets custom margins", async () => {
+    const created = await duplicateTheme({ id: "editorial" });
+    if (!created.ok) throw new Error(created.error);
+    const saved = await saveTheme({ ...created.data, marginXmm: 0, marginYmm: 10.5 });
+    expect(saved).toMatchObject({ ok: true, data: { marginXmm: 0, marginYmm: 10.5 } });
+    expect(await prisma().theme.findUniqueOrThrow({ where: { id: created.data.id } })).toMatchObject({ marginXmm: 0, marginYmm: 10.5 });
+    expect(await duplicateTheme({ id: created.data.id })).toMatchObject({ ok: true, data: { marginXmm: 0, marginYmm: 10.5 } });
+    expect(await saveTheme({ ...created.data, marginXmm: null, marginYmm: null })).toMatchObject({ ok: true, data: { marginXmm: null, marginYmm: null } });
+    expect(await saveTheme({ ...created.data, marginXmm: 31 })).toMatchObject({ ok: false, fieldErrors: { marginXmm: expect.any(Array) } });
+  });
+});
+
 describe("managing themes (E5-7)", () => {
   it("duplicates a built-in theme into a custom one, which becomes the base theme", async () => {
     const result = await duplicateTheme({ id: "modern" });

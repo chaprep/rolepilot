@@ -361,6 +361,9 @@ model Theme {
   align         ThemeAlign    @default(LEFT)
   headingStyle  HeadingStyle  @default(PLAIN)
   density       Density       @default(REGULAR)
+  /// Millimetres; null keeps the density preset’s page margins.
+  marginXmm     Float?
+  marginYmm     Float?
   headerStyle   HeaderStyle   @default(PLAIN)
   sidebarStyle  SidebarStyle  @default(PLAIN)
   dateStyle     DateStyle     @default(INLINE)
@@ -573,6 +576,10 @@ model Document {
   application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   kind          DocumentKind
   units         Json
+  /// Independent application-local content metadata, structure and appearance.
+  state         Json?
+  /// Initial cover-letter template. Null preserves the legacy Classic appearance.
+  initialLetterLayout String?
   /// The theme it was created with; null falls back to the base theme.
   themeId       String?
   theme         Theme?            @relation(fields: [themeId], references: [id], onDelete: SetNull)
@@ -611,6 +618,7 @@ model DocumentVersion {
   documentId String
   document   Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
   units      Json
+  state      Json?
   cause      VersionCause
   /// What changed, e.g. the part's name or the chat request.
   detail     String       @default("")
@@ -635,6 +643,8 @@ model ChatMessage {
   targetUnit    String?
   /// Unit changes it made, with the previous text for Undo (editsSchema).
   edits         Json?
+  /// Before/after complete document changes, including non-text edits.
+  documentChanges Json?
   undone        Boolean     @default(false)
   /// The letter's tone before this message changed it, for Undo; null when it didn't.
   previousTone  Tone?

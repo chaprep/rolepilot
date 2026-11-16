@@ -10,6 +10,7 @@ import { extractedOf, unitSchema, unitsSchema } from "@/lib/application-data";
 import { updateDocuments } from "@/lib/document-units";
 import { withoutPrivateParts } from "@/lib/letter-frame";
 import { prisma } from "@/lib/prisma";
+import { readDocumentState } from "@/lib/document-state";
 import { profileOfApplication } from "@/lib/frozen-copy";
 import { loadFactTexts } from "@/lib/profile-data";
 
@@ -49,6 +50,7 @@ export const regenerateUnitJob = defineJob({
     if (!application || !units || !unit || unit.text !== from) return { outcome: "changed" as const };
 
     const [provider, options, profile, facts] = await Promise.all([getAiProvider(), loadTaskOptions(), profileOfApplication(application.frozen), loadFactTexts(applicationId)]);
+    const state = readDocumentState(application.documents[0].state);
     const { data } = await regenerateUnit(
       provider,
       {
@@ -56,14 +58,14 @@ export const regenerateUnitJob = defineJob({
         unit,
         // The letter's sender and signature hold contact details, which never go to the model (E8-11).
         document: withoutPrivateParts(units),
-        profile,
+        profile: state?.profile ?? profile,
         extracted: extractedOf(application),
-        tone: application.tone,
+        tone: state?.tone ?? application.tone,
         facts,
         posting: application.postingText,
       },
       // The rest of the document is in this language, so the new part is too.
-      { ...options, language: application.language || options.language, signal },
+      { ...options, language: state?.language || application.language || options.language, signal },
     );
 
     return updateDocuments(applicationId, async (documents) => {

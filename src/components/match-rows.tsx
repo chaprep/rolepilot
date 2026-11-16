@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
+import { ApplicationEvidenceForm } from "./application-evidence-form";
 import { Button } from "@/components/ui/button";
-import type { Match, MatchResult, Requirement } from "@/lib/application-data";
+import type { Match, MatchResult, Requirement, ApplicationEvidence, EvidenceOption } from "@/lib/application-data";
 import { matchScore } from "@/lib/application-data";
 import { cn } from "@/lib/cn";
 
@@ -19,13 +21,16 @@ const MARKS: Record<MatchResult, { mark: string; label: string; className: strin
 export function MatchRows({
   match,
   requirements,
-  onAddSkill,
+  onAddEvidence, evidenceOptions = [], evidence = [],
 }: {
   match: Match;
   /** The extracted requirements, in the same order as the match's items. */
   requirements: Requirement[];
-  onAddSkill: (index: number, skill: string) => void;
+  onAddEvidence: (evidence: ApplicationEvidence) => Promise<boolean>;
+  evidenceOptions?: EvidenceOption[];
+  evidence?: ApplicationEvidence[];
 }) {
+  const [editing, setEditing] = useState<number | null>(null);
   const { hit, total } = matchScore(match);
   return (
     <div className="flex flex-col">
@@ -35,6 +40,7 @@ export function MatchRows({
           {hit} of {total} covered by your profile
         </p>
       </div>
+      <p className="pb-3 text-meta text-muted">This compares your profile. Application-only evidence may already be demonstrated in the tailored resume.</p>
       <ul aria-label="Requirements">
         {match.items.map((item, index) => {
           const { mark, label, className } = MARKS[item.result];
@@ -50,10 +56,11 @@ export function MatchRows({
                   {item.requirement}
                 </p>
                 {item.note && <p className="text-meta text-muted">{item.note}</p>}
+                {editing === index && skill && <ApplicationEvidenceForm key={index} skill={skill} index={index} options={evidenceOptions} initial={evidence.find((entry) => entry.requirementIndex === index)} onSave={onAddEvidence} onCancel={() => setEditing(null)} />}
               </div>
-              {item.result === "gap" && skill && (
-                <Button variant="secondary" size="sm" className="flex-none" onClick={() => onAddSkill(index, skill)}>
-                  + Add to profile
+              {skill && (
+                <Button variant="secondary" size="sm" className="flex-none" onClick={() => setEditing(editing === index ? null : index)}>
+                  {evidence.some((entry) => entry.requirementIndex === index) ? "Edit application evidence" : "Add for this application"}
                 </Button>
               )}
             </li>

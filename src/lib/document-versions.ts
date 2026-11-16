@@ -1,7 +1,8 @@
 import "server-only";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import type { VersionCause } from "@/generated/prisma/enums";
+import { readDocumentState, type DocumentState } from "@/lib/document-state";
 import type { Unit } from "@/lib/application-data";
 
 // Versions of a tailored document (E8-10, APP-13): saved after each AI
@@ -22,9 +23,10 @@ function nextTime(): Date {
 }
 
 /** Saves `units` as a version of the document, keeping the newest MAX_VERSIONS. */
-export async function saveVersion(tx: Prisma.TransactionClient, documentId: string, units: Unit[], { cause, detail = "" }: VersionNote): Promise<void> {
+export async function saveVersion(tx: Prisma.TransactionClient, documentId: string, units: Unit[], { cause, detail = "" }: VersionNote, state?: DocumentState | null): Promise<void> {
+  const snapshot = state === undefined ? readDocumentState((await tx.document.findUniqueOrThrow({ where: { id: documentId }, select: { state: true } })).state) : state;
   await tx.documentVersion.create({
-    data: { documentId, units: units as Prisma.InputJsonValue, cause, detail: detail.trim().slice(0, 200), createdAt: nextTime() },
+    data: { documentId, state: snapshot ? snapshot as unknown as Prisma.InputJsonValue : Prisma.DbNull, units: units as Prisma.InputJsonValue, cause, detail: detail.trim().slice(0, 200), createdAt: nextTime() },
   });
   const older = await tx.documentVersion.findMany({
     where: { documentId },

@@ -22,11 +22,14 @@ export const THEME_FILE_FORMAT = "dossier-theme";
 /**
  * Bump when the file's shape changes; imports refuse versions they don't
  * know. Version 2 added the header, sidebar and date styles, 3 the photo's
- * shape and position (#224); older files read with the defaults.
+ * shape and position (#224), 4 optional page margins; older files read with the defaults.
  */
-export const THEME_FILE_VERSION = 3;
+export const THEME_FILE_VERSION = 4;
 
 const font = z.enum(ThemeFont, { error: (issue) => `That theme uses a font Dossier doesn't have (${String(issue.input)}).` });
+
+/** Margin controls allow half-millimetre steps, including edge-to-edge PDFs. */
+export const themeMarginSchema = z.number().min(0).max(30).multipleOf(0.5).nullable().default(null);
 
 /** A theme's name and look, checked the same way wherever it comes from. */
 export const themeFieldsSchema = z.object({
@@ -45,6 +48,8 @@ export const themeFieldsSchema = z.object({
   align: z.enum(ThemeAlign),
   headingStyle: z.enum(HeadingStyle),
   density: z.enum(Density),
+  marginXmm: themeMarginSchema,
+  marginYmm: themeMarginSchema,
   headerStyle: z.enum(HeaderStyle),
   sidebarStyle: z.enum(SidebarStyle),
   dateStyle: z.enum(DateStyle),
@@ -69,10 +74,11 @@ export const themeFileSchema = z.object({
 /** What an exported theme file holds. */
 export function themeFile(theme: ThemeData) {
   const { name, headFont, bodyFont, accent, layout, align, headingStyle, density, headerStyle, sidebarStyle, dateStyle, photoShape, photoPosition } = theme;
+  const { marginXmm = null, marginYmm = null } = theme;
   return {
     format: THEME_FILE_FORMAT,
     version: THEME_FILE_VERSION,
-    theme: { name, headFont, bodyFont, accent, layout, align, headingStyle, density, headerStyle, sidebarStyle, dateStyle, photoShape, photoPosition },
+    theme: { name, headFont, bodyFont, accent, layout, align, headingStyle, density, marginXmm, marginYmm, headerStyle, sidebarStyle, dateStyle, photoShape, photoPosition },
   };
 }
 

@@ -8,6 +8,7 @@ import type { Extracted, Match } from "@/lib/application-data";
 import { documentLabels } from "@/lib/document-labels";
 import { documentLanguage } from "@/lib/document-language";
 import type { WriteDocumentsResult } from "@/lib/jobs/write-documents";
+import { sidebarLetterUnits } from "@/lib/cover-letter-format";
 import { newFrame, withFrame } from "@/lib/letter-frame";
 import { prisma } from "@/lib/prisma";
 import { loadProfile } from "@/lib/profile-data";
@@ -58,20 +59,21 @@ export type CreateApplicationInput = {
   postingUrl: string;
   tone: Tone;
   note: string;
+  evidenceFacts?: string[];
   claim: ApplicationClaim;
 };
 
 const CLAIMED = "application:";
 
 /** Creates the application once; creating again with the same claim returns the one that exists. */
-export async function createApplicationFromDocuments({ reading, documents, match, details, postingUrl, tone, note, claim }: CreateApplicationInput): Promise<string> {
+export async function createApplicationFromDocuments({ reading, documents, match, details, postingUrl, tone, note, evidenceFacts = [], claim }: CreateApplicationInput): Promise<string> {
   const [settings, profile] = await Promise.all([loadSettings(), loadProfile()]);
   const { extracted, extractedWith, matchedWith } = reading;
   const language = settings.docLanguage ?? extracted.language ?? "English";
   // E8-11: every part of the letter is a unit. The AI wrote the recipient
   // and greeting; the sender and signature come from the profile, and the
   // date is written now, in the letter's language.
-  const letter = withFrame(
+  const letter = sidebarLetterUnits(withFrame(
     documents.letter,
     newFrame({
       basics: profile.basics,
@@ -82,7 +84,7 @@ export async function createApplicationFromDocuments({ reading, documents, match
       lang: documentLanguage(language, documents.letter.map((unit) => unit.text).join(" ")).lang,
       labels: documentLabels(language),
     }),
-  );
+  ), details.role.trim() || profile.basics.headline);
   const summary = tailoringSummary({
     profile,
     company: details.company,
@@ -134,7 +136,7 @@ export async function createApplicationFromDocuments({ reading, documents, match
         matchedWith,
         tone,
         // "Anything I should know?" becomes the application's first fact (APP-15).
-        ...(note.trim() ? { facts: { create: { text: note.trim() } } } : {}),
+        ...((note.trim() || evidenceFacts.length) ? { facts: { create: [...(note.trim() ? [{ text: note.trim(), sort: 0 }] : []), ...evidenceFacts.map((text, index) => ({ text, sort: index + 1 }))] } } : {}),
         language,
         documents: {
           // Each starts its history with the first draft (E8-10). One that wasn't
@@ -155,6 +157,7 @@ export async function createApplicationFromDocuments({ reading, documents, match
               ? [
                   {
                     kind: "COVER_LETTER" as const,
+                    initialLetterLayout: "SIDEBAR",
                     units: letter,
                     themeId: settings.baseThemeId,
                     writtenWith: documents.letterWith,

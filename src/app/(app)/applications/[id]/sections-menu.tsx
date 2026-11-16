@@ -12,6 +12,7 @@ import { arrangedSections, isCustomKey, sectionHeading, withHeading, withMoved, 
  * hasn't, to add. A section only arrives here when it's added, never on its own.
  */
 export function SectionsMenu({
+  inline = false,
   sections,
   present,
   base,
@@ -26,6 +27,7 @@ export function SectionsMenu({
   onAdd,
   onFollowBase,
 }: {
+  inline?: boolean;
   sections: SectionLayout;
   /** The sections this resume has content for. */
   present: string[];
@@ -51,6 +53,61 @@ export function SectionsMenu({
   const removed = arranged.filter((key) => present.includes(key) && sections.off.includes(key));
   const fresh = arranged.filter((key) => base.includes(key) && !present.includes(key));
 
+  const content = (
+    <div className="flex flex-col gap-4" data-no-swipe>
+      <p className="text-label text-muted">Sections on this resume</p>
+      {sent && <p className="text-label text-pretty text-muted">This resume was sent, so changes to your profile don&apos;t reach it. Anything you change here does.</p>}
+      {canUpdate && (
+        <div className="flex flex-col items-start gap-1.5 rounded-control bg-paper p-3">
+          <p className="text-label text-pretty text-muted">
+            {sent
+              ? "Your profile has changed since. Updating brings in titles, dates, contact details and new items in these sections. The text on this resume stays, and nothing leaves it."
+              : "Your profile has new items for these sections. Updating adds them in your profile's own words."}
+          </p>
+          <Button variant="secondary" size="sm" onClick={onUpdate}>
+            Update from profile
+          </Button>
+        </div>
+      )}
+      <SectionOrderList
+        rows={on.map((key) => ({
+          key,
+          name: sectionHeading(sections, key, nameOf(key)),
+          usual: nameOf(key),
+          inSidebar: isSidebar(key),
+        }))}
+        sidebar={sidebar}
+        onMove={(keys) => onChange({ ...sections, order: withMoved(sections.order, keys) })}
+        onRemove={(key) => onChange({ ...sections, off: [...sections.off, key] })}
+        onRename={(key, title) => onChange(withHeading(sections, key, title))}
+      />
+      {(fresh.length > 0 || removed.length > 0) && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-label text-muted">Add from your profile</p>
+          <ul className="flex flex-col gap-1.5">
+            {[...fresh, ...removed].map((key) => (
+              <li key={key} className="flex items-center justify-between gap-2 rounded-control border border-dashed border-line-card py-1 pr-1.5 pl-3">
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm">{nameOf(key)}</span>
+                  <span className="text-xs text-muted">{fresh.includes(key) ? "Not on this resume yet" : "Removed from this resume"}</span>
+                </span>
+                <Button variant="text" size="sm" onClick={() => onAdd(key)}>
+                  Add <span className="sr-only">{nameOf(key)}</span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {own && onFollowBase && (
+        <Button variant="text" size="sm" className="self-start" onClick={onFollowBase}>
+          Use the base resume&apos;s order
+        </Button>
+      )}
+    </div>
+  );
+  if (inline) return content;
+
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
@@ -71,55 +128,7 @@ export function SectionsMenu({
           collisionPadding={8}
           className="z-30 flex max-h-(--radix-popover-content-available-height) w-[min(380px,calc(100vw-16px))] flex-col gap-4 overflow-y-auto rounded-card border border-line-popover bg-card p-4 shadow-menu"
         >
-          <p className="text-label text-muted">Sections on this resume</p>
-          {sent && <p className="text-label text-pretty text-muted">This resume was sent, so changes to your profile don&apos;t reach it. Anything you change here does.</p>}
-          {canUpdate && (
-            <div className="flex flex-col items-start gap-1.5 rounded-control bg-paper p-3">
-              <p className="text-label text-pretty text-muted">
-                {sent
-                  ? "Your profile has changed since. Updating brings in titles, dates, contact details and new items in these sections. The text on this resume stays, and nothing leaves it."
-                  : "Your profile has new items for these sections. Updating adds them in your profile's own words."}
-              </p>
-              <Button variant="secondary" size="sm" onClick={onUpdate}>
-                Update from profile
-              </Button>
-            </div>
-          )}
-          <SectionOrderList
-            rows={on.map((key) => ({
-              key,
-              name: sectionHeading(sections, key, nameOf(key)),
-              usual: nameOf(key),
-              inSidebar: isSidebar(key),
-            }))}
-            sidebar={sidebar}
-            onMove={(keys) => onChange({ ...sections, order: withMoved(sections.order, keys) })}
-            onRemove={(key) => onChange({ ...sections, off: [...sections.off, key] })}
-            onRename={(key, title) => onChange(withHeading(sections, key, title))}
-          />
-          {(fresh.length > 0 || removed.length > 0) && (
-            <div className="flex flex-col gap-1.5">
-              <p className="text-label text-muted">Add from your profile</p>
-              <ul className="flex flex-col gap-1.5">
-                {[...fresh, ...removed].map((key) => (
-                  <li key={key} className="flex items-center justify-between gap-2 rounded-control border border-dashed border-line-card py-1 pr-1.5 pl-3">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-sm">{nameOf(key)}</span>
-                      <span className="text-xs text-muted">{fresh.includes(key) ? "Not on this resume yet" : "Removed from this resume"}</span>
-                    </span>
-                    <Button variant="text" size="sm" onClick={() => onAdd(key)}>
-                      Add <span className="sr-only">{nameOf(key)}</span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {own && onFollowBase && (
-            <Button variant="text" size="sm" className="self-start" onClick={onFollowBase}>
-              Use the base resume&apos;s order
-            </Button>
-          )}
+          {content}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

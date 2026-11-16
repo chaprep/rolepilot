@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { demoDocumentState } from "@/test/document-state";
+import { readDocumentState, documentChangesSchema } from "@/lib/document-state";
 import { MockProvider } from "@/lib/ai/providers/mock";
 import { demoLetterUnits, demoResumeUnits } from "@/lib/demo-profile";
 import { createTestClient, resetDatabase } from "@/test/db";
@@ -63,7 +65,7 @@ describe("refineJob (E8-5)", () => {
     expect(saved).toMatchObject({
       role: "AI",
       text: "Trimmed your summary.",
-      writtenWith: "refine-chat@9",
+      writtenWith: "refine-chat@13",
       previousTone: null,
       edits: [{ document: "RESUME", unitId: "summary", text: "Designer of calm tools.", previousText: resume[0].text }],
     });
@@ -94,7 +96,7 @@ describe("refineJob (E8-5)", () => {
     expect((await units("COVER_LETTER")).at(-1)).toMatchObject({ id: "sign-off", text: "Kind regards," });
   });
 
-  it("declines without touching the documents (APP-9)", async () => {
+  it("keeps documents unchanged when the provider reports a decline", async () => {
     provider.current = reply({
       reply: "Your profile doesn't mention Kubernetes yet, so I've left it out.",
       edits: [{ document: "RESUME", unitId: "summary", text: "Kubernetes expert." }],
@@ -105,7 +107,25 @@ describe("refineJob (E8-5)", () => {
     expect(await units("RESUME")).toEqual(resume);
   });
 
-  it("leaves a unit that changed while it worked, and says so", async () => {
+  it("saves requested new skills and an empty section without changing the letter", async () => {
+    provider.current = reply({ reply: "Applied your changes.", edits: [
+      { document: "RESUME", unitId: "skills", text: "Cloud: Kubernetes" },
+      { document: "RESUME", unitId: "summary", text: "" },
+    ] });
+    const result = await ask("Add Kubernetes to skills and clear the summary");
+    expect(result.edited).toHaveLength(2);
+    expect((await units("RESUME")).find((unit) => unit.id === "skills")?.text).toBe("Cloud: Kubernetes");
+    expect((await units("RESUME")).find((unit) => unit.id === "summary")?.text).toBe("");
+    expect(await units("COVER_LETTER")).toEqual(letter);
+    expect((await lastMessage()).edits).toEqual(expect.arrayContaining([
+      expect.objectContaining({ unitId: "summary", text: "", previousText: resume[0].text }),
+    ]));
+    expect(await prisma().documentVersion.count()).toBe(1);
+    expect(await prisma().skill.count()).toBe(0);
+    expect(await prisma().fact.count()).toBe(0);
+  });
+
+  it("rejects the full request when a document changed while it worked", async () => {
     provider.current = new MockProvider({
       reply: async () => {
         const edited = resume.map((unit) => (unit.id === "summary" ? { ...unit, text: "Mine" } : unit));
@@ -113,9 +133,9 @@ describe("refineJob (E8-5)", () => {
         return { reply: "Tightened it.", edits: [{ document: "RESUME", unitId: "summary", text: "The AI's" }], tone: null, declined: false };
       },
     });
-    expect(await ask("Shorter")).toMatchObject({ edited: [] });
+    await expect(ask("Shorter")).rejects.toThrow("document changed while refining");
     expect((await units("RESUME"))[0].text).toBe("Mine");
-    expect((await lastMessage()).text).toBe("Tightened it. I left the summary as it is: it changed while I was working.");
+    expect((await lastMessage()).role).toBe("USER");
   });
 
   it("sends the conversation so far and the picked unit", async () => {
@@ -162,4 +182,96 @@ describe("the letter's contact details (E8-11)", () => {
     expect(saved.find((unit) => unit.id === "sender")?.text).toBe(framed[0].text);
     expect(saved.find((unit) => unit.id === "greeting")?.text).toBe("Hello Ledgerly team,");
   });
+});
+
+
+it("limits automatic evidence application to the resume and does not duplicate replies on retry", async () => {
+  const fact = await prisma().fact.create({ data: { applicationId: "app-1", text: "Worked on delivery planning." } });
+  const message = await prisma().chatMessage.create({ data: { applicationId: "app-1", role: "USER", text: "Apply evidence" } });
+  const beforeLetter = await units("COVER_LETTER");
+  provider.current = reply({ reply: "Applied evidence.", tone: "FORMAL", edits: [
+    { document: "RESUME", unitId: "summary", text: "Delivery planning specialist." },
+    { document: "RESUME", unitId: "experience:e1", text: "Do not change" },
+    { document: "COVER_LETTER", unitId: "paragraph:1", text: "Do not change" },
+  ] });
+  const input = { applicationId: "app-1", messageId: message.id, request: "Apply evidence", viewing: "RESUME" as const, target: null, evidence: { factId: fact.id, targetUnitId: null } };
+  const result = await refineJob.run(input, context);
+  expect(result.edited).toEqual([{ document: "RESUME", unitId: "summary" }]);
+  expect(await units("COVER_LETTER")).toEqual(beforeLetter);
+  expect((await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } })).tone).toBe("WARM");
+  expect(await refineJob.run(input, context)).toEqual({ messageId: result.messageId, edited: [] });
+  expect(await prisma().documentVersion.count()).toBe(1);
+});
+
+
+it("does not apply a result if its evidence was removed during generation", async () => {
+  const fact = await prisma().fact.create({ data: { applicationId: "app-1", text: "Worked on delivery planning." } });
+  const message = await prisma().chatMessage.create({ data: { applicationId: "app-1", role: "USER", text: "Apply evidence" } });
+  provider.current = new MockProvider({ reply: async () => {
+    await prisma().fact.delete({ where: { id: fact.id } });
+    return { reply: "Updated.", tone: null, declined: false, edits: [{ document: "RESUME", unitId: "summary", text: "Do not save" }] };
+  } });
+  await expect(refineJob.run({ applicationId: "app-1", messageId: message.id, request: "Apply evidence", viewing: "RESUME", target: null, evidence: { factId: fact.id, targetUnitId: null } }, context)).rejects.toThrow("evidence changed while rewriting");
+  expect(await units("RESUME")).toEqual(resume);
+  expect(await prisma().documentVersion.count()).toBe(0);
+});
+
+
+describe("complete local document refinement", () => {
+  it("saves formatting, metadata and new sections atomically with complete history", async () => {
+    provider.current = reply({ reply: "Updated the resume and letter.", operations: [
+      { type: "settings", document: "RESUME", json: '{"theme":{"marginXmm":8},"paper":"LETTER"}' },
+      { type: "style", document: "RESUME", target: "document", json: '{"fontSize":11,"lineHeight":1.25}' },
+      { type: "metadata", document: "RESUME", path: "experience.e1.role", json: '\"Principal Designer\"' },
+      { type: "entry", document: "RESUME", collection: "customSections", action: "upsert", id: "local-awards", json: JSON.stringify({ title: "Awards", format: "LINES", items: [{ id: "local-award", title: "Design award", onResumes: true }] }), beforeId: null },
+      { type: "unit", document: "RESUME", action: "upsert", id: "custom-line:local-award", label: "Award", text: "**Design award**", beforeId: null },
+      { type: "unit", document: "COVER_LETTER", action: "upsert", id: "paragraph:local-new", label: "New paragraph", text: "A new paragraph.", beforeId: null },
+    ] });
+    await ask("Change the resume design and add my award; add a letter paragraph");
+    const row = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "RESUME" } } });
+    const state = readDocumentState(row.state)!;
+    expect(state.theme.marginXmm).toBe(8);
+    expect(state.paper).toBe("LETTER");
+    expect(state.profile.experience[0].role).toBe("Principal Designer");
+    expect(state.styles.document.fontSize).toBe(11);
+    expect(state.sections.order).toContain("custom:local-awards");
+    expect(documentChangesSchema.parse((await lastMessage()).documentChanges)).toHaveLength(2);
+    expect(await prisma().documentVersion.count()).toBe(2);
+    expect(await prisma().experience.count()).toBe(0);
+    expect(await prisma().theme.count()).toBe(0);
+    expect((await units("COVER_LETTER")).at(-1)?.id).toBe("paragraph:local-new");
+    const version = await prisma().documentVersion.findFirstOrThrow({ where: { documentId: row.id } });
+    expect(readDocumentState(version.state)?.paper).toBe("LETTER");
+    provider.current = reply({ reply: "Shorter.", edits: [{ document: "RESUME", unitId: "summary", text: "Principal designer." }] });
+    await ask("Shorten the summary");
+    const current = await prisma().document.findUniqueOrThrow({ where: { id: row.id } });
+    expect(readDocumentState(current.state)?.theme.marginXmm).toBe(8);
+    expect(readDocumentState(current.state)?.profile.experience[0].role).toBe("Principal Designer");
+  });
+  it("rejects an invalid operation without saving its accompanying text edits", async () => {
+    provider.current = reply({ reply: "Done.", edits: [{ document: "RESUME", unitId: "summary", text: "Do not save" }], operations: [{ type: "style", document: "RESUME", target: "document", json: '{"fontSize":-1}' }] });
+    await expect(ask("Change spacing and summary")).rejects.toThrow();
+    expect(await units("RESUME")).toEqual(resume);
+    expect(await prisma().documentVersion.count()).toBe(0);
+    expect((await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1", kind: "RESUME" } })).state).toBeNull();
+  });
+  it("leaves inheritance intact when the provider makes no changes", async () => {
+    provider.current = reply({ reply: "What would you like to change?" });
+    await ask("Hello");
+    expect((await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1" } })).state).toBeNull();
+    expect(await prisma().documentVersion.count()).toBe(0);
+  });
+});
+
+
+it("preserves a theme manually selected while the first local refinement is running", async () => {
+  const theme = demoDocumentState().theme;
+  await prisma().theme.create({ data: { ...theme, id: "new-theme", builtIn: false } });
+  provider.current = new MockProvider({ reply: async () => {
+    await prisma().document.update({ where: { applicationId_kind: { applicationId: "app-1", kind: "RESUME" } }, data: { themeId: "new-theme" } });
+    return { reply: "Updated.", edits: [], operations: [{ type: "settings", document: "RESUME", json: '{"theme":{"marginXmm":8}}' }], tone: null, declined: false };
+  } });
+  await expect(ask("Reduce margins")).rejects.toThrow("document changed while refining");
+  const row = await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1", kind: "RESUME" } });
+  expect(row.themeId).toBe("new-theme"); expect(row.state).toBeNull();
 });

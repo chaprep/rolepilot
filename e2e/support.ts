@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { crc32, deflateSync } from "node:zlib";
 
@@ -36,6 +37,8 @@ export function e2eDatabaseUrl(): string {
 /** The app's environment for a run. */
 export function appEnv(): Record<string, string> {
   return {
+    NODE_OPTIONS: `--require ${JSON.stringify(resolve("e2e/openrouter-preload.cjs"))}`,
+    FAKE_AI_PORT: String(FAKE_AI_PORT),
     DATABASE_URL: e2eDatabaseUrl(),
     DOSSIER_PASSWORD: PASSWORD_HASH,
     DOSSIER_SECRET: "e2e-secret-e2e-secret-e2e-secret-e2e",

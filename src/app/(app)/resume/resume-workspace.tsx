@@ -205,99 +205,109 @@ export function ResumeWorkspace({
 
   return (
     <>
-      <PageHeader
-        title="Base resume"
-        description="Built straight from your profile. Every new application starts from this one, then gets tailored to the job."
-        actions={
-          <>
-            <Link href="/profile" className={buttonClassName("secondary")}>
-              Edit profile
-            </Link>
-            <DownloadPdfButton href="/api/pdf?doc=base">Download PDF</DownloadPdfButton>
-          </>
-        }
-      />
-      <div className="@container flex flex-1 flex-wrap border-t border-line">
-        <DocumentPreview
-          label={theme.name}
-          meta={(pages) => `${PAPER_SIZES[paper].label} · ${pages} ${pages === 1 ? "page" : "pages"}${fit > 0 ? " · squeezed to fit" : ""}`}
-          onPages={onPages}
-          notice={() =>
-            empty ? (
-              // E11-4: an empty page needs a way forward.
-              <p role="note" className="rounded-card bg-card px-4 py-2.5 text-meta text-muted">
-                Your resume fills in from your profile. Add your name and a role or two, and it takes shape here.{" "}
-                <Link href="/profile" className="text-ink underline underline-offset-2">
-                  Go to your profile
-                </Link>
-              </p>
-            ) : null
-          }
-        >
-          <ResumeDocument theme={theme} profile={profile} paper={paper} includeReferences={includeReferences} language={language} sections={sections} fit={fitToPage ? fit : 0} />
-        </DocumentPreview>
-        <aside
-          ref={panelArea}
-          aria-label="Theme and sections"
-          className="flex flex-[1_0_300px] flex-col gap-6 border-t border-line bg-paper px-7 pt-7 pb-12 @min-[780px]:border-t-0 @min-[780px]:border-l"
-        >
-          <Toggle
-            label="Fit to one page"
-            description={
-              !fitToPage
-                ? "Off. The resume takes the pages it needs."
-                : fit === 0
-                  ? "On. It fits as it is."
-                  : pages > 1
-                    ? "On, but it runs over one page even at its tightest. Shorten it, or leave a section out under Sections."
-                    : `On. Tighter spacing${fit >= 3 ? " and smaller type" : fit >= 2 ? " and lines" : ""}, so it fits; the PDF does the same.`
-            }
-            checked={fitToPage}
-            onCheckedChange={(next) => void toggleFit(next)}
-          />
-          <Tabs value={panel} onValueChange={(value) => openPanel(value as Panel)} className="flex flex-col gap-6">
-            <TabsList variant="segmented">
-              <TabsTrigger value="themes">Themes</TabsTrigger>
-              <TabsTrigger value="customize">Customize</TabsTrigger>
-              <TabsTrigger value="sections">Sections</TabsTrigger>
-            </TabsList>
-            <TabsContent value="themes">
-              <ThemePicker
-                themes={themes}
-                activeId={theme.id}
-                userName={profile.basics.name.trim() || "Your name"}
-                onSelect={selectTheme}
-                onCustomize={() => openPanel("customize", true)}
-                actions={{
-                  duplicate: () => void duplicate(),
-                  exportFile,
-                  remove: () => setDeleting(base),
-                  importFile: (file) => void importFile(file),
-                }}
+      <div className="@container flex min-w-0 flex-1 flex-col">
+        {/* The shell has an 8px bottom inset and a 1px panel border. */}
+        <div className="flex flex-1 flex-col @min-[780px]:h-[calc(100dvh-9px)] @min-[780px]:flex-none @min-[780px]:overflow-hidden">
+          <div className="shrink-0">
+            <PageHeader
+              title="Base resume"
+              description="Built straight from your profile. Every new application starts from this one, then gets tailored to the job."
+              actions={
+                <>
+                  <Link href="/profile" className={buttonClassName("secondary")}>
+                    Edit profile
+                  </Link>
+                  <DownloadPdfButton href="/api/pdf?doc=base">Download PDF</DownloadPdfButton>
+                </>
+              }
+            />
+          </div>
+          <div className="@container flex min-h-0 flex-1 flex-wrap border-t border-line @min-[780px]:flex-nowrap @min-[780px]:overflow-hidden">
+            <DocumentPreview
+              className="@min-[780px]:min-h-0 @min-[780px]:overscroll-contain"
+              label={theme.name}
+              meta={(pages) => `${PAPER_SIZES[paper].label} · ${pages} ${pages === 1 ? "page" : "pages"}${fit > 0 ? " · squeezed to fit" : ""}`}
+              onPages={onPages}
+              notice={() =>
+                empty ? (
+                  // E11-4: an empty page needs a way forward.
+                  <p role="note" className="rounded-card bg-card px-4 py-2.5 text-meta text-muted">
+                    Your resume fills in from your profile. Add your name and a role or two, and it takes shape here.{" "}
+                    <Link href="/profile" className="text-ink underline underline-offset-2">
+                      Go to your profile
+                    </Link>
+                  </p>
+                ) : null
+              }
+            >
+              <ResumeDocument theme={theme} profile={profile} paper={paper} includeReferences={includeReferences} language={language} sections={sections} fit={fitToPage ? fit : 0} />
+            </DocumentPreview>
+            <aside
+              ref={panelArea}
+              aria-label="Theme and sections"
+              // Contain Radix's absolute hidden inputs within this scroll area.
+              className="relative flex flex-[1_0_300px] flex-col gap-6 border-t border-line bg-paper px-7 pt-7 pb-12 @min-[780px]:min-h-0 @min-[780px]:overflow-y-auto @min-[780px]:overscroll-contain @min-[780px]:border-t-0 @min-[780px]:border-l"
+            >
+              <Toggle
+                label="Fit to one page"
+                description={
+                  !fitToPage
+                    ? "Off. The resume takes the pages it needs."
+                    : fit === 0
+                      ? "On. It fits as it is."
+                      : pages > 1
+                        ? "On, but it runs over one page even at its tightest. Shorten it, or leave a section out under Sections."
+                        : `On. Tighter spacing${fit >= 3 ? " and smaller type" : fit >= 2 ? " and lines" : ""}, so it fits; the PDF does the same.`
+                }
+                checked={fitToPage}
+                onCheckedChange={(next) => void toggleFit(next)}
               />
-            </TabsContent>
-            <TabsContent value="customize">
-              {draft && (
-                <ThemeBuilder
-                  draft={draft}
-                  onChange={setDraft}
-                  onSave={saveDraft}
-                  onCancel={() => openPanel("themes", true)}
-                  saving={saving}
-                />
-              )}
-            </TabsContent>
-            <TabsContent value="sections">
-              <SectionsPanel
-                profile={profile}
-                includeReferences={includeReferences}
-                sections={sections}
-                sidebar={hasSidebar(theme.layout)}
-                onChange={(next) => void changeSections(next)}
-              />
-            </TabsContent>
-          </Tabs>
-        </aside>
+              <Tabs value={panel} onValueChange={(value) => openPanel(value as Panel)} className="flex flex-col gap-6">
+                <TabsList variant="segmented">
+                  <TabsTrigger value="themes">Themes</TabsTrigger>
+                  <TabsTrigger value="customize">Customize</TabsTrigger>
+                  <TabsTrigger value="sections">Sections</TabsTrigger>
+                </TabsList>
+                <TabsContent value="themes">
+                  <ThemePicker
+                    themes={themes}
+                    activeId={theme.id}
+                    userName={profile.basics.name.trim() || "Your name"}
+                    onSelect={selectTheme}
+                    onCustomize={() => openPanel("customize", true)}
+                    actions={{
+                      duplicate: () => void duplicate(),
+                      exportFile,
+                      remove: () => setDeleting(base),
+                      importFile: (file) => void importFile(file),
+                    }}
+                  />
+                </TabsContent>
+                <TabsContent value="customize">
+                  {draft && (
+                    <ThemeBuilder
+                      draft={draft}
+                      paper={paper}
+                      onChange={setDraft}
+                      onSave={saveDraft}
+                      onCancel={() => openPanel("themes", true)}
+                      saving={saving}
+                    />
+                  )}
+                </TabsContent>
+                <TabsContent value="sections">
+                  <SectionsPanel
+                    profile={profile}
+                    includeReferences={includeReferences}
+                    sections={sections}
+                    sidebar={hasSidebar(theme.layout)}
+                    onChange={(next) => void changeSections(next)}
+                  />
+                </TabsContent>
+              </Tabs>
+            </aside>
+          </div>
+        </div>
       </div>
       <ConfirmDialog
         open={deleting !== null}

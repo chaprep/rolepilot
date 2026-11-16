@@ -226,6 +226,13 @@
   break-before: avoid;
 }
 
+.bodyParagraph {
+  margin-top: calc(var(--u) * 3);
+  white-space: pre-line;
+  orphans: 2;
+  widows: 2;
+}
+
 .bullets {
   margin-top: calc(var(--u) * 3);
   padding-inline-start: 1.1em;
@@ -347,6 +354,85 @@
   margin-top: calc(var(--u) * 4);
   font-weight: 600;
   color: var(--doc-ink);
+}
+
+/* Sidebar letters: isolated from resume layouts and the legacy letter frame. */
+.sidebarLetter {
+  color: #202020;
+}
+
+.letterSidebar {
+  float: inline-start;
+  width: 30%;
+  break-inside: avoid;
+  overflow-wrap: anywhere;
+}
+
+.letterMain {
+  margin-inline-start: 36%;
+  border-top: calc(var(--u) * 2) solid var(--accent);
+  padding-top: calc(var(--u) * 4);
+}
+
+.sidebarLetter::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+.sidebarLetter[data-document="letter"] .senderName {
+  color: #171717;
+  overflow-wrap: anywhere;
+}
+
+.sidebarRole {
+  color: var(--accent);
+  margin-top: calc(var(--u) * 8);
+  overflow-wrap: anywhere;
+}
+
+.sidebarDivider {
+  width: calc(var(--u) * 16);
+  border-top: calc(var(--u) * 1) solid var(--doc-ink);
+  margin-block: calc(var(--u) * 16) calc(var(--u) * 24);
+}
+
+.sidebarContacts p {
+  margin: 0;
+}
+
+.sidebarContactName {
+  font-weight: 600;
+}
+
+.sidebarContacts a {
+  color: var(--accent);
+}
+
+.sidebarLetter .letterDate {
+  color: #666;
+  font-weight: 600;
+  margin-bottom: calc(var(--u) * 3);
+}
+
+.sidebarLetter .recipient {
+  margin-bottom: calc(var(--u) * 25);
+}
+
+.sidebarLetter .recipient p:first-child {
+  font-weight: 600;
+}
+
+.sidebarLetter .greeting {
+  margin-bottom: calc(var(--u) * 14);
+}
+
+.sidebarLetter .paragraphs {
+  gap: calc(var(--u) * 16);
+}
+
+.sidebarLetter .signOff {
+  margin-top: calc(var(--u) * 24);
 }
 
 /* ─── Theme structures ─────────────────────────────────────────────────── */

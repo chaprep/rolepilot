@@ -15,10 +15,11 @@ vi.mock("@/lib/profile-data", async () => {
   return { loadProfile: async () => demoProfile() };
 });
 vi.mock("@/lib/settings-data", () => ({ loadSettings: async () => ({ resumeSections: { order: [], off: [] } }) }));
-const scorer = vi.hoisted(() => ({ calls: [] as { posting: unknown; summary: string }[] }));
+const scorer = vi.hoisted(() => ({ changeWhileScoring: false, calls: [] as { posting: unknown; summary: string }[] }));
 vi.mock("@/lib/scoring", () => ({
   loadPostingScorer: async () => async (posting: unknown, profile: { basics: { summary: string } }) => {
     scorer.calls.push({ posting, summary: profile.basics.summary });
+    if (scorer.changeWhileScoring) await db.client!.document.updateMany({ where: { applicationId: "app-1", kind: "RESUME" }, data: { units: [{ id: "summary", label: "Summary", text: "Changed while scoring" }], updatedAt: new Date(Date.now() + 1000) } });
     return { data: { score: 82, reasons: ["Payments, as the posting asks"], redFlags: [] }, scoredWith: "score-posting-jev@1" };
   },
 }));
@@ -30,6 +31,7 @@ const context = { id: "test-job", step: async () => {}, signal: new AbortControl
 beforeEach(async () => {
   await resetDatabase(prisma());
   scorer.calls = [];
+  scorer.changeWhileScoring = false;
   await prisma().application.create({
     data: {
       id: "app-1",
@@ -53,6 +55,12 @@ describe("scoreResumeJob (#370)", () => {
       { posting: { title: "Designer", company: "Ledgerly", place: "Amsterdam", remote: true, salary: "", description: "Ledgerly is hiring a Designer." }, summary: "Payments designer." },
     ]);
     expect((await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } })).resumeFit).toMatchObject({ score: 82, reasons: ["Payments, as the posting asks"] });
+  });
+
+  it("does not publish a score after the resume changed during scoring", async () => {
+    scorer.changeWhileScoring = true;
+    await expect(scoreResumeJob.run({ applicationId: "app-1" }, context)).rejects.toThrow("resume changed while scoring");
+    expect((await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } })).resumeFit).toBeNull();
   });
 
   it("says so for an application without a tailored resume", async () => {

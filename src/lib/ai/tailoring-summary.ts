@@ -1,7 +1,7 @@
 import type { Tone } from "@/generated/prisma/enums";
 import type { Match, Unit } from "@/lib/application-data";
 import { isParagraph } from "@/lib/letter-frame";
-import { sameName, type ProfileData } from "@/lib/profile";
+import { type ProfileData } from "@/lib/profile";
 import { inEditorOrder, skillNamesIn } from "@/lib/skill-groups";
 import { TONES } from "@/lib/tones";
 import { isCustomUnit } from "@/lib/unit-text";
@@ -83,15 +83,7 @@ export function tailoringSummary({
   if (resume.some((entry) => isCustomUnit(entry.id))) list.push("Kept your own sections word for word");
 
   const skills = skillNamesIn(unit("skills")?.text ?? "");
-  const profileSkills = inEditorOrder(profile.skills).map((skill) => skill.name);
-  const kept = profileSkills.filter((name) => skills.some((skill) => sameName(skill, name)));
-  if (skills.length > 1 && !skills.every((skill, index) => kept[index] && sameName(skill, kept[index]))) {
-    list.push(`Ordered your skills by what ${where} asks for`);
-  }
-  const dropped = profileSkills.filter((name) => !skills.some((skill) => sameName(skill, name)));
-  if (skills.length > 0 && dropped.length > 0) {
-    list.push(dropped.length <= 3 ? `Left out ${listOf(dropped)}, which this job isn't about` : `Left out ${dropped.length} skills that don't help here`);
-  }
+  if (skills.length > 0 && (skills.length !== profile.skills.length || !skills.every((name, index) => inEditorOrder(profile.skills)[index]?.name === name))) list.push("Selected and phrased your skills for this job");
 
   if (profile.references.length > 0 && resume.length > 0) {
     list.push(
@@ -105,19 +97,19 @@ export function tailoringSummary({
 
   if (letter.some(isParagraph)) list.push(`Wrote a ${TONES[tone].label.toLowerCase()} cover letter`);
   const gaps = match.items.filter((item) => item.result === "gap").map((item) => `“${item.requirement}”`);
-  if (gaps.length > 0) list.push(`Worth being ready to talk about ${listOf(gaps)}, since ${gaps.length === 1 ? "it isn't" : "they aren't"} in your profile`);
+  if (gaps.length > 0) list.push(`Review the initial profile-match gaps: ${listOf(gaps)}. Application evidence may address them`);
   if (note.trim()) list.push(`Took your note into account: “${note.trim()}”`);
 
   const flagged = [...resume, ...letter].reduce((count, entry) => count + (entry.unverified?.length ?? 0), 0);
   if (strict && flagged > 0) {
-    list.push(`Marked ${flagged === 1 ? "one detail" : `${flagged} details`} to check (not in your profile or the posting)`);
+    list.push(`Marked ${flagged === 1 ? "one detail" : `${flagged} details`} to check against the source information`);
   }
 
   const foot = !strict
     ? "“Never invent experience” is off, so check the facts before you send anything."
     : flagged > 0
       ? "Double-check the marked details before you send anything."
-      : "Nothing invented: every line comes from your profile.";
+      : "Written from your profile and application facts. Review the details before sending.";
 
   return showChanges
     ? { intro: `Here's what I tailored for ${where}:`, list, foot }

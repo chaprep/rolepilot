@@ -15,6 +15,8 @@ export const THEME_FIELDS = {
   align: true,
   headingStyle: true,
   density: true,
+  marginXmm: true,
+  marginYmm: true,
   headerStyle: true,
   sidebarStyle: true,
   dateStyle: true,

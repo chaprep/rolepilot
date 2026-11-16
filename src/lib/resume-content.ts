@@ -10,6 +10,36 @@ import { webHref } from "@/lib/web-link";
 // What a resume shows, worked out from the profile (the base resume) or from
 // a tailored document's units, so the renderer only has to lay it out.
 
+export type ResumeBodyBlock = { type: "paragraph"; text: string } | { type: "bullets"; items: string[] };
+
+/** Base-resume descriptions: explicit * markers make bullets; unmarked lines stay paragraphs. */
+export function resumeBody(text: string): ResumeBodyBlock[] {
+  const blocks: ResumeBodyBlock[] = [];
+  let current: ResumeBodyBlock | undefined;
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      current = undefined;
+      continue;
+    }
+    const marker = /^\*(?:[\t ]+|$)/.exec(trimmed);
+    if (marker) {
+      const item = trimmed.slice(marker[0].length).trim();
+      if (!item) continue;
+      if (current?.type === "bullets") current.items.push(item);
+      else {
+        current = { type: "bullets", items: [item] };
+        blocks.push(current);
+      }
+    } else if (current?.type === "paragraph") current.text += `\n${trimmed}`;
+    else {
+      current = { type: "paragraph", text: trimmed };
+      blocks.push(current);
+    }
+  }
+  return blocks;
+}
+
 export type ResumeContent = {
   name: string;
   headline: string;
@@ -32,6 +62,8 @@ export type ResumeContent = {
     href: string | null;
     dates: string;
     bullets: string[];
+    /** Base resume only; tailored units retain their existing bullet format. */
+    body?: ResumeBodyBlock[];
     skills: string[];
   }[];
   education: { id: string; degree: string; school: string; dates: string; notes: string }[];
@@ -92,6 +124,8 @@ export type ResumeRole = {
   descriptor: string;
   dates: string;
   bullets: string[];
+  /** Base resume only; tailored units retain their existing bullet format. */
+  body?: ResumeBodyBlock[];
   /** The skills used in the role (RES-6). */
   skills: string[];
 };
@@ -99,6 +133,10 @@ export type ResumeRole = {
 export type ResumeOptions = {
   /** A tailored document's units; they replace the profile's text (APP-4). */
   units?: Unit[];
+  /** Independent documents can reorder entries without changing their text. */
+  entryOrderFromProfile?: boolean;
+  /** Exact application-local date labels, including an empty label to hide one. */
+  dateLabels?: Record<string, string>;
   /** Settings → "Include references" (SET-9). */
   includeReferences?: boolean;
   /** An application's Photo switch (#224); null or left out follows the profile's "Show on resumes". */
@@ -159,7 +197,7 @@ export function sectionsWithContent(content: ResumeContent): string[] {
 /** What the resume shows, with its dates and levels in the words of `labels`. */
 export function resumeContent(
   profile: ProfileData,
-  { units, includeReferences = false, showPhoto, today = new Date() }: ResumeOptions = {},
+  { units, entryOrderFromProfile = false, dateLabels = {}, includeReferences = false, showPhoto, today = new Date() }: ResumeOptions = {},
   labels: DocumentLabels = ENGLISH_LABELS,
 ): ResumeContent {
   const { basics } = profile;
@@ -171,9 +209,10 @@ export function resumeContent(
     role: entry.role.trim(),
     company: entry.company.trim(),
     descriptor: entry.descriptor.trim(),
-    dates: formatDateRange(entry, dates),
+    dates: dateLabels[`experience:${entry.id}`] ?? formatDateRange(entry, dates),
     // A tailored text gets the profile's bold back where it keeps the words (#368).
     bullets: lines(keepBold(bullets, entry.bullets)),
+    ...(!units ? { body: resumeBody(bullets) } : {}),
     skills: entry.skillIds.flatMap((id) => skillNames.get(id) ?? []),
   });
   const project = (entry: ProfileData["projects"][number], bullets: string) => ({
@@ -181,8 +220,9 @@ export function resumeContent(
     name: entry.name.trim(),
     link: displayLink(entry.link),
     href: webHref(entry.link),
-    dates: formatDateRange(entry, dates),
+    dates: dateLabels[`project:${entry.id}`] ?? formatDateRange(entry, dates),
     bullets: lines(keepBold(bullets, entry.bullets)),
+    ...(!units ? { body: resumeBody(bullets) } : {}),
     skills: entry.skillIds.flatMap((id) => skillNames.get(id) ?? []),
   });
   const publication = (entry: ProfileData["publications"][number], citation: string) => ({
@@ -195,7 +235,7 @@ export function resumeContent(
     id: entry.id,
     name: name.trim(),
     issuer: entry.issuer.trim(),
-    date: formatMonthYear(entry.year, entry.month, dates),
+    date: dateLabels[`certification:${entry.id}`] ?? formatMonthYear(entry.year, entry.month, dates),
     details: [
       entry.expiryYear === null ? "" : labels.validUntil(formatMonthYear(entry.expiryYear, entry.expiryMonth, dates)),
       entry.credentialId.trim() && `${labels.credentialId} ${entry.credentialId.trim()}`,
@@ -207,7 +247,7 @@ export function resumeContent(
     id: entry.id,
     degree: entry.degree.trim(),
     school: entry.school.trim(),
-    dates: formatDateRange(entry, dates),
+    dates: dateLabels[`education:${entry.id}`] ?? formatDateRange(entry, dates),
     notes: notes.trim(),
   });
 
@@ -215,7 +255,7 @@ export function resumeContent(
     id: item.id,
     title: title.trim(),
     subtitle: item.subtitle.trim(),
-    dates: formatDateRange(item, dates),
+    dates: dateLabels[`custom-entry:${item.id}`] ?? formatDateRange(item, dates),
     bullets: lines(details),
     link: displayLink(item.link),
     href: webHref(item.link),
@@ -257,7 +297,7 @@ export function resumeContent(
     // a role, project, degree, certification, publication or custom item without a unit was left out on purpose.
     const text = (id: string) => units.find((unit) => unit.id === id)?.text ?? "";
     const withUnit = <T extends { id: string }>(prefix: string, entries: T[]) =>
-      units.flatMap((unit) => {
+      (entryOrderFromProfile ? [...units].sort((a, b) => entries.findIndex(entry => `${prefix}${entry.id}` === a.id) - entries.findIndex(entry => `${prefix}${entry.id}` === b.id)) : units).flatMap((unit) => {
         if (!unit.id.startsWith(prefix)) return [];
         const entry = entries.find(({ id }) => `${prefix}${id}` === unit.id);
         return entry ? [{ entry, text: unit.text }] : [];

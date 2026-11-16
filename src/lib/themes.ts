@@ -30,6 +30,9 @@ export type ThemeData = {
   align: ThemeAlign;
   headingStyle: HeadingStyle;
   density: Density;
+  /** Explicit page margins in millimetres; absent/null uses the density preset. */
+  marginXmm?: number | null;
+  marginYmm?: number | null;
   headerStyle: HeaderStyle;
   sidebarStyle: SidebarStyle;
   dateStyle: DateStyle;
@@ -274,7 +277,7 @@ export const SIDEBAR = { width: 150, gap: 28 };
  * covers its own script, set in document.module.css), then Greek in a matching
  * style, then the theme font, so every script prints with a bundled font.
  */
-function documentFamily(font: ThemeFont): string {
+export function documentFamily(font: ThemeFont): string {
   const { family, serif } = THEME_FONTS[font];
   return `var(--script-fonts), ${serif ? "var(--typeface-greek-serif)" : "var(--typeface-greek-sans)"}, ${family}`;
 }
@@ -284,7 +287,7 @@ function documentFamily(font: ThemeFont): string {
  * own, e.g. a tailored resume in a single column (E5-1 decision); `fit` is
  * how far the density is squeezed to fit one page (public issue 69).
  */
-export function resolveTheme(theme: ThemeData, layout: ThemeLayout = theme.layout, fit = 0) {
+export function resolveTheme(theme: ThemeData, layout: ThemeLayout = theme.layout, fit = 0, paper: PaperSize = PaperSize.A4) {
   const split = hasSidebar(layout);
   const serifHeading = THEME_FONTS[theme.headFont].serif;
   return {
@@ -308,11 +311,22 @@ export function resolveTheme(theme: ThemeData, layout: ThemeLayout = theme.layou
     /** Text on the accent, e.g. in a banner: white, or ink when that reads better. */
     onAccent: contrastRatio(theme.accent, "#ffffff") >= contrastRatio(theme.accent, INK) ? "#ffffff" : INK,
     heading: HEADING_STYLES[theme.headingStyle],
-    density: squeeze(DENSITIES[theme.density], fit),
+    density: themeDensity(theme, paper, fit),
     name: serifHeading ? { size: 30, weight: 500 } : { size: 25, weight: 600 },
   };
 }
 export type ResolvedTheme = ReturnType<typeof resolveTheme>;
+
+/** Shared by screen and print; explicit margins survive fit-to-page squeezing. */
+export function themeDensity(theme: Pick<ThemeData, "density" | "marginXmm" | "marginYmm">, paper: PaperSize, fit = 0): DensityMetrics {
+  const density = squeeze(DENSITIES[theme.density], fit);
+  const unitsPerMm = PAGE_WIDTH / PAPER_SIZES[paper].widthMm;
+  return {
+    ...density,
+    paddingX: theme.marginXmm == null ? density.paddingX : theme.marginXmm * unitsPerMm,
+    paddingY: theme.marginYmm == null ? density.paddingY : theme.marginYmm * unitsPerMm,
+  };
+}
 
 /** Millimetres for a length in page units on the given paper. */
 export function unitsToMm(units: number, paper: PaperSize): number {
@@ -326,7 +340,7 @@ export function unitsToMm(units: number, paper: PaperSize): number {
  */
 export function printCss(theme: ThemeData, paper: PaperSize, fit = 0): string {
   const { widthMm, heightMm } = PAPER_SIZES[paper];
-  const { paddingY, paddingX } = squeeze(DENSITIES[theme.density], fit);
+  const { paddingY, paddingX } = themeDensity(theme, paper, fit);
   return [
     `@page { size: ${widthMm}mm ${heightMm}mm; margin: ${unitsToMm(paddingY, paper)}mm ${unitsToMm(paddingX, paper)}mm; }`,
     `:root { --u: ${widthMm / PAGE_WIDTH}mm; }`,

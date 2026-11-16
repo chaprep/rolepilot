@@ -179,6 +179,8 @@ export async function importExport(db: PrismaClient, data: DossierExport): Promi
             applicationId: application.id,
             units: (document.units ?? []) as Prisma.InputJsonValue,
             trimmed: json(document.trimmed),
+            state: json(document.state),
+            initialLetterLayout: document.initialLetterLayout ?? null,
             // A theme that isn't here falls back to the base theme.
             themeId: document.themeId && themeIds.has(document.themeId) ? document.themeId : null,
           })),
@@ -187,13 +189,13 @@ export async function importExport(db: PrismaClient, data: DossierExport): Promi
       await tx.documentVersion.createMany({
         data: applications.flatMap((application) =>
           application.documents.flatMap((document) =>
-            (document.versions ?? []).map((version) => ({ ...version, documentId: document.id, units: version.units as Prisma.InputJsonValue })),
+            (document.versions ?? []).map((version) => ({ ...version, documentId: document.id, state: json(version.state), units: version.units as Prisma.InputJsonValue })),
           ),
         ),
       });
       await tx.chatMessage.createMany({
         data: applications.flatMap((application) =>
-          application.messages.map((message) => ({ ...message, applicationId: application.id, edits: json(message.edits) })),
+          application.messages.map((message) => ({ ...message, applicationId: application.id, edits: json(message.edits), documentChanges: json(message.documentChanges) })),
         ),
       });
       await tx.note.createMany({

@@ -20,7 +20,7 @@ import {
   type Tone,
 } from "@/generated/prisma/enums";
 import type { ResumeFit } from "@/lib/resume-fit";
-import { type Match, type Requirement, type Unit } from "@/lib/application-data";
+import { evidenceOptions, type ApplicationEvidence, type Match, type Requirement, type Unit } from "@/lib/application-data";
 import { EMAIL_UNITS, WRITTEN_EMAIL_UNITS } from "@/lib/application-email";
 import { documentLabels } from "@/lib/document-labels";
 import { defaultFrame, isFrameUnit, isParagraph, withFrame, WRITTEN_FRAME_UNITS } from "@/lib/letter-frame";
@@ -32,14 +32,13 @@ import type { RegenerateUnitResult } from "@/lib/jobs/regenerate-unit";
 import type { JobView } from "@/lib/jobs/runner";
 import type { WriteEmailResult } from "@/lib/jobs/write-email";
 import type { FactItem, ProfileData } from "@/lib/profile";
-import type { RefineSuggestions } from "@/lib/refine-suggestions";
 import { resumeContent, sectionsWithContent } from "@/lib/resume-content";
-import { inSidebar, sectionName, type SectionLayout } from "@/lib/resume-sections";
+import { inSidebar, sectionName, sectionOfUnit, type SectionLayout } from "@/lib/resume-sections";
 import { hasSidebar, type ThemeData } from "@/lib/themes";
 import { cleanUnitText, isVerbatimUnit, unitName } from "@/lib/unit-text";
 
 import {
-  addMatchSkill,
+  addApplicationEvidence,
   leaveOutUnit,
   putBackTrimmed,
   restoreUnit,
@@ -50,6 +49,8 @@ import {
   followBaseSections,
   setApplicationSections,
   setApplicationTheme,
+  saveApplicationTheme,
+  setCoverLetterLayout,
   setFollowThemeLayout,
   setShowPhoto,
   undoUpdateFromProfile,
@@ -59,6 +60,9 @@ import {
   undoEmailRewrite,
   undoMessage,
 } from "./actions";
+import { ThemePicker } from "../../resume/theme-picker";
+import { ThemeBuilder, draftFrom, type ThemeDraft } from "../../resume/theme-builder";
+import { ResumeSidebar } from "./resume-sidebar";
 import { ResumeScore } from "./resume-score";
 import { WriteMissingDocument } from "./write-missing-document";
 import { ApplicationHeader } from "./application-header";
@@ -73,7 +77,7 @@ import { PostingTab, type PostingData } from "./posting-tab";
 import { RefinePanel, type ChatEntry } from "./refine-panel";
 import { StatusControl } from "./status-control";
 import { SectionsMenu } from "./sections-menu";
-import { ThemeMenu } from "./theme-menu";
+import { ThemeMenu, LetterFormatMenu } from "./theme-menu";
 import { TrimmedNotice } from "./trimmed-notice";
 
 import { aboutWords, type Tab } from "./tabs";
@@ -112,6 +116,7 @@ export type ApplicationViewProps = {
     id: string;
     title: string;
     company: string;
+    role?: string;
     location: string;
     status: ApplicationStatus;
     tone: Tone;
@@ -184,7 +189,6 @@ export type ApplicationViewProps = {
   messages: ChatEntry[];
   /** A reply still being written, e.g. since before a reload. */
   refining: string | null;
-  suggestions: RefineSuggestions;
 };
 
 /**
@@ -228,18 +232,27 @@ export function ApplicationView({
   rewriting: rewritingAtLoad,
   messages,
   refining,
-  suggestions,
 }: ApplicationViewProps) {
   const router = useRouter();
+  const resumeProfile = resume?.state?.profile ?? profile;
   const [tab, setTab] = useState(initialTab);
   // Kept here: the Job posting tab is drawn again on every visit, and switching tabs doesn't reload the page.
   const [facts, setFacts] = useState(factsAtLoad);
   const [followLayout, showFollowLayout] = useOptimistic(application.followThemeLayout);
   const [photoChoice, showPhotoChoice] = useOptimistic(application.showPhoto);
-  const showPhoto = photoChoice ?? profile.photo?.onResumes ?? false;
+  const showPhoto = photoChoice ?? resumeProfile.photo?.onResumes ?? false;
   // A theme just picked from the Theme menu, until the page has it (#226).
   const [themeChoice, showThemeChoice] = useOptimistic<ThemeData | null>(null);
-  const resumeTheme = themeChoice ?? resume?.theme;
+  const [sidebarView, setSidebarView] = useState("ai");
+  const [controlsTab, setControlsTab] = useState("themes");
+  const [themeDraft, setThemeDraft] = useState<ThemeDraft | null>(null);
+  const [savedThemes, setSavedThemes] = useState<ThemeData[]>([]);
+  const [savingTheme, setSavingTheme] = useState(false);
+  const availableThemes = [...themes, ...savedThemes.filter(saved => !themes.some(theme => theme.id === saved.id))];
+  const selectedResumeTheme = themeChoice ?? resume?.theme;
+  const resumeTheme = tab === "resume" && themeDraft && controlsTab === "customize"
+    ? { ...themeDraft, id: "draft", builtIn: false }
+    : selectedResumeTheme;
   const letterTheme = themeChoice ?? letter?.theme;
   const [, startTransition] = useTransition();
   const [editing, setEditing] = useState<string | null>(null);
@@ -287,7 +300,7 @@ export function ApplicationView({
 
   const changeTheme = (themeId: string) =>
     startTransition(async () => {
-      showThemeChoice(themes.find((theme) => theme.id === themeId) ?? null);
+      showThemeChoice(availableThemes.find((theme) => theme.id === themeId) ?? null);
       toastResult(await setApplicationTheme({ id: application.id, themeId }));
     });
   const [sectionsChoice, showSections] = useOptimistic(sections);
@@ -420,6 +433,7 @@ export function ApplicationView({
   /** "Ask AI" (APP-5): the next message is about this unit. */
   const askAbout = (kind: DocumentKind, unit: Unit) => {
     setTarget({ document: kind, unitId: unit.id, label: unit.label, name: unitName(unit) });
+    setSidebarView("ai");
     focusChat((count) => count + 1);
   };
 
@@ -523,13 +537,15 @@ export function ApplicationView({
     });
   };
 
-  /** "+ Add to profile" on the Job posting tab (E8-7). */
-  const addSkill = (index: number) =>
-    startTransition(async () => {
-      const result = await addMatchSkill({ id: application.id, index });
-      if (!result.ok) return toast(result.error);
-      toast(`Added “${result.data.name}” to your skills. Attach it to a role under Experience to make it count.`);
-    });
+  const addEvidence = async (evidence: ApplicationEvidence) => {
+    if (reply) { toast("Wait for the current update to finish."); return false; }
+    const result = await addApplicationEvidence({ id: application.id, evidence });
+    if (!result.ok) { toast(result.error); return false; }
+    setFacts((current) => [...current.filter((fact) => fact.id !== result.data.fact.id), result.data.fact]);
+    if (result.data.jobId) setReply({ jobId: result.data.jobId, revision: 0 });
+    toast(result.data.notice);
+    return !result.data.retry;
+  };
 
   /** "Put back" something left out by hand (#217), or by the page limit of earlier versions (E10-10). */
   const putBack = (index: number) =>
@@ -595,7 +611,7 @@ export function ApplicationView({
           onSave={(text) => save(kind, unit, text)}
           onRegenerate={written ? () => void regenerate(kind, unit, { stored: stored.has(id) }) : undefined}
           // The chat only edits parts the letter stores.
-          onAskAi={written && stored.has(id) ? () => askAbout(kind, unit) : undefined}
+          onAskAi={stored.has(id) ? () => askAbout(kind, unit) : undefined}
           onLeaveOut={kind === DocumentKind.RESUME ? () => leaveOut(unit) : undefined}
         >
           {children}
@@ -605,17 +621,18 @@ export function ApplicationView({
 
   const resumeUnits = resume && shown(DocumentKind.RESUME, resume.units);
   // Every part of the letter, those it doesn't store yet as they've always been drawn (E8-11).
+  const letterState = (viewing?.document === DocumentKind.COVER_LETTER ? viewing.state : null) ?? letter?.state;
   const letterUnits =
     letter &&
     withFrame(
       shown(DocumentKind.COVER_LETTER, letter.units),
       defaultFrame({
-        basics: profile.basics,
-        company: application.company,
-        location: application.location,
-        date: letterDate,
-        dateFormat,
-        labels: documentLabels(application.language),
+        basics: letterState?.profile.basics ?? profile.basics,
+        company: letterState?.company ?? application.company,
+        location: letterState?.location ?? application.location,
+        date: letterState ? new Date(letterState.letterDate) : letterDate,
+        dateFormat: letterState?.dateFormat ?? dateFormat,
+        labels: documentLabels(letterState?.language ?? application.language),
       }),
     );
   const letterStored = new Set(letter?.units.map((unit) => unit.id));
@@ -735,35 +752,18 @@ export function ApplicationView({
               }
               label={
                 <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <span className="flex items-center gap-1">Tailored resume · {themeMenu(resumeTheme)}</span>
-                  {!viewed(DocumentKind.RESUME) && (
-                    <SectionsMenu
-                      sections={sectionsChoice}
-                      present={sectionsWithContent(resumeContent(profile, { units: resumeUnits, includeReferences }))}
-                      base={baseSections.map((section) => section.key)}
-                      nameOf={(key) => baseSections.find((section) => section.key === key)?.name ?? sectionName(key, profile.customSections)}
-                      isSidebar={(key) => inSidebar(key, profile.customSections)}
-                      sidebar={followLayout && hasSidebar(resumeTheme.layout)}
-                      own={ownSections}
-                      sent={sent}
-                      canUpdate={canUpdate}
-                      onUpdate={updateProfile}
-                      onChange={changeSections}
-                      onAdd={addSection}
-                      onFollowBase={followBase}
-                    />
-                  )}
+                  <span className="flex items-center gap-1">Tailored resume · {resumeTheme.name}</span>
                   {hasSidebar(resumeTheme.layout) && (
                     <PreviewSwitch label="Sidebar layout" checked={followLayout} onCheckedChange={changeLayout} />
                   )}
-                  {profile.photo && <PreviewSwitch label="Photo" checked={showPhoto} onCheckedChange={changePhoto} />}
+                  {resumeProfile.photo && <PreviewSwitch label="Photo" checked={showPhoto} onCheckedChange={changePhoto} />}
                   {historyButton(DocumentKind.RESUME)}
                   <ResumeScore applicationId={application.id} fit={resumeFit} scoring={scoringResume} />
                 </span>
               }
             >
               <TailoredResume
-                resume={{ ...resume, theme: resumeTheme, units: viewed(DocumentKind.RESUME)?.units ?? resumeUnits }}
+                resume={{ ...resume, state: viewed(DocumentKind.RESUME)?.state ?? (resume.state ? { ...resume.state, theme: resumeTheme, sections: sectionsChoice, followThemeLayout: followLayout, showPhoto: photoChoice } : null), theme: resumeTheme, units: viewed(DocumentKind.RESUME)?.units ?? resumeUnits }}
                 profile={profile}
                 paper={paper}
                 followThemeLayout={followLayout}
@@ -786,6 +786,7 @@ export function ApplicationView({
                 <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
                   <span>Cover letter · {aboutWords(paragraphs)}</span>
                   {themeMenu(letterTheme)}
+                  {!viewed(DocumentKind.COVER_LETTER) && <LetterFormatMenu current={letter.state?.coverLetterLayout ?? letter.initialLetterLayout ?? "CLASSIC"} onChange={layout => startTransition(async () => { toastResult(await setCoverLetterLayout({ id: application.id, layout })); })} />}
                   {historyButton(DocumentKind.COVER_LETTER)}
                 </span>
               }
@@ -793,10 +794,11 @@ export function ApplicationView({
               notice={viewed(DocumentKind.COVER_LETTER) ? versionBanner(viewed(DocumentKind.COVER_LETTER)!) : undefined}
             >
               <TailoredLetter
-                letter={{ ...letter, theme: letterTheme, units: viewed(DocumentKind.COVER_LETTER)?.units ?? letterUnits }}
+                letter={{ ...letter, state: viewed(DocumentKind.COVER_LETTER)?.state ?? (letter.state ? { ...letter.state, theme: letterTheme } : null), theme: letterTheme, units: viewed(DocumentKind.COVER_LETTER)?.units ?? letterUnits }}
                 profile={profile}
                 paper={paper}
                 company={application.company}
+                role={application.role}
                 location={application.location}
                 tone={application.tone}
                 date={letterDate}
@@ -835,7 +837,8 @@ export function ApplicationView({
             posting={posting}
             match={match}
             requirements={requirements}
-            onAddSkill={(index) => addSkill(index)}
+            onAddEvidence={addEvidence}
+            evidenceOptions={evidenceOptions(resumeProfile).filter((option) => resume?.units.some((unit) => unit.id === option.id) && !sections.off.includes(sectionOfUnit(option.id, resumeProfile) ?? ""))}
             facts={facts}
             setFacts={setFacts}
           />
@@ -854,32 +857,92 @@ export function ApplicationView({
             setHistoryOf(null);
           }}
         />
-        <RefinePanel
-          tab={tab}
-          messages={[...messages, ...sending]}
-          thinking={reply !== null}
-          suggestions={tab === "resume" ? suggestions.resume : tab === "letter" ? suggestions.letter : tab === "email" && email ? suggestions.email : []}
-          target={target}
-          onClearTarget={() => setTarget(null)}
-          onSend={send}
-          aiReady={aiReady}
-          focusRequest={chatFocus}
-        >
-          {(message) =>
-            message.canUndo &&
-            (message.undone || undoing.includes(message.id) ? (
-              <span className="px-1 text-label text-muted">Undone</span>
+        <ResumeSidebar
+          enabled={tab === "resume" && !!resume}
+          view={sidebarView}
+          onViewChange={setSidebarView}
+          controls={resumeTheme && selectedResumeTheme && resumeUnits ? (
+            viewed(DocumentKind.RESUME) ? (
+              <p className="text-sm text-muted">Return to the current resume to change its theme or sections.</p>
             ) : (
-              <button
-                type="button"
-                onClick={() => undo(message)}
-                className="px-1 text-label text-muted underline underline-offset-3 hover:text-ink"
-              >
-                Undo
-              </button>
-            ))
-          }
-        </RefinePanel>
+              <Tabs value={controlsTab} onValueChange={(next) => {
+                if (next === "customize" && !themeDraft) setThemeDraft({ ...draftFrom(selectedResumeTheme), id: null });
+                setControlsTab(next);
+              }} className="flex flex-col gap-6">
+                <TabsList variant="segmented" aria-label="Resume controls">
+                  <TabsTrigger value="themes">Themes</TabsTrigger>
+                  <TabsTrigger value="customize">Customize</TabsTrigger>
+                  <TabsTrigger value="sections">Sections</TabsTrigger>
+                </TabsList>
+                <TabsContent value="themes">
+                  <ThemePicker themes={availableThemes} activeId={selectedResumeTheme.id} userName={resumeProfile.basics.name.trim() || "Your name"}
+                    onSelect={(id) => { setThemeDraft(null); if (id !== selectedResumeTheme.id) changeTheme(id); }}
+                    onCustomize={() => { setThemeDraft(themeDraft ?? { ...draftFrom(selectedResumeTheme), id: null }); setControlsTab("customize"); }} />
+                </TabsContent>
+                <TabsContent value="customize">
+                  {themeDraft && <ThemeBuilder draft={themeDraft} paper={paper} onChange={setThemeDraft} saving={savingTheme}
+                    onCancel={() => { setThemeDraft(null); setControlsTab("themes"); }}
+                    onSave={async () => {
+                      if (savingTheme) return;
+                      setSavingTheme(true);
+                      try {
+                        const result = toastResult(await saveApplicationTheme({ ...themeDraft, applicationId: application.id }));
+                        if (result.ok) {
+                          setSavedThemes(current => [...current, result.data]);
+                          setThemeDraft(null);
+                          setControlsTab("themes");
+                        }
+                      } finally { setSavingTheme(false); }
+                    }} />}
+                </TabsContent>
+                <TabsContent value="sections">
+                    <SectionsMenu inline
+                      sections={sectionsChoice}
+                      present={sectionsWithContent(resumeContent(resumeProfile, { units: resumeUnits, includeReferences }))}
+                      base={baseSections.map((section) => section.key)}
+                      nameOf={(key) => baseSections.find((section) => section.key === key)?.name ?? sectionName(key, resumeProfile.customSections)}
+                      isSidebar={(key) => inSidebar(key, resumeProfile.customSections)}
+                      sidebar={followLayout && hasSidebar(resumeTheme.layout)}
+                      own={ownSections}
+                      sent={sent}
+                      canUpdate={canUpdate}
+                      onUpdate={updateProfile}
+                      onChange={changeSections}
+                      onAdd={addSection}
+                      onFollowBase={followBase}
+                    />
+                </TabsContent>
+              </Tabs>
+            )
+          ) : null}
+        >
+          <RefinePanel
+            embedded
+            tab={tab}
+            messages={[...messages, ...sending]}
+            thinking={reply !== null}
+            target={target}
+            onClearTarget={() => setTarget(null)}
+            onSend={send}
+            aiReady={aiReady}
+            focusRequest={chatFocus}
+          >
+            {(message) =>
+              message.canUndo &&
+              (message.undone || undoing.includes(message.id) ? (
+                <span className="px-1 text-label text-muted">Undone</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => undo(message)}
+                  className="px-1 text-label text-muted underline underline-offset-3 hover:text-ink"
+                >
+                  Undo
+                </button>
+              ))
+            }
+          </RefinePanel>
+        </ResumeSidebar>
       </div>
     </Tabs>
     </div>

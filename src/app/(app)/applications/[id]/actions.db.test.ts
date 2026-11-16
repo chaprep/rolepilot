@@ -1,11 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { BUILT_IN_THEMES } from "@/lib/themes";
+import { demoDocumentState } from "@/test/document-state";
+import { readDocumentState } from "@/lib/document-state";
 import { applyStatusChange } from "@/lib/status-changes";
 import { createTestClient, resetDatabase } from "@/test/db";
 
 import {
   addApplicationSection,
-  addMatchSkill,
+  addApplicationEvidence,
   addNote,
   deleteNote,
   followBaseSections,
@@ -20,6 +23,8 @@ import {
   sendMessage,
   setApplicationSections,
   setApplicationTheme,
+  saveApplicationTheme,
+  setCoverLetterLayout,
   setFollowThemeLayout,
   setInterviewDate,
   setShowPhoto,
@@ -55,9 +60,10 @@ vi.mock("@/lib/jobs/runner", async (importOriginal) => {
   const runner = await importOriginal<typeof import("@/lib/jobs/runner")>();
   return {
     ...runner,
-    startJob: vi.fn(async (definition: { type: string }, input: object, options: { key?: string; applicationId?: string }) => {
+    startJob: vi.fn(async (definition: { type: string }, input: object, options: { key?: string; applicationId?: string; id?: string }) => {
       const { prisma } = await import("@/lib/prisma");
-      return (await prisma.job.create({ data: { type: definition.type, input, key: options.key, applicationId: options.applicationId } })).id;
+      if (options.id && await prisma.job.count({ where: { id: options.id } })) return options.id;
+      return (await prisma.job.create({ data: { id: options.id, type: definition.type, input, key: options.key, applicationId: options.applicationId } })).id;
     }),
   };
 });
@@ -86,6 +92,36 @@ const units = async () =>
   (await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "RESUME" } } }))
     .units as typeof resume;
 afterAll(() => prisma().$disconnect());
+
+describe("cover-letter format", () => {
+  it("opts an old letter into Sidebar locally and undoes the complete change", async () => {
+    const original = [{ id: "sender", label: "Sender", text: "Jane Doe\nLondon · jane@example.com" }, { id: "paragraph:1", label: "Opening", text: "Keep this exact paragraph." }];
+    await prisma().application.update({ where: { id: "app-1" }, data: { role: "GTM Engineer" } });
+    const letter = await prisma().document.create({ data: { applicationId: "app-1", kind: "COVER_LETTER", units: original } });
+    const globals = await prisma().profileField.findMany();
+    expect(await setCoverLetterLayout({ id: "app-1", layout: "SIDEBAR" })).toMatchObject({ ok: true });
+    const changed = await prisma().document.findUniqueOrThrow({ where: { id: letter.id } });
+    expect(readDocumentState(changed.state)).toMatchObject({ coverLetterLayout: "SIDEBAR", theme: { accent: "#243B53", headFont: "INTER" } });
+    expect(changed.units).toEqual(expect.arrayContaining([{ id: "headline", label: "Role title", text: "GTM Engineer" }, original[1]]));
+    expect(await units()).toEqual(resume);
+    expect(await prisma().profileField.findMany()).toEqual(globals);
+    const message = await prisma().chatMessage.findFirstOrThrow({ where: { applicationId: "app-1" } });
+    expect(await undoMessage({ id: "app-1", messageId: message.id })).toMatchObject({ ok: true });
+    expect(await prisma().document.findUniqueOrThrow({ where: { id: letter.id } })).toMatchObject({ units: original, state: null, initialLetterLayout: null });
+  });
+
+  it("retains Sidebar text when switching to Classic and honors an explicit theme", async () => {
+    const letter = await prisma().document.create({ data: { applicationId: "app-1", kind: "COVER_LETTER", initialLetterLayout: "SIDEBAR", units: [{ id: "sender", label: "Sender", text: "Jane Doe" }, { id: "contacts", label: "Contact details", text: "jane@example.com" }, { id: "paragraph:1", label: "Opening", text: "Keep this." }] } });
+    await prisma().theme.create({ data: { id: "chosen", name: "Chosen", headFont: "GEIST", bodyFont: "GEIST", accent: "#993333" } });
+    expect(await setApplicationTheme({ id: "app-1", themeId: "chosen" })).toMatchObject({ ok: true });
+    const themed = await prisma().document.findUniqueOrThrow({ where: { id: letter.id } });
+    expect(readDocumentState(themed.state)).toMatchObject({ coverLetterLayout: "SIDEBAR", theme: { accent: "#993333", headFont: "GEIST" } });
+    expect(await setCoverLetterLayout({ id: "app-1", layout: "CLASSIC" })).toMatchObject({ ok: true });
+    const classic = await prisma().document.findUniqueOrThrow({ where: { id: letter.id } });
+    expect(classic.units).toEqual(letter.units);
+    expect(readDocumentState(classic.state)?.coverLetterLayout).toBe("CLASSIC");
+  });
+});
 
 describe("setFollowThemeLayout (E8-2)", () => {
   it("saves the layout switch on the application", async () => {
@@ -532,7 +568,7 @@ describe("undoMessage (E8-6)", () => {
   });
 });
 
-describe("addMatchSkill (E8-7)", () => {
+describe("addApplicationEvidence (E8-7)", () => {
   const requirement = (text: string, skill: string | null) => ({ text, kind: skill ? "skill" : "other", skill, years: null, language: null });
   const item = (text: string, result: string) => ({ requirement: text, result, skill: null, experienceIds: [], note: "Not in your profile" });
 
@@ -550,17 +586,45 @@ describe("addMatchSkill (E8-7)", () => {
     });
   });
 
-  it("adds the skill to the profile and marks the requirement partly covered", async () => {
-    expect(await addMatchSkill({ id: "app-1", index: 0 })).toEqual({ ok: true, data: { name: "Kubernetes" } });
-    expect(await prisma().skill.findMany({ select: { name: true } })).toEqual([{ name: "Kubernetes" }]);
-    const { match } = await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } });
-    expect(match).toMatchObject({ items: [{ result: "partial", skill: "Kubernetes", note: "In your skills, but not linked to a role yet" }, { result: "gap" }] });
+  const evidence = { id: "f4513749-6c4f-4283-996f-12cc74711432", requirementIndex: 0, text: "Deployed Kubernetes services.", targetUnitId: null };
+  it("saves evidence only for this application and starts a resume-only job", async () => {
+    const before = await prisma().profileField.findMany();
+    const result = await addApplicationEvidence({ id: "app-1", evidence });
+    expect(result).toMatchObject({ ok: true, data: { retry: false, jobId: expect.any(String) } });
+    expect(await prisma().skill.count()).toBe(0);
+    expect(await prisma().profileField.findMany()).toEqual(before);
+    expect(await prisma().fact.findMany()).toMatchObject([{ applicationId: "app-1", text: expect.stringContaining("Deployed Kubernetes services.") }]);
+    const job = await prisma().job.findFirstOrThrow();
+    expect(job.input).toMatchObject({ evidence: { factId: expect.any(String), targetUnitId: null }, viewing: "RESUME" });
+    expect(await units()).toEqual(resume);
   });
-
-  it("refuses a requirement that isn't a skill", async () => {
-    expect(await addMatchSkill({ id: "app-1", index: 1 })).toMatchObject({ ok: false });
+  it("does not duplicate evidence or jobs when the same submission is retried", async () => {
+    const first = await addApplicationEvidence({ id: "app-1", evidence });
+    const second = await addApplicationEvidence({ id: "app-1", evidence });
+    expect(first).toMatchObject({ ok: true });
+    expect(second).toMatchObject({ ok: true, data: { retry: false } });
+    expect(await prisma().fact.count()).toBe(1);
+    expect(await prisma().job.count()).toBe(1);
+  });
+  it("saves evidence without generating when the application has no resume", async () => {
+    await prisma().document.deleteMany({ where: { applicationId: "app-1" } });
+    expect(await addApplicationEvidence({ id: "app-1", evidence })).toMatchObject({ ok: true, data: { jobId: null, retry: false } });
+    expect(await prisma().fact.count({ where: { applicationId: "app-1" } })).toBe(1);
+    expect(await prisma().job.count()).toBe(0);
     expect(await prisma().skill.count()).toBe(0);
   });
+  it("refuses a non-skill requirement and an unrelated role", async () => {
+    expect(await addApplicationEvidence({ id: "app-1", evidence: { ...evidence, requirementIndex: 1 } })).toMatchObject({ ok: false });
+    expect(await addApplicationEvidence({ id: "app-1", evidence: { ...evidence, targetUnitId: "experience:another-person" } })).toMatchObject({ ok: false });
+    expect(await prisma().fact.count()).toBe(0);
+  });
+  it("keeps evidence when AI is unavailable, without changing any resume", async () => {
+    ai.ready = false;
+    expect(await addApplicationEvidence({ id: "app-1", evidence })).toMatchObject({ ok: true, data: { retry: true, jobId: null } });
+    expect(await prisma().fact.count()).toBe(1);
+    expect(await units()).toEqual(resume);
+  });
+
 });
 
 describe("notes (E8-9)", () => {
@@ -574,7 +638,8 @@ describe("notes (E8-9)", () => {
     expect(await updateNote({ id: "app-1", noteId: note.id, body: "Called John; second round next week." })).toEqual({ ok: true, data: null });
     const [edited] = await notes();
     expect(edited.body).toBe("Called John; second round next week.");
-    expect(edited.updatedAt.getTime()).toBeGreaterThan(note.updatedAt.getTime());
+    // SQLite can create and update within the same millisecond.
+    expect(edited.updatedAt.getTime()).toBeGreaterThanOrEqual(note.updatedAt.getTime());
 
     const deleted = await deleteNote({ id: "app-1", noteId: note.id });
     expect(deleted).toEqual({
@@ -679,7 +744,7 @@ describe("versions (E8-10)", () => {
     await saveUnit({ id: "app-1", document: "RESUME", unitId: "summary", text: "Rewritten by hand.", expected: resume[0].text });
 
     const loaded = await loadVersion({ id: "app-1", versionId: written.id });
-    expect(loaded).toEqual({ ok: true, data: { document: "RESUME", units: resume } });
+    expect(loaded).toEqual({ ok: true, data: { document: "RESUME", units: resume, state: null } });
 
     const restored = await restoreVersion({ id: "app-1", versionId: written.id });
     expect(restored).toMatchObject({ ok: true, toast: "Restored the resume as it was then. The version you had is in the history too." });
@@ -770,5 +835,98 @@ describe("the email", () => {
     const first = await finishedRewrite({ units: email, previous: null });
     expect(await undoEmailRewrite({ id: "app-1", jobId: first.id })).toEqual({ ok: false, error: "There's nothing to undo." });
     expect(await saved()).toEqual(email);
+  });
+});
+
+
+describe("full local document state and Undo", () => {
+  it("undoes formatting-only changes and restores inheritance", async () => {
+    const state = demoDocumentState();
+    state.theme.marginXmm = 8;
+    const row = await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1", kind: "RESUME" } });
+    await prisma().document.update({ where: { id: row.id }, data: { state } });
+    const message = await prisma().chatMessage.create({ data: { applicationId: "app-1", role: "AI", text: "Reduced margins.", documentChanges: [{ document: "RESUME", beforeUnits: resume, afterUnits: resume, beforeState: null, afterState: state }] } });
+    expect(await undoMessage({ id: "app-1", messageId: message.id })).toMatchObject({ ok: true });
+    expect((await prisma().document.findUniqueOrThrow({ where: { id: row.id } })).state).toBeNull();
+    expect(await units()).toEqual(resume);
+  });
+  it("protects later formatting changes from Undo", async () => {
+    const state = demoDocumentState();
+    const newer = structuredClone(state); newer.theme.marginXmm = 12;
+    const row = await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1", kind: "RESUME" } });
+    await prisma().document.update({ where: { id: row.id }, data: { state: newer } });
+    const message = await prisma().chatMessage.create({ data: { applicationId: "app-1", role: "AI", text: "Changed margins.", documentChanges: [{ document: "RESUME", beforeUnits: resume, afterUnits: resume, beforeState: null, afterState: state }] } });
+    expect(await undoMessage({ id: "app-1", messageId: message.id })).toMatchObject({ ok: false });
+    expect(readDocumentState((await prisma().document.findUniqueOrThrow({ where: { id: row.id } })).state)?.theme.marginXmm).toBe(12);
+  });
+  it("restores formatting from a version even when its text is unchanged", async () => {
+    const state = demoDocumentState(); state.theme.marginXmm = 8;
+    const row = await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1", kind: "RESUME" } });
+    await prisma().document.update({ where: { id: row.id }, data: { state } });
+    const older = structuredClone(state); older.theme.marginXmm = 4;
+    const version = await prisma().documentVersion.create({ data: { documentId: row.id, units: resume, state: older, cause: "REFINED" } });
+    expect(await restoreVersion({ id: "app-1", versionId: version.id })).toMatchObject({ ok: true });
+    expect(readDocumentState((await prisma().document.findUniqueOrThrow({ where: { id: row.id } })).state)?.theme.marginXmm).toBe(4);
+    const before = await prisma().documentVersion.findFirstOrThrow({ where: { documentId: row.id, cause: "BEFORE_RESTORE" } });
+    expect(readDocumentState(before.state)?.theme.marginXmm).toBe(8);
+  });
+  it("manual controls modify the local copy and theme selection resets its appearance", async () => {
+    const state = demoDocumentState(); state.styles.document = { fontSize: 11 };
+    const row = await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1", kind: "RESUME" } });
+    await prisma().document.update({ where: { id: row.id }, data: { state } });
+    await setShowPhoto({ id: "app-1", show: true });
+    await setFollowThemeLayout({ id: "app-1", follow: true });
+    await setApplicationSections({ id: "app-1", order: ["skills", "summary"], off: ["education"] });
+    let local = readDocumentState((await prisma().document.findUniqueOrThrow({ where: { id: row.id } })).state)!;
+    expect(local.showPhoto).toBe(true); expect(local.followThemeLayout).toBe(true);
+    expect(local.sections.off).toContain("education");
+    await prisma().theme.create({ data: { ...state.theme, id: "local-theme", builtIn: false, name: "Local theme", accent: "#123456" } });
+    await setApplicationTheme({ id: "app-1", themeId: "local-theme" });
+    local = readDocumentState((await prisma().document.findUniqueOrThrow({ where: { id: row.id } })).state)!;
+    expect(local.styles).toEqual({}); expect(local.theme.accent).toBe("#123456");
+    expect(local.profile.basics.name).toBe(state.profile.basics.name);
+  });
+});
+
+
+it("makes manually added local skills available to subsequent AI work", async () => {
+  const state = demoDocumentState();
+  const row = await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1", kind: "RESUME" } });
+  const unitsWithSkills = [...resume, { id: "skills", label: "Skills", text: "Figma" }];
+  await prisma().document.update({ where: { id: row.id }, data: { units: unitsWithSkills, state } });
+  expect(await saveUnit({ id: "app-1", document: "RESUME", unitId: "skills", text: "Figma · Kubernetes", expected: "Figma" })).toMatchObject({ ok: true });
+  const local = readDocumentState((await prisma().document.findUniqueOrThrow({ where: { id: row.id } })).state)!;
+  expect(local.profile.skills.some(skill => skill.name === "Kubernetes")).toBe(true);
+});
+
+
+describe("saving an application theme copy", () => {
+  const fields = { ...BUILT_IN_THEMES[0], name: "Application copy", accent: "#993333" };
+
+  it("creates a new theme for both documents while preserving base settings, shared themes, and other applications", async () => {
+    await prisma().theme.create({ data: { id: "shared", name: "Shared", headFont: "INTER", bodyFont: "INTER", accent: "#123456" } });
+    await prisma().setting.create({ data: { key: "baseThemeId", value: "shared" } });
+    await prisma().document.updateMany({ where: { applicationId: "app-1" }, data: { themeId: "shared", state: demoDocumentState() } });
+    await prisma().document.create({ data: { applicationId: "app-1", kind: "COVER_LETTER", units: [], state: demoDocumentState() } });
+    await prisma().application.create({ data: { id: "other", title: "Other", company: "Other", documents: { create: { kind: "RESUME", units: [], themeId: "shared" } } } });
+    const result = await saveApplicationTheme({ ...fields, applicationId: "app-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.id).not.toBe("shared");
+    const documents = await prisma().document.findMany({ where: { applicationId: "app-1" } });
+    for (const document of documents) {
+      expect(document.themeId).toBe(result.data.id);
+      expect(readDocumentState(document.state)?.theme).toMatchObject({ id: result.data.id, accent: "#993333" });
+    }
+    expect(await units()).toEqual(resume);
+    expect(await prisma().setting.findUniqueOrThrow({ where: { key: "baseThemeId" } })).toMatchObject({ value: "shared" });
+    expect(await prisma().theme.findUniqueOrThrow({ where: { id: "shared" } })).toMatchObject({ accent: "#123456" });
+    expect(await prisma().document.findFirstOrThrow({ where: { applicationId: "other" } })).toMatchObject({ themeId: "shared" });
+  });
+
+  it("does not create a theme for invalid fields or a missing application", async () => {
+    expect(await saveApplicationTheme({ ...fields, applicationId: "app-1", accent: "invalid" })).toMatchObject({ ok: false });
+    expect(await saveApplicationTheme({ ...fields, applicationId: "gone" })).toMatchObject({ ok: false, error: "That application no longer exists." });
+    expect(await prisma().theme.count()).toBe(0);
   });
 });

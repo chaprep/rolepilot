@@ -51,7 +51,8 @@ describe("writeDocumentJob (#367)", () => {
     await writeDocumentJob.run({ applicationId: "app-1", kind: "COVER_LETTER" }, context);
     const letter = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "COVER_LETTER" } }, include: { versions: true } });
     expect(letter.writtenWith).toBe("write-cover-letter@6");
-    expect((letter.units as { id: string }[]).map((unit) => unit.id)).toEqual(["sender", "date", "recipient", "greeting", "paragraph:1", "sign-off", "signature"]);
+    expect(letter.initialLetterLayout).toBe("SIDEBAR");
+    expect((letter.units as { id: string }[]).map((unit) => unit.id)).toEqual(["sender", "headline", "contacts", "date", "recipient", "greeting", "paragraph:1", "sign-off", "signature"]);
     expect(letter.versions.map((version) => version.cause)).toEqual(["WRITTEN"]);
   });
 

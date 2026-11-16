@@ -130,7 +130,7 @@ describe("createApplication", () => {
     ]);
     expect(application.messages).toHaveLength(1);
     expect(application.messages[0]).toMatchObject({ role: "AI", text: expect.stringMatching(/^Here's what I tailored for Ledgerly B\.V\.:\n\n- /) });
-    expect(application.messages[0].text).toMatch(/Nothing invented: every line comes from your profile\.$/);
+    expect(application.messages[0].text).toMatch(/Written from your profile and application facts\. Review the details before sending\.$/);
     expect(await prisma().job.count({ where: { key: `application:${id}`, applicationId: id } })).toBe(2);
   });
 
@@ -182,9 +182,12 @@ describe("createApplication", () => {
     const result = await createApplication({ writeJobId: "write-job", details, postingUrl: "" });
     const letter = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: result.ok ? result.data : "", kind: "COVER_LETTER" } } });
     const units = letter.units as { id: string; text: string }[];
-    expect(units.map((unit) => unit.id)).toEqual(["sender", "date", "recipient", "greeting", "paragraph:1", "paragraph:2", "paragraph:3", "paragraph:4", "sign-off", "signature"]);
+    expect(letter.initialLetterLayout).toBe("SIDEBAR");
+    expect(units.map((unit) => unit.id)).toEqual(["sender", "headline", "contacts", "date", "recipient", "greeting", "paragraph:1", "paragraph:2", "paragraph:3", "paragraph:4", "sign-off", "signature"]);
     const text = (id: string) => units.find((unit) => unit.id === id)?.text;
-    expect(text("sender")).toMatch(/^Jane Doe\n.*jane\.doe@example\.com/);
+    expect(text("sender")).toBe("Jane Doe");
+    expect(text("headline")).toBe(details.role);
+    expect(text("contacts")).toContain("jane.doe@example.com");
     expect(text("signature")).toBe("Jane Doe");
     expect(text("date")).toBe(new Intl.DateTimeFormat("de", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(calendarDay()));
     // This job's letter came without a recipient or greeting, so German ones stand in.
@@ -216,4 +219,19 @@ describe("createApplication", () => {
     expect(await prisma().application.count()).toBe(0);
   });
 
+});
+
+
+it("persists generated evidence as application facts without adding global skills", async () => {
+  await finishedJobs();
+  const job = await prisma().job.findUniqueOrThrow({ where: { id: "write-job" } });
+  const evidence = "JD skill: Kubernetes\nContext: General capability\nEvidence: Maintained Kubernetes deployments.";
+  await prisma().job.update({ where: { id: job.id }, data: { input: { ...(job.input as object), evidenceFacts: [evidence] } } });
+  const before = await prisma().skill.findMany();
+  const result = await createApplication({ writeJobId: "write-job", details, postingUrl: "" });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(await prisma().fact.findMany({ where: { applicationId: result.data }, select: { text: true } })).toContainEqual({ text: evidence });
+  expect(await prisma().fact.count({ where: { applicationId: null } })).toBe(0);
+  expect(await prisma().skill.findMany()).toEqual(before);
 });

@@ -26,9 +26,9 @@ export type ChatEntry = {
 export type ChatTarget = { label: string; name: string };
 
 const SUBTITLES: Record<Tab, string> = {
-  resume: "Ask for changes to your tailored resume. I'll only use what's in your profile.",
-  letter: "Ask for changes to your cover letter. I'll only use what's in your profile.",
-  email: "Ask for changes to your email. I'll only use what's in your profile.",
+  resume: "Ask for content, structure or formatting changes to this resume.",
+  letter: "Ask for content, structure or formatting changes to this cover letter.",
+  email: "Ask for changes to this application’s plain-text email.",
   conversation: "Answers to employers are drafted right in the conversation.",
   posting: "Switch to the resume, cover letter or email to make changes.",
   notes: "Switch to the resume, cover letter or email to make changes.",
@@ -36,14 +36,14 @@ const SUBTITLES: Record<Tab, string> = {
 
 /**
  * "Refine with AI" (APP-7): the conversation about this application's
- * documents, with suggestions and a box to ask for a change. It sticks to
+ * documents, with a box to ask for a change. It sticks to
  * the side of the documents, and moves below them on narrow windows.
  */
 export function RefinePanel({
+  embedded = false,
   tab,
   messages,
   thinking,
-  suggestions,
   target,
   onClearTarget,
   onSend,
@@ -51,11 +51,11 @@ export function RefinePanel({
   focusRequest,
   children,
 }: {
+  embedded?: boolean;
   tab: Tab;
   messages: ChatEntry[];
   /** A reply is on its way. */
   thinking: boolean;
-  suggestions: string[];
   target: ChatTarget | null;
   onClearTarget: () => void;
   /** Resolves to whether the message was sent; the box keeps it otherwise. */
@@ -82,26 +82,27 @@ export function RefinePanel({
   return (
     <aside
       aria-labelledby="refine-heading"
-      className="flex-[1_0_300px] border-t border-line bg-paper @min-[780px]:border-t-0 @min-[780px]:border-l"
+      className={embedded ? "h-full bg-paper" : "flex-[1_0_300px] border-t border-line bg-paper @min-[780px]:border-t-0 @min-[780px]:border-l"}
     >
-      <div className="flex h-[min(100dvh,680px)] flex-col @min-[780px]:h-full">
-        <div className="flex flex-col gap-1 px-6 pt-[26px] pb-3.5">
-          <h2 id="refine-heading" className="text-[15px] font-medium">
-            Refine with AI
-          </h2>
-          <p className="text-meta leading-[1.45] text-muted">{SUBTITLES[tab]}</p>
-        </div>
-
+      <div className={embedded ? "flex h-full flex-col" : "flex h-[min(100dvh,680px)] flex-col @min-[780px]:h-full"}>
         {/* column-reverse keeps the newest message in view. Focusable, so it scrolls from the keyboard too (E11-3). */}
         <div role="log" aria-label="Conversation" tabIndex={0} className="flex min-h-0 flex-1 flex-col-reverse overflow-auto px-6">
-          <div className="flex flex-col gap-3.5 pt-1.5 pb-4">
-            {messages.map((message) => (
-              <div key={message.id} className={cn("flex flex-col gap-[5px]", message.role === "USER" ? "items-end" : "items-start")}>
-                <Bubble message={message} />
-                {children?.(message)}
-              </div>
-            ))}
-            {thinking && <p className="pl-1 text-meta text-muted">Thinking…</p>}
+          <div className="min-h-full shrink-0">
+            <div className="flex flex-col gap-1 pt-[26px] pb-3.5">
+              <h2 id="refine-heading" className="text-[15px] font-medium">
+                Refine with AI
+              </h2>
+              <p className="text-meta leading-[1.45] text-muted">{SUBTITLES[tab]}</p>
+            </div>
+            <div className="flex flex-col gap-3.5 pt-1.5 pb-4">
+              {messages.map((message) => (
+                <div key={message.id} className={cn("flex flex-col gap-[5px]", message.role === "USER" ? "items-end" : "items-start")}>
+                  <Bubble message={message} />
+                  {children?.(message)}
+                </div>
+              ))}
+              {thinking && <p className="pl-1 text-meta text-muted">Thinking…</p>}
+            </div>
           </div>
         </div>
 
@@ -113,21 +114,6 @@ export function RefinePanel({
                 Choose one in Settings
               </Link>
             </p>
-          )}
-          {aiReady && suggestions.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  aria-disabled={thinking || undefined}
-                  onClick={() => void send(suggestion)}
-                  className="rounded-full border border-line-field bg-card px-[11px] py-1.5 text-label hover:border-line-strong aria-disabled:cursor-not-allowed aria-disabled:text-muted"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
           )}
           <div className="flex flex-col gap-2 rounded-card border border-line-input bg-input px-3 py-2.5 focus-within:border-primary">
             {target && (

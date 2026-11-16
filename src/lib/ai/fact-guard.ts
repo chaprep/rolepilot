@@ -172,3 +172,8 @@ export function guardSources(
 ): FactSources {
   return sourcesFor(profile, extracted, [posting, ...facts].join("\n"), Math.floor(experienceMonths(profile, today) / 12));
 }
+
+/** Resume claims must be backed by the candidate, not by requirements in a posting. */
+export function resumeFactSources(profile: ProfileData, facts: string[] = []): FactSources {
+  return guardSources(profile, null, "", facts);
+}

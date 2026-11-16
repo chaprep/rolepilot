@@ -2,6 +2,7 @@ import type { DateFormat, PaperSize, Tone } from "@/generated/prisma/enums";
 import type { DocumentData } from "@/lib/application-documents";
 import type { ProfileData } from "@/lib/profile";
 import type { SectionLayout } from "@/lib/resume-sections";
+import { letterFormatting } from "@/lib/cover-letter-format";
 import { withoutSidebar } from "@/lib/themes";
 
 import { CoverLetterDocument } from "./cover-letter-document";
@@ -35,17 +36,21 @@ export function TailoredResume({
   sections: SectionLayout;
   renderUnit?: UnitRenderer;
 }) {
+  const state = resume.state;
   return (
     <ResumeDocument
-      theme={resume.theme}
-      profile={profile}
-      paper={paper}
+      theme={state?.theme ?? resume.theme}
+      formatting={state?.styles}
+      profile={state?.profile ?? profile}
+      paper={state?.paper ?? paper}
       units={resume.units}
-      layout={followThemeLayout ? undefined : withoutSidebar(resume.theme.layout)}
-      showPhoto={showPhoto}
-      language={language}
-      includeReferences={includeReferences}
-      sections={sections}
+      entryOrderFromProfile={Boolean(state)}
+      dateLabels={state?.dateLabels}
+      layout={(state?.followThemeLayout ?? followThemeLayout) ? undefined : withoutSidebar((state?.theme ?? resume.theme).layout)}
+      showPhoto={state ? state.showPhoto : showPhoto}
+      language={state?.language ?? language}
+      includeReferences={state?.includeReferences ?? includeReferences}
+      sections={state?.sections ?? sections}
       renderUnit={renderUnit}
     />
   );
@@ -56,6 +61,7 @@ export function TailoredLetter({
   profile,
   paper,
   company,
+  role,
   location,
   tone,
   date,
@@ -67,6 +73,7 @@ export function TailoredLetter({
   profile: ProfileData;
   paper: PaperSize;
   company: string;
+  role?: string;
   location: string;
   tone: Tone;
   date: Date;
@@ -74,18 +81,23 @@ export function TailoredLetter({
   language: string;
   renderUnit?: UnitRenderer;
 }) {
+  const state = letter.state;
+  const layout = state?.coverLetterLayout ?? letter.initialLetterLayout ?? "CLASSIC";
   return (
     <CoverLetterDocument
-      theme={letter.theme}
-      paper={paper}
-      basics={profile.basics}
+      theme={state?.theme ?? letter.theme}
+      layout={layout}
+      role={state?.role || role}
+      formatting={letterFormatting(layout, state?.styles)}
+      paper={state?.paper ?? paper}
+      basics={state?.profile.basics ?? profile.basics}
       units={letter.units}
-      company={company}
-      location={location}
-      tone={tone}
-      date={date}
-      dateFormat={dateFormat}
-      language={language}
+      company={state?.company ?? company}
+      location={state?.location ?? location}
+      tone={state?.tone ?? tone}
+      date={state ? new Date(state.letterDate) : date}
+      dateFormat={state?.dateFormat ?? dateFormat}
+      language={state?.language ?? language}
       renderUnit={renderUnit}
     />
   );

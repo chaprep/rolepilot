@@ -19,7 +19,6 @@ import { pullInterviewEvents } from "@/lib/google/availability";
 import { loadConversation } from "@/lib/google/inbox-data";
 import { readFrozenCopy } from "@/lib/frozen-copy";
 import { profileUpdate } from "@/lib/profile-update";
-import { refineSuggestions } from "@/lib/refine-suggestions";
 import { resumeContent, sectionsWithContent } from "@/lib/resume-content";
 import { sectionName } from "@/lib/resume-sections";
 import { loadThemes } from "@/lib/theme-data";
@@ -72,12 +71,16 @@ export default async function ApplicationPage({ params, searchParams }: PageProp
       targetUnit: message.targetUnit,
       // Written in code when the application was created (E7-6).
       opening: index === 0 && message.role === "AI" && !message.writtenWith,
-      canUndo: message.role === "AI" && (readJson(editsSchema, message.edits)?.length ?? 0) > 0,
+      canUndo: message.role === "AI" && ((readJson(editsSchema, message.edits)?.length ?? 0) > 0 || Array.isArray(message.documentChanges) && message.documentChanges.length > 0),
       undone: message.undone,
     }))
     // Settings → "Show what changed" off hides the list of what was tailored (SET-5).
     .filter((message) => settings.showDiff || !message.opening);
-  const { title, company, location, status, tone, language, followThemeLayout, showPhoto, nextInterviewAt } = application;
+  const { title, company, location, status, nextInterviewAt } = application;
+  const tone = letter?.state?.tone ?? application.tone;
+  const language = resume?.state?.language ?? application.language;
+  const followThemeLayout = resume?.state?.followThemeLayout ?? application.followThemeLayout;
+  const showPhoto = resume?.state ? resume.state.showPhoto : application.showPhoto;
   // Units still being rewritten, so a reload keeps showing it.
   const rewriting = unitJobs.flatMap((job) => {
     const input = regenerateUnitJob.input.safeParse(job.input);
@@ -85,7 +88,7 @@ export default async function ApplicationPage({ params, searchParams }: PageProp
   });
   // The PDFs to attach to the email, named as they'll download (SET-8).
   const fileName = (doc: "RESUME" | "COVER_LETTER") =>
-    resolveFileName(settings.fileNamePattern, { name: profile.basics.name, company: application.company, role: application.role, doc, date: new Date() });
+    resolveFileName(settings.fileNamePattern, { name: (doc === "RESUME" ? resume?.state : letter?.state)?.profile.basics.name ?? profile.basics.name, company: application.company, role: application.role, doc, date: new Date() });
 
   return (
     <ApplicationView
@@ -93,6 +96,7 @@ export default async function ApplicationPage({ params, searchParams }: PageProp
         id,
         title,
         company,
+        role: application.role,
         location,
         status,
         tone,
@@ -150,7 +154,7 @@ export default async function ApplicationPage({ params, searchParams }: PageProp
       canUpdate={
         resume !== null &&
         profileUpdate({
-          copy: readFrozenCopy(application.frozen)?.profile ?? null,
+          copy: resume.state?.profile ?? readFrozenCopy(application.frozen)?.profile ?? null,
           live: liveProfile,
           units: resume.units,
           trimmed: resume.trimmed ?? null,
@@ -166,12 +170,6 @@ export default async function ApplicationPage({ params, searchParams }: PageProp
       rewriting={rewriting}
       messages={messages}
       refining={refineJobs.at(-1)?.id ?? null}
-      suggestions={refineSuggestions({
-        match,
-        requirements: extracted?.requirements ?? [],
-        tone,
-        hasSummary: Boolean(resume?.units.some((unit) => unit.id === "summary" && unit.text.trim())),
-      })}
     />
   );
 }

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { readDocumentState } from "@/lib/document-state";
 import { DocumentKind } from "@/generated/prisma/enums";
 import { resolveFileName } from "@/lib/file-name";
 import { holdPdf, pdfDownload } from "@/lib/pdf/downloads";
@@ -60,7 +61,7 @@ async function renderRequested(request: NextRequest): Promise<{ pdf: Uint8Array;
   const application = APPLICATION_ID.test(id)
     ? await prisma.application.findUnique({
         where: { id },
-        select: { company: true, role: true, documents: { where: { kind: TAILORED[doc] }, select: { id: true } } },
+        select: { company: true, role: true, documents: { where: { kind: TAILORED[doc] }, select: { id: true, state: true } } },
       })
     : null;
   if (!application) return notFound("That application no longer exists.");
@@ -70,6 +71,6 @@ async function renderRequested(request: NextRequest): Promise<{ pdf: Uint8Array;
 
   return {
     pdf: await renderPdf(`/print/${doc}/${id}`),
-    fileName: resolveFileName(settings.fileNamePattern, { name, company: application.company, role: application.role, doc: TAILORED[doc], date }),
+    fileName: resolveFileName(settings.fileNamePattern, { name: readDocumentState(application.documents[0].state)?.profile.basics.name ?? name, company: application.company, role: application.role, doc: TAILORED[doc], date }),
   };
 }

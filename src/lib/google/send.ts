@@ -2,6 +2,7 @@ import "server-only";
 
 import { ApplicationStatus, DocumentKind, EmailDirection } from "@/generated/prisma/enums";
 import { unitsSchema } from "@/lib/application-data";
+import { readDocumentState } from "@/lib/document-state";
 import { emailAddresses, emailParts } from "@/lib/application-email";
 import { resolveFileName } from "@/lib/file-name";
 import { renderPdf } from "@/lib/pdf/render";
@@ -40,7 +41,7 @@ export type SentApplication = { threadId: string; eventId: string | null; attach
 export async function sendApplicationEmail(applicationId: string): Promise<SentApplication> {
   const account = await loadGoogleAccount();
   if (!account) throw new GoogleError("not-connected", "Connect your Google account in Settings → Google first.");
-  const application = await prisma.application.findUnique({ where: { id: applicationId }, include: { documents: { select: { kind: true, units: true } } } });
+  const application = await prisma.application.findUnique({ where: { id: applicationId }, include: { documents: { select: { kind: true, units: true, state: true } } } });
   if (!application) throw new GoogleError("unavailable", "That application no longer exists.");
 
   const units = unitsSchema.safeParse(application.documents.find((document) => document.kind === DocumentKind.EMAIL)?.units);
@@ -54,7 +55,7 @@ export async function sendApplicationEmail(applicationId: string): Promise<SentA
   for (const { kind, path } of PRINTED) {
     if (!application.documents.some((document) => document.kind === kind)) continue;
     attachments.push({
-      fileName: resolveFileName(settings.fileNamePattern, { name, company: application.company, role: application.role, doc: kind, date: new Date() }),
+      fileName: resolveFileName(settings.fileNamePattern, { name: readDocumentState(application.documents.find(document => document.kind === kind)?.state)?.profile.basics.name ?? name, company: application.company, role: application.role, doc: kind, date: new Date() }),
       contentType: "application/pdf",
       data: await renderPdf(`/print/${path}/${applicationId}`),
     });
