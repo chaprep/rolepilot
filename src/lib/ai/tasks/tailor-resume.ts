@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { unitsSchema, type Extracted, type Match, type Unit } from "@/lib/application-data";
 import { publicationLabel } from "@/lib/citation";
-import { documentLabels, ENGLISH_LABELS, languagesLine, type DocumentLabels } from "@/lib/document-labels";
+import { ENGLISH_LABELS, languagesLine, type DocumentLabels } from "@/lib/document-labels";
 import { customSectionUnits } from "@/lib/custom-section-units";
 import { certificationLabel, resumeCertifications, resumeCustomSections, resumePublications, sameName, type ProfileData } from "@/lib/profile";
 import { inEditorOrder, skillsText } from "@/lib/skill-groups";
@@ -14,7 +14,7 @@ import {
   candidateFacts,
   CREATIVITY,
   jobForPrompt,
-  languageRule,
+  ENGLISH_WRITING,
   NO_EM_DASHES,
   profileForPrompt,
   postingForPrompt,
@@ -24,7 +24,9 @@ import {
   type Task,
 } from "./prompt-parts";
 
-export const TAILOR_RESUME_VERSION = "tailor-resume@10";
+export const TAILOR_RESUME_VERSION = "tailor-resume@11";
+
+export const RESUME_STRATEGY = `Read the job's core responsibilities, desired outcomes and recurring capabilities, then examine candidate actions, deliverables, decisions, education and facts rather than relying on named skills. Recognize direct, transferable and adjacent evidence; match results are advisory. Rebuild the summary and prioritize bullets within their owning entries and skills by job relevance, within the selected writing approach. Preserve chronology, responsibility level, historical titles and metrics with their original activity and owner. Never turn participation into leadership or exposure into mastery. Coordination across teams supports cross-functional coordination, not managing those teams. Feedback-led workflow improvement does not establish formal usability research. Power BI supports dashboard development, not Tableau proficiency. Spreadsheet automation retains its recorded savings, not invented Python expertise. Never pad sparse evidence to reach bullet counts. Preserve the career storyline rather than claiming the candidate already held the target role.`;
 
 export const RESUME_RULES = `For resume edits, use the job description's terminology naturally where it accurately describes demonstrated capabilities. Tailor the summary, role and project bullets, education notes and skills to the job. Never invent tools, credentials, responsibilities, proficiency, metrics or outcomes, even when creativity is high or strict mode is off. A related tool is not an interchangeable tool. Job requirements and match gaps are context, not evidence about the candidate. A profile-match gap does not prove that experience or application facts lack transferable evidence.
 For skills, return objects with name, group, and evidence: [{ sourceId, quote }]. Use the candidate evidence sources and quote an exact, meaningful passage supporting each skill. Select relevant original skills, accurate synonyms and evidence-supported transferable capabilities. Group skills under short job-relevant labels and rank by relevance, regardless of profile ordering. Preserve the meaning and proficiency. Do not use colons, middle dots or newlines inside skill names, or colons/middle dots/newlines inside group labels. For a changed skills section, return the complete desired list. For an unchanged skills section in an edit, return no skills edit. Never assign an application fact to a role/project unless its Context explicitly identifies that entry.`;
@@ -47,6 +49,7 @@ export function resumeEvidenceSources(profile: ProfileData, facts: string[]): Re
     });
     else if (typeof value === "string" && value.trim()) sources[key] = value;
   }
+  profile.facts.filter(fact => fact.id.startsWith("memory:")).forEach(fact => { sources[fact.id] = fact.text; });
   facts.forEach((fact, index) => { if (fact.trim()) sources[`application:${index}`] = fact; });
   return sources;
 }
@@ -89,6 +92,8 @@ const INSTRUCTIONS = `You tailor a candidate's resume to one job, as JSON.
 
 export type TailorInput = {
   profile: ProfileData;
+  /** Full privacy-filtered evidence can include entries hidden from printing. */
+  evidenceProfile?: ProfileData;
   extracted: Extracted;
   match: Match | null;
   /** What the candidate tells the AI for this application (APP-15). */
@@ -98,16 +103,18 @@ export type TailorInput = {
 };
 
 /** APP-4: the tailored resume as units (summary, each role, each project, skills, each degree, each certification, each publication, languages). */
-export const tailorResume: Task<TailorInput, Unit[]> = async (provider, { profile, extracted, match, facts, posting }, options) => {
+export const tailorResume: Task<TailorInput, Unit[]> = async (provider, { profile, evidenceProfile = profile, extracted, match, facts, posting }, options) => {
   const answer = await provider.complete({
     task: "tailor-resume",
     system: system(
       INSTRUCTIONS,
       RESUME_RULES,
-      truthfulness(options.strict),
+      RESUME_STRATEGY,
+      "Evidence sources may include hidden entries. Use hidden evidence only for supported general capabilities; never print hidden entries, move their achievements or metrics to another owner, or override explicit exclusions.",
+      truthfulness(options.strict, options.creativity),
       candidateFacts(profile, facts),
       CREATIVITY[options.creativity],
-      languageRule(options.language),
+      ENGLISH_WRITING,
       UNTRUSTED_POSTING,
       NO_EM_DASHES,
     ),
@@ -118,7 +125,7 @@ export const tailorResume: Task<TailorInput, Unit[]> = async (provider, { profil
           `The candidate's profile:\n${profileForPrompt(profile)}`,
           `The job:\n${jobForPrompt(extracted, match)}`,
           `Original posting (reference only; corrected job details above take precedence):\n${postingForPrompt(posting)}`,
-          `Candidate evidence sources:\n${JSON.stringify(resumeEvidenceSources(profile, facts))}`,
+          `Candidate evidence sources:\n${JSON.stringify(resumeEvidenceSources(evidenceProfile, facts))}`,
           applicationFacts(facts),
         ]
           .filter(Boolean)
@@ -130,9 +137,9 @@ export const tailorResume: Task<TailorInput, Unit[]> = async (provider, { profil
     creativity: options.creativity,
     signal: options.signal,
   });
-  // The languages line in the resume's language: the chosen one, or the posting's.
-  const units = resumeUnits(profile, { ...answer, skills: [] }, documentLabels(options.language ?? extracted.language));
-  units.find((unit) => unit.id === "skills")!.text = acceptedSkills(profile, answer.skills, facts);
+  // Future drafts use English proficiency labels.
+  const units = resumeUnits(profile, { ...answer, skills: [] }, ENGLISH_LABELS);
+  units.find((unit) => unit.id === "skills")!.text = acceptedSkills(evidenceProfile, answer.skills, facts);
   // E6-6: in strict mode, note what the profile and posting don't back.
   return {
     data: options.strict ? guardUnits(units, resumeFactSources(profile, facts)) : units,

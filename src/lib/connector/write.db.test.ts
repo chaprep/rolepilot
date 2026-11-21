@@ -27,7 +27,7 @@ const written = (overrides: Partial<WrittenApplication> = {}): WrittenApplicatio
   posting: "Senior Product Designer at Acme, Berlin. Figma, design systems, 5+ years.",
   postingUrl: "https://jobs.example/acme-design",
   postingId: null,
-  details: { company: "Acme", role: "Senior Product Designer", location: "Berlin", mode: "Hybrid", salary: "", deadline: null, language: "English" },
+  details: { company: "Acme", role: "Senior Product Designer", location: "Berlin", mode: "Hybrid", salary: "", deadline: null },
   resume: {
     summary: "Designer who ships calm, clear products.",
     roles: [

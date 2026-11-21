@@ -69,7 +69,7 @@ export const CALLBACK_MESSAGES: Record<string, string> = {
 };
 
 /**
- * Settings → Google (E15-1): connect Gmail and Calendar, choose what Dossier
+ * Settings → Google (E15-1): connect Gmail and Calendar, choose what rolepilot
  * reads, and set the working hours that interview times are offered in.
  * Every field saves on its own. Nothing is ever sent without asking.
  */
@@ -125,7 +125,7 @@ export function GoogleSection({
     <>
       <SettingsSectionIntro title="Google">
         Send applications from your Gmail, see employers&apos; replies next to each application, and offer interview times from your
-        calendar. Dossier always asks before it sends anything.
+        calendar. rolepilot always asks before it sends anything.
       </SettingsSectionIntro>
 
       <Card className="flex flex-col gap-4">
@@ -143,7 +143,7 @@ export function GoogleSection({
             {connection.signInProblem && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line px-4 py-3">
                 <p role="alert" className="text-control text-error">
-                  {connection.signInProblem} Until then, Dossier doesn&apos;t check your mail or calendar.
+                  {connection.signInProblem} Until then, rolepilot doesn&apos;t check your mail or calendar.
                 </p>
                 <a href="/api/google/connect" className={buttonClassName("secondary", "sm")}>
                   Connect again
@@ -159,7 +159,7 @@ export function GoogleSection({
         ) : (
           <div className="flex flex-col items-start gap-3">
             <p className="text-sm text-muted">
-              You&apos;ll sign in on Google&apos;s own page and choose what Dossier may do. Tokens are stored encrypted on your server and
+              You&apos;ll sign in on Google&apos;s own page and choose what rolepilot may do. Tokens are stored encrypted on your server and
               never leave it, except to talk to Google.
             </p>
             <a href="/api/google/connect" className={buttonClassName("primary", "md", "hover:text-on-primary")}>
@@ -320,7 +320,7 @@ export function GoogleSection({
         open={confirming}
         onOpenChange={setConfirming}
         title="Disconnect Google?"
-        description="Dossier's access is revoked at Google. Mail already in Dossier stays; nothing new comes in until you connect again."
+        description="rolepilot's access is revoked at Google. Mail already in rolepilot stays; nothing new comes in until you connect again."
         confirmLabel="Disconnect"
         onConfirm={() => void disconnect()}
       />
@@ -391,14 +391,14 @@ function SetupSteps({ redirectUri, client }: { redirectUri: string; client: Goog
 
 const SECRET_PLACEHOLDER: Record<GoogleClientView["secretState"], string> = {
   set: "Saved · type a new secret to replace it",
-  env: "Using DOSSIER_GOOGLE_CLIENT_SECRET · type one to save it here",
+  env: "Using ROLEPILOT_GOOGLE_CLIENT_SECRET · type one to save it here",
   none: "Stored encrypted on your server",
   unreadable: "Stored encrypted on your server",
 };
 
 /**
  * The OAuth client: its ID, and a write-only secret, each saved when you
- * leave its field. Saved here, they override the DOSSIER_GOOGLE_CLIENT_*
+ * leave its field. Saved here, they override the ROLEPILOT_GOOGLE_CLIENT_*
  * variables. A different client ID disconnects the account.
  */
 export function ClientCard({ initial, connected }: { initial: GoogleClientView; connected: boolean }) {
@@ -438,8 +438,8 @@ export function ClientCard({ initial, connected }: { initial: GoogleClientView; 
         <Input
           label="Client ID"
           value={id}
-          placeholder={view.idState === "env" ? "Using DOSSIER_GOOGLE_CLIENT_ID" : "…apps.googleusercontent.com"}
-          hint={view.idState === "env" ? "From DOSSIER_GOOGLE_CLIENT_ID · type one to save it here" : undefined}
+          placeholder={view.idState === "env" ? "Using ROLEPILOT_GOOGLE_CLIENT_ID" : "…apps.googleusercontent.com"}
+          hint={view.idState === "env" ? "From ROLEPILOT_GOOGLE_CLIENT_ID · type one to save it here" : undefined}
           spellCheck={false}
           autoComplete="off"
           inputClassName="font-mono text-[13.5px]"
@@ -459,7 +459,7 @@ export function ClientCard({ initial, connected }: { initial: GoogleClientView; 
             autoComplete="off"
             value={secret}
             placeholder={SECRET_PLACEHOLDER[view.secretState]}
-            error={view.secretState === "unreadable" ? "The saved secret can't be read, probably since DOSSIER_SECRET changed. Enter it again." : undefined}
+            error={view.secretState === "unreadable" ? "The saved secret can't be read, probably since ROLEPILOT_SECRET changed. Enter it again." : undefined}
             onChange={(event) => setSecret(event.target.value)}
             onBlur={() => void saveSecret()}
             onKeyDown={(event) => {

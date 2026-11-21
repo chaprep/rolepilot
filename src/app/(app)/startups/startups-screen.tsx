@@ -40,13 +40,13 @@ export type StartupsScreenProps = {
   country: string;
   /** The profile's headline, for the subject of an email from the user's own mail. */
   headline: string;
-  /** Whether an AI provider is set up, so "Write to them" can start an application. */
+  /** Whether an AI provider is set up, so "Draft outreach" can start an application. */
   aiReady: boolean;
   today: string;
 };
 
 const VIEWS: { status: StartupStatusName; label: string }[] = [
-  { status: "NEW", label: "To look at" },
+  { status: "NEW", label: "To review" },
   { status: "SAVED", label: "Saved" },
   { status: "CONTACTED", label: "Contacted" },
   { status: "DISMISSED", label: "Dismissed" },
@@ -55,7 +55,7 @@ const VIEWS: { status: StartupStatusName; label: string }[] = [
 /**
  * The Startups screen (#222): startups that are hiring, from YC startups' job
  * posts and Hacker News' "Who is hiring?", ranked against the profile, with
- * the addresses they publish for applications. Dossier sends nothing: the
+ * the addresses they publish for applications. rolepilot sends nothing: the
  * user writes to each one, from New application or their own mail.
  */
 export function StartupsScreen({ filter, list, lastRefresh, refreshJobId, city, country, headline, aiReady, today }: StartupsScreenProps) {
@@ -134,7 +134,7 @@ function RefreshStatus({ lastRefresh, refreshing, step, today }: { lastRefresh: 
     return (
       <div role="note" className="flex flex-col gap-2 rounded-panel border border-line-card bg-card px-6 py-5 text-sm text-pretty">
         <p>
-          Press <strong>Refresh</strong> to look for startups. Dossier reads YC startups&apos; job posts and this month&apos;s “Who is hiring?” thread on
+          Press <strong>Refresh</strong> to look for startups. rolepilot reads YC startups&apos; job posts and this month&apos;s “Who is hiring?” thread on
           Hacker News, keeps the ones that hire where you live or remotely, and looks on the best matches&apos; own sites for the address they publish for
           applications, following their robots.txt.
         </p>
@@ -295,7 +295,7 @@ function StartupCard({ startup: initial, headline, aiReady, today }: { startup: 
         <ScoreBadge score={startup.score} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h3 className="font-serif text-section">{startup.company}</h3>
+            <h3 className="product-heading text-section">{startup.company}</h3>
             <span className="rounded-full border border-line-field px-2 py-0.5 text-xs text-muted">
               {info.name} · {info.kind}
             </span>
@@ -332,7 +332,7 @@ function StartupCard({ startup: initial, headline, aiReady, today }: { startup: 
           </Link>
         ) : !blocked && aiReady ? (
           <Link href={`/new?startup=${encodeURIComponent(startup.id)}`} className={buttonClassName("primary", "sm")}>
-            Write to them
+            Draft outreach
           </Link>
         ) : !blocked ? (
           <Link href="/settings?section=ai" className="text-meta text-muted underline underline-offset-2 hover:text-ink">
@@ -341,12 +341,12 @@ function StartupCard({ startup: initial, headline, aiReady, today }: { startup: 
         ) : null}
         {startup.website && !blocked && (
           <Button size="sm" variant="secondary" aria-disabled={busy !== null || undefined} onClick={() => void lookUp(false)}>
-            {busy === "emails" ? "Looking…" : startup.emailsCheckedAt ? "Look on their site again" : "Find addresses on their site"}
+            {busy === "emails" ? "Looking…" : startup.emailsCheckedAt ? "Recheck website" : "Find website emails"}
           </Button>
         )}
         {startup.website && !blocked && startup.emailsCheckedAt && (
           <Button size="sm" variant="text" aria-disabled={busy !== null || undefined} onClick={() => void lookUp(true)}>
-            {busy === "people" ? "Looking…" : "Look for people's addresses"}
+            {busy === "people" ? "Looking…" : "Find contact emails"}
           </Button>
         )}
         <span className="ml-auto flex flex-wrap items-center gap-3">
@@ -361,7 +361,7 @@ function StartupCard({ startup: initial, headline, aiReady, today }: { startup: 
             </Button>
           )}
           {startup.status === "DISMISSED" || startup.status === "CONTACTED" ? (
-            <Button size="sm" variant="text" onClick={() => void move("NEW", `${startup.company} is back in To look at.`)}>
+            <Button size="sm" variant="text" onClick={() => void move("NEW", `${startup.company} is back in To review.`)}>
               Move back
             </Button>
           ) : (
@@ -383,7 +383,7 @@ function StartupCard({ startup: initial, headline, aiReady, today }: { startup: 
             {open ? "Hide details" : "Details and notes"}
           </button>
           <Button size="sm" variant="danger-text" onClick={() => setRemoving(true)}>
-            Remove for good
+            Delete permanently
           </Button>
         </span>
       </div>
@@ -396,9 +396,9 @@ function StartupCard({ startup: initial, headline, aiReady, today }: { startup: 
       <ConfirmDialog
         open={removing}
         onOpenChange={setRemoving}
-        title={`Remove ${startup.company} for good?`}
-        description="Dossier deletes what it keeps about this startup, its addresses and your notes, and refreshes leave it out from now on. An application you started stays."
-        confirmLabel="Remove for good"
+        title={`Delete ${startup.company} permanently?`}
+        description="rolepilot deletes what it keeps about this startup, its addresses and your notes, and refreshes leave it out from now on. An application you started stays."
+        confirmLabel="Delete permanently"
         onConfirm={() => void remove()}
       />
     </article>

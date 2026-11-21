@@ -14,8 +14,8 @@ vi.mock("@/lib/prisma", async () => {
   db.client = createTestClient();
   return { prisma: db.client };
 });
-// Settings → Scoring reads DOSSIER_SCORER (#274).
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
+// Settings → Scoring reads ROLEPILOT_SCORER (#274).
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
 vi.mock("@/lib/auth/session", () => ({
   getSession: vi.fn(async () => ({ persistent: false, issuedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) })),
 }));
@@ -30,7 +30,7 @@ vi.mock("@/lib/ai/config", async (original) => {
  const actual = await original<typeof import("@/lib/ai/config")>();
  return { ...actual, isAiConfigured: async () => setup.ai,
  resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
- actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: setup.ai ? "router-test" : undefined},secret) };
+ actual.resolveAiConfig(saved, {...source, ROLEPILOT_AI_KEY: setup.ai ? "router-test" : undefined},secret) };
 });
 vi.mock("@/lib/job-search/config", () => ({
   loadJobSearchConfig: async () => ({ source: setup.source, saved: true, jsearch: { key: "k", host: "openwebninja", keyState: "set" }, adzuna: { appId: "", key: null, keyState: "none" } }),

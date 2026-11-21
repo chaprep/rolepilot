@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -19,7 +19,7 @@ vi.mock("@/lib/prisma", async () => {
 });
 const dataDir = vi.hoisted(() => ({ path: "" }));
 vi.mock("@/lib/env", () => ({
-  env: { get DOSSIER_DATA_DIR() { return dataDir.path; }, DOSSIER_BACKUP_RETENTION_DAYS: 14, DOSSIER_SECRET: "s".repeat(32) },
+  env: { get ROLEPILOT_DATA_DIR() { return dataDir.path; }, ROLEPILOT_BACKUP_RETENTION_DAYS: 14, ROLEPILOT_SECRET: "s".repeat(32) },
 }));
 vi.mock("@/lib/log", () => ({ logServerError: vi.fn() }));
 
@@ -27,7 +27,7 @@ const prisma = () => db.client!;
 const backups = () => readdir(path.join(dataDir.path, "backups")).catch(() => [] as string[]);
 
 beforeEach(async () => {
-  dataDir.path = await mkdtemp(path.join(tmpdir(), "dossier-backups-"));
+  dataDir.path = await mkdtemp(path.join(tmpdir(), "rolepilot-backups-"));
   await resetDatabase(prisma());
   await prisma().application.create({ data: { company: "Ledgerly" } });
 });
@@ -52,12 +52,12 @@ describe("nightly backups (E10-7)", () => {
     ] });
     const now = new Date(2026, 8, 28, 3, 0);
     expect(await runNightlyBackup(now)).toBe("written");
-    expect(await backups()).toEqual(["dossier-backup-nightly-2026-09-28-030000.json"]);
+    expect(await backups()).toEqual(["rolepilot-backup-nightly-2026-09-28-030000.json"]);
     expect(await lastNightlyBackup()).toBeInstanceOf(Date);
     const parsed = parseExport(await readFile(path.join(dataDir.path, "backups", (await backups())[0]), "utf8"));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) throw new Error(parsed.error);
-    expect(parsed.data.schemaVersion).toBe(12);
+    expect(parsed.data.schemaVersion).toBe(16);
     expect(parsed.data.agentSearches).toEqual([expect.objectContaining({ id: search.id, name: "Design", enabled: false })]);
     expect(parsed.data.agentCandidateSearches).toHaveLength(2);
     await prisma().agentCandidate.deleteMany();
@@ -73,17 +73,17 @@ describe("nightly backups (E10-7)", () => {
   it("catch up at the start when the last one is over a day old, or there's none (#325)", async () => {
     const dir = path.join(dataDir.path, "backups");
     expect(await catchUpBackup(new Date(2026, 8, 28, 10, 0))).toBe("written");
-    expect(await backups()).toEqual(["dossier-backup-nightly-2026-09-28-100000.json"]);
+    expect(await backups()).toEqual(["rolepilot-backup-nightly-2026-09-28-100000.json"]);
 
     // Two days later, with the computer off at 03:00: another one.
     const first = new Date(2026, 8, 28, 10, 0);
-    await utimes(path.join(dir, "dossier-backup-nightly-2026-09-28-100000.json"), first, first);
+    await utimes(path.join(dir, "rolepilot-backup-nightly-2026-09-28-100000.json"), first, first);
     expect(await catchUpBackup(new Date(2026, 8, 30, 10, 0))).toBe("written");
     expect(await backups()).toHaveLength(2);
 
     // Started again an hour later: the last one is recent, so nothing more.
     const second = new Date(2026, 8, 30, 10, 0);
-    await utimes(path.join(dir, "dossier-backup-nightly-2026-09-30-100000.json"), second, second);
+    await utimes(path.join(dir, "rolepilot-backup-nightly-2026-09-30-100000.json"), second, second);
     expect(await catchUpBackup(new Date(2026, 8, 30, 11, 0))).toBe("recent");
     expect(await backups()).toHaveLength(2);
   });
@@ -103,12 +103,12 @@ describe("nightly backups (E10-7)", () => {
   it("remove backups past the retention", async () => {
     const dir = path.join(dataDir.path, "backups");
     await runNightlyBackup(new Date(2026, 8, 28, 3));
-    const old = path.join(dir, "dossier-backup-nightly-2026-09-01-030000.json");
+    const old = path.join(dir, "rolepilot-backup-nightly-2026-09-01-030000.json");
     await writeFile(old, "{}");
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     await utimes(old, monthAgo, monthAgo);
     expect(await pruneBackups(new Date())).toBe(1);
-    expect(await backups()).toEqual(["dossier-backup-nightly-2026-09-28-030000.json"]);
+    expect(await backups()).toEqual(["rolepilot-backup-nightly-2026-09-28-030000.json"]);
   });
 
   it("keep a failure for the settings row, and clear it after a success", async () => {
@@ -121,4 +121,15 @@ describe("nightly backups (E10-7)", () => {
     await runNightlyBackup();
     expect((await loadSettings()).backupProblem).toBeNull();
   });
+});
+
+it("recognizes historical nightly backups for catch-up and retention", async () => {
+  const dir = path.join(dataDir.path, "backups");
+  await mkdir(dir, { recursive: true });
+  const legacy = path.join(dir, "dossier-backup-nightly-2026-09-28-030000.json");
+  await writeFile(legacy, "{}");
+  const now = new Date();
+  await utimes(legacy, now, now);
+  expect(await lastNightlyBackup()).toEqual(now);
+  expect(await catchUpBackup(now)).toBe("recent");
 });

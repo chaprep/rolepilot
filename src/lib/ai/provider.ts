@@ -12,6 +12,19 @@ import { AiError, toAiError } from "./errors";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+export type ToolCall = { id: string; name: string; arguments: string };
+export type ToolMessage =
+  | ChatMessage
+  | { role: "assistant"; content: string; calls: ToolCall[]; continuation?: unknown }
+  | { role: "tool"; callId: string; content: string };
+export type ToolDefinition = { name: string; description: string; parameters: Record<string, unknown> };
+export type ToolTurnRequest = Omit<CompletionRequest, "messages"> & {
+  messages: ToolMessage[];
+  tools: ToolDefinition[];
+  allowTools?: boolean;
+};
+export type ToolTurn = { text: string; calls: ToolCall[]; continuation?: unknown };
+
 /** How much a model that thinks before answering may think; its own default when unset. */
 export type Effort = "low" | "medium" | "high";
 
@@ -44,6 +57,7 @@ export interface AIProvider {
   complete(request: CompletionRequest): Promise<string>;
   /** The model's answer as validated JSON. */
   complete<T>(request: JsonCompletionRequest<T>): Promise<T>;
+  toolTurn?(request: ToolTurnRequest): Promise<ToolTurn>;
   /** Models the server offers, for the model select in Settings (E6-3). */
   listModels(signal?: AbortSignal): Promise<string[]>;
   /** Sends a tiny prompt and reports how long the answer took (SET-2). */
@@ -76,7 +90,7 @@ export type ChatAnswer = { text: string; cutOff: boolean };
 export const TEMPERATURES: Record<Creativity, number> = {
   FAITHFUL: 0.2,
   BALANCED: 0.6,
-  EXPRESSIVE: 0.9,
+  OPTIMIZED: 0.7,
 };
 
 const DEFAULT_MAX_TOKENS = 4096;
@@ -151,6 +165,14 @@ export abstract class BaseProvider implements AIProvider {
     // What didn't fit, for the server log: the schema's paths, never the answer (#276).
     logServerWarning("AI", `${model}'s answer didn't match the ${schemaName} schema twice: ${second.where}`);
     throw AiError.of("invalid-output", second.problem.split("\n", 1)[0]);
+  }
+
+  protected runToolTurn(request: ToolTurnRequest, send: (model: string, signal: AbortSignal, used: ChatCall["used"]) => Promise<ToolTurn>): Promise<ToolTurn> {
+    const model = this.modelForTask(request.task);
+    const signal = AbortSignal.any([AbortSignal.timeout(30_000), ...(request.signal ? [request.signal] : [])]);
+    return this.guard(model, signal, (combined) => send(model, combined, (tokens) =>
+      this.onUsage?.({ task: request.task, provider: this.usageProvider(), model, ...tokens }),
+    ));
   }
 
   listModels(signal?: AbortSignal): Promise<string[]> {

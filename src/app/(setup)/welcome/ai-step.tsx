@@ -36,7 +36,7 @@ function hint(kind: AiErrorKind, choice: AiChoice): string | null {
     case "rate-limited":
       return "This usually means there's no credit on the account yet. Add some, wait a minute, and check again.";
     case "unreachable":
-      return `Dossier couldn't reach ${choice.name}. Check that this server is online, then try again.`;
+      return `rolepilot couldn't reach ${choice.name}. Check that this server is online, then try again.`;
     case "model":
       return "Your account may not have access to them yet. New accounts sometimes wait a little: try again later, or pick another company.";
     default:
@@ -60,13 +60,13 @@ export function AiStep({ current }: { current: AiStepView }) {
     return (
       <Card className="flex flex-col items-start gap-3">
         <p className="text-sm">
-          Dossier already writes with <strong className="font-medium">{current.name}</strong>
+          rolepilot already writes with <strong className="font-medium">{current.name}</strong>
           {current.model && (
             <>
               , using <span className="font-mono text-[13px]">{current.model}</span>
             </>
           )}
-          .{current.fromEnv && " It's set on the server, in DOSSIER_AI_PROVIDER."}
+          .{current.fromEnv && " It's set on the server, in ROLEPILOT_AI_PROVIDER."}
         </p>
         <Button variant="secondary" size="sm" onClick={() => setChanging(true)}>
           Choose another
@@ -150,7 +150,7 @@ function ChoicePanel({ choice, onConnected }: { choice: AiChoice; onConnected: (
   return (
     <Card className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="font-serif text-section">{choice.name}</h2>
+        <h2 className="product-heading text-section">{choice.name}</h2>
         <p className="text-sm text-muted">{choice.about}</p>
       </div>
       <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[140px_1fr]">
@@ -204,9 +204,9 @@ function ChoicePanel({ choice, onConnected }: { choice: AiChoice; onConnected: (
         )}
         {status.state === "missing" && (
           <div className="flex flex-col gap-1.5 rounded-card bg-warning-surface px-4 py-3 text-warning">
-            <p className="font-medium">Dossier couldn&apos;t find {choice.name}.</p>
+            <p className="font-medium">rolepilot couldn&apos;t find {choice.name}.</p>
             <p>
-              Check that it&apos;s running{choice.id === "lmstudio" ? ", with its server switched on in the Developer tab" : ""}, then try again. If Dossier runs on a
+              Check that it&apos;s running{choice.id === "lmstudio" ? ", with its server switched on in the Developer tab" : ""}, then try again. If rolepilot runs on a
               server rather than this computer, it can&apos;t reach {choice.name} here: pick another option, or see the wiki to run a model on the server.
             </p>
           </div>
@@ -218,7 +218,7 @@ function ChoicePanel({ choice, onConnected }: { choice: AiChoice; onConnected: (
             </p>
           ) : (
             <div className="flex flex-col gap-3">
-              <p className="text-success">Found {choice.name}. Dossier will write with the model below.</p>
+              <p className="text-success">Found {choice.name}. rolepilot will write with the model below.</p>
               <Select label="Model" value={status.model ?? ""} onChange={(event) => void chooseModel(event.target.value)} className="max-w-[420px]">
                 {status.models.map((model) => (
                   <option key={model} value={model}>

@@ -1,5 +1,6 @@
 "use server";
 
+import { recordMemorySource, withdrawSources, advanceMemory } from "@/lib/memory/store";
 import { z } from "zod";
 
 import { action, ActionError } from "@/lib/action";
@@ -32,14 +33,23 @@ export const createFact = action(z.object({ applicationId }), async ({ applicati
 });
 
 export const saveFact = action(z.object({ id, text }), async ({ id, text }) => {
-  await prisma.fact.updateMany({ where: { id }, data: { text } });
+  await prisma.$transaction(async tx => {
+    const fact = await tx.fact.findUnique({ where: { id } });
+    await tx.fact.updateMany({ where: { id }, data: { text } });
+    if (fact && !fact.applicationId && fact.text !== text) await advanceMemory(tx);
+    if (fact?.applicationId && fact.text !== text) await recordMemorySource(tx, { sourceKey: `fact:${id}`, kind: "FACT", text, factId: id, applicationId: fact.applicationId, context: { scope: "UNRESOLVED" } });
+  });
   return null;
 });
 
 /** Answers with where it was, for Undo. */
 export const removeFact = action(z.object({ id }), async ({ id }) => {
   const fact = await prisma.fact.findUnique({ where: { id }, select: { sort: true } });
-  await prisma.fact.deleteMany({ where: { id } });
+  await prisma.$transaction(async tx => {
+    const sources = await tx.memorySource.findMany({ where: { factId: id }, select: { id: true } });
+    await withdrawSources(tx, sources.map(row => row.id));
+    await tx.fact.deleteMany({ where: { id } });
+  });
   return { sort: fact?.sort ?? null };
 });
 
@@ -48,11 +58,18 @@ export const restoreFact = action(
   z.object({ id, applicationId, text, sort: z.number().int().nullable() }),
   async ({ id, applicationId, text, sort }) => {
     await checkRoom(applicationId);
-    return prisma.fact.upsert({
+    const restored = await prisma.fact.upsert({
       where: { id },
       create: { id, applicationId, text, sort: sort ?? (await nextSort(prisma.fact)) },
       update: {},
       select: { id: true, text: true },
     });
+    if (applicationId) await prisma.$transaction(async tx => {
+      const sources = await tx.memorySource.findMany({ where: { sourceKey: `fact:${id}`, text: { not: "" } }, orderBy: { revision: "desc" }, take: 1 });
+      if (sources.length) {
+        await tx.memorySource.update({ where: { id: sources[0].id }, data: { factId: id, status: "PENDING", extraction: undefined } });
+      }
+    });
+    return restored;
   },
 );

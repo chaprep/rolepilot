@@ -8,9 +8,9 @@ import { EnvError, parseEnv } from "./env";
 const PASSWORD_HASH = "argon2id:m=19456,t=2,p=1:CLZW5wQoCjh3Q9CHBp_JWw:Ak2xS7TYlYYrhemlgBkVxFmWXfcMq_rjd0mJGZcZFfA";
 
 const valid = {
-  DOSSIER_PASSWORD: PASSWORD_HASH,
-  DOSSIER_SECRET: "a".repeat(32),
-  DATABASE_URL: "postgresql://postgres:postgres@db:5432/dossier",
+  ROLEPILOT_PASSWORD: PASSWORD_HASH,
+  ROLEPILOT_SECRET: "a".repeat(32),
+  DATABASE_URL: "postgresql://postgres:postgres@db:5432/rolepilot",
 };
 
 function problems(source: Record<string, string | undefined>): string[] {
@@ -24,103 +24,92 @@ function problems(source: Record<string, string | undefined>): string[] {
 }
 
 describe("parseEnv", () => {
-  it("reads DOSSIER_API_URL without its trailing slash, and only an http or https address", () => {
-    expect(parseEnv(valid).DOSSIER_API_URL).toBeUndefined();
-    expect(parseEnv({ ...valid, DOSSIER_API_URL: "http://api.localhost:3000/v1/" }).DOSSIER_API_URL).toBe("http://api.localhost:3000/v1");
-    expect(problems({ ...valid, DOSSIER_API_URL: "ftp://example.com" })).toEqual(["DOSSIER_API_URL must be an http:// or https:// URL."]);
+  it("ignores retired notification endpoint overrides", () => {
+    expect(parseEnv({ ...valid, ROLEPILOT_API_URL: "ftp://legacy.example", ROLEPILOT_UPDATES_TEST_BASE_URL: "legacy" })).toEqual(parseEnv(valid));
   });
 
   it("accepts the required variables and fills in defaults", () => {
     expect(parseEnv(valid)).toEqual({
       ...valid,
-      DOSSIER_DATA_DIR: "/data",
-      DOSSIER_BACKUP_RETENTION_DAYS: 14,
-      DOSSIER_TELEMETRY: undefined,
+      ROLEPILOT_DATA_DIR: "/data",
+      ROLEPILOT_BACKUP_RETENTION_DAYS: 14,
     });
   });
 
-  it("reads whether the usage ping is on", () => {
-    // Unset or empty: not decided, so Dossier asks (#172).
-    expect(parseEnv({ ...valid, DOSSIER_TELEMETRY: "" }).DOSSIER_TELEMETRY).toBeUndefined();
-    expect(parseEnv(valid).DOSSIER_TELEMETRY).toBeUndefined();
-    expect(parseEnv({ ...valid, DOSSIER_TELEMETRY: "ON" }).DOSSIER_TELEMETRY).toBe("on");
-    expect(parseEnv({ ...valid, DOSSIER_TELEMETRY: " Off " }).DOSSIER_TELEMETRY).toBe("off");
-    expect(problems({ ...valid, DOSSIER_TELEMETRY: "false" })).toEqual(['DOSSIER_TELEMETRY must be on or off (got "false").']);
-  });
 
   it("reads the optional variables", () => {
     const env = parseEnv({
       ...valid,
-      DOSSIER_DATA_DIR: "/srv/dossier",
-      DOSSIER_BACKUP_RETENTION_DAYS: "30",
-      DOSSIER_AI_PROVIDER: "local",
-      DOSSIER_AI_URL: "http://ollama:11434",
-      DOSSIER_AI_MODEL: "llama3.1:8b",
-      DOSSIER_AI_KEY: "sk-test",
+      ROLEPILOT_DATA_DIR: "/srv/rolepilot",
+      ROLEPILOT_BACKUP_RETENTION_DAYS: "30",
+      ROLEPILOT_AI_PROVIDER: "local",
+      ROLEPILOT_AI_URL: "http://ollama:11434",
+      ROLEPILOT_AI_MODEL: "llama3.1:8b",
+      ROLEPILOT_AI_KEY: "sk-test",
     });
     expect(env).toMatchObject({
-      DOSSIER_DATA_DIR: "/srv/dossier",
-      DOSSIER_BACKUP_RETENTION_DAYS: 30,
-      DOSSIER_AI_PROVIDER: "local",
-      DOSSIER_AI_URL: "http://ollama:11434",
-      DOSSIER_AI_MODEL: "llama3.1:8b",
-      DOSSIER_AI_KEY: "sk-test",
+      ROLEPILOT_DATA_DIR: "/srv/rolepilot",
+      ROLEPILOT_BACKUP_RETENTION_DAYS: 30,
+      ROLEPILOT_AI_PROVIDER: "local",
+      ROLEPILOT_AI_URL: "http://ollama:11434",
+      ROLEPILOT_AI_MODEL: "llama3.1:8b",
+      ROLEPILOT_AI_KEY: "sk-test",
     });
   });
 
   it("reads the AI timeout in seconds", () => {
-    expect(parseEnv({ ...valid, DOSSIER_AI_TIMEOUT_SECONDS: " 300 " }).DOSSIER_AI_TIMEOUT_SECONDS).toBe(300);
-    expect(() => parseEnv({ ...valid, DOSSIER_AI_TIMEOUT_SECONDS: "5m" })).toThrow(/whole number of seconds/);
-    expect(() => parseEnv({ ...valid, DOSSIER_AI_TIMEOUT_SECONDS: "1" })).toThrow(/at least 5/);
+    expect(parseEnv({ ...valid, ROLEPILOT_AI_TIMEOUT_SECONDS: " 300 " }).ROLEPILOT_AI_TIMEOUT_SECONDS).toBe(300);
+    expect(() => parseEnv({ ...valid, ROLEPILOT_AI_TIMEOUT_SECONDS: "5m" })).toThrow(/whole number of seconds/);
+    expect(() => parseEnv({ ...valid, ROLEPILOT_AI_TIMEOUT_SECONDS: "1" })).toThrow(/at least 5/);
   });
 
   it("resolves a relative data directory", () => {
-    const env = parseEnv({ ...valid, DOSSIER_DATA_DIR: "./data" });
-    expect(env.DOSSIER_DATA_DIR).toBe(path.resolve("data"));
+    const env = parseEnv({ ...valid, ROLEPILOT_DATA_DIR: "./data" });
+    expect(env.ROLEPILOT_DATA_DIR).toBe(path.resolve("data"));
   });
 
   it("treats empty values as unset", () => {
-    const env = parseEnv({ ...valid, DOSSIER_AI_KEY: "", DOSSIER_DATA_DIR: " " });
-    expect(env.DOSSIER_AI_KEY).toBeUndefined();
-    expect(env.DOSSIER_DATA_DIR).toBe("/data");
-    expect(problems({ ...valid, DOSSIER_PASSWORD: "" })).toEqual([
-      expect.stringMatching(/^DOSSIER_PASSWORD is not set\./),
+    const env = parseEnv({ ...valid, ROLEPILOT_AI_KEY: "", ROLEPILOT_DATA_DIR: " " });
+    expect(env.ROLEPILOT_AI_KEY).toBeUndefined();
+    expect(env.ROLEPILOT_DATA_DIR).toBe("/data");
+    expect(problems({ ...valid, ROLEPILOT_PASSWORD: "" })).toEqual([
+      expect.stringMatching(/^ROLEPILOT_PASSWORD is not set\./),
     ]);
   });
 
   it("names every missing required variable", () => {
     expect(problems({})).toEqual([
-      expect.stringMatching(/^DOSSIER_PASSWORD is not set\. Set it to/),
-      expect.stringMatching(/^DOSSIER_SECRET is not set\. .*openssl rand/),
+      expect.stringMatching(/^ROLEPILOT_PASSWORD is not set\. Set it to/),
+      expect.stringMatching(/^ROLEPILOT_SECRET is not set\. .*openssl rand/),
       expect.stringMatching(/^DATABASE_URL is not set\. /),
     ]);
   });
 
   it("takes an SQLite file as the database, by its full path", () => {
-    expect(parseEnv({ ...valid, DATABASE_URL: "file:/data/dossier.db" }).DATABASE_URL).toBe("file:/data/dossier.db");
-    expect(problems({ ...valid, DATABASE_URL: "file:./dossier.db" })).toEqual([
-      "DATABASE_URL must give the SQLite file's full path, e.g. file:/data/dossier.db.",
+    expect(parseEnv({ ...valid, DATABASE_URL: "file:/data/rolepilot.db" }).DATABASE_URL).toBe("file:/data/rolepilot.db");
+    expect(problems({ ...valid, DATABASE_URL: "file:./rolepilot.db" })).toEqual([
+      "DATABASE_URL must give the SQLite file's full path, e.g. file:/data/rolepilot.db.",
     ]);
   });
 
   it("wants a hash of the password, not the password itself", () => {
-    expect(problems({ ...valid, DOSSIER_PASSWORD: "correct horse" })).toEqual([
-      expect.stringMatching(/^DOSSIER_PASSWORD must be a hash of your password, not the password itself\. .*hash-password/),
+    expect(problems({ ...valid, ROLEPILOT_PASSWORD: "correct horse" })).toEqual([
+      expect.stringMatching(/^ROLEPILOT_PASSWORD must be a hash of your password, not the password itself\. .*hash-password/),
     ]);
-    expect(parseEnv({ ...valid, DOSSIER_PASSWORD: ` ${PASSWORD_HASH}\n` }).DOSSIER_PASSWORD).toBe(PASSWORD_HASH);
+    expect(parseEnv({ ...valid, ROLEPILOT_PASSWORD: ` ${PASSWORD_HASH}\n` }).ROLEPILOT_PASSWORD).toBe(PASSWORD_HASH);
   });
 
   it("rejects a secret shorter than 32 characters", () => {
-    expect(problems({ ...valid, DOSSIER_SECRET: "short" })).toEqual([
-      expect.stringMatching(/^DOSSIER_SECRET is too short \(5 characters\)\./),
+    expect(problems({ ...valid, ROLEPILOT_SECRET: "short" })).toEqual([
+      expect.stringMatching(/^ROLEPILOT_SECRET is too short \(5 characters\)\./),
     ]);
   });
 
   it("never echoes secret values", () => {
     const messages = problems({
-      DOSSIER_PASSWORD: "hunter2",
-      DOSSIER_SECRET: "tiny-secret",
-      DATABASE_URL: "mysql://root:db-password@db/dossier",
+      ROLEPILOT_PASSWORD: "hunter2",
+      ROLEPILOT_SECRET: "tiny-secret",
+      DATABASE_URL: "mysql://root:db-password@db/rolepilot",
     }).join("\n");
     expect(messages).not.toContain("hunter2");
     expect(messages).not.toContain("tiny-secret");
@@ -132,17 +121,17 @@ describe("parseEnv", () => {
     expect(
       problems({
         ...valid,
-        DOSSIER_BACKUP_RETENTION_DAYS: "two weeks",
-        DOSSIER_AI_PROVIDER: "gemini",
-        DOSSIER_AI_URL: "ftp://example.com",
+        ROLEPILOT_BACKUP_RETENTION_DAYS: "two weeks",
+        ROLEPILOT_AI_PROVIDER: "gemini",
+        ROLEPILOT_AI_URL: "ftp://example.com",
       }),
     ).toEqual([
-      'DOSSIER_BACKUP_RETENTION_DAYS must be a whole number of days (got "two weeks").',
-      'DOSSIER_AI_PROVIDER must be one of local, openai, anthropic, mistral, lmstudio (got "gemini").',
-      "DOSSIER_AI_URL must be an http:// or https:// URL.",
+      'ROLEPILOT_BACKUP_RETENTION_DAYS must be a whole number of days (got "two weeks").',
+      'ROLEPILOT_AI_PROVIDER must be one of local, openai, anthropic, mistral, lmstudio (got "gemini").',
+      "ROLEPILOT_AI_URL must be an http:// or https:// URL.",
     ]);
-    expect(problems({ ...valid, DOSSIER_BACKUP_RETENTION_DAYS: "0" })).toEqual([
-      "DOSSIER_BACKUP_RETENTION_DAYS must be at least 1.",
+    expect(problems({ ...valid, ROLEPILOT_BACKUP_RETENTION_DAYS: "0" })).toEqual([
+      "ROLEPILOT_BACKUP_RETENTION_DAYS must be at least 1.",
     ]);
   });
 });
@@ -152,37 +141,44 @@ describe("job search variables (E14-4)", () => {
     expect(
       parseEnv({
         ...valid,
-        DOSSIER_JOBS_SOURCE: "jsearch",
-        DOSSIER_JSEARCH_KEY: "ak_test",
-        DOSSIER_JSEARCH_HOST: "rapidapi",
-        DOSSIER_ADZUNA_APP_ID: "app",
-        DOSSIER_ADZUNA_KEY: "adz",
-        DOSSIER_FREEHIRE_URL: "https://jobs.example/",
+        ROLEPILOT_JOBS_SOURCE: "jsearch",
+        ROLEPILOT_JSEARCH_KEY: "ak_test",
+        ROLEPILOT_JSEARCH_HOST: "rapidapi",
+        ROLEPILOT_ADZUNA_APP_ID: "app",
+        ROLEPILOT_ADZUNA_KEY: "adz",
+        ROLEPILOT_FREEHIRE_URL: "https://jobs.example/",
       }),
     ).toMatchObject({
-      DOSSIER_JOBS_SOURCE: "jsearch",
-      DOSSIER_JSEARCH_KEY: "ak_test",
-      DOSSIER_JSEARCH_HOST: "rapidapi",
-      DOSSIER_ADZUNA_APP_ID: "app",
-      DOSSIER_ADZUNA_KEY: "adz",
-      DOSSIER_FREEHIRE_URL: "https://jobs.example",
+      ROLEPILOT_JOBS_SOURCE: "jsearch",
+      ROLEPILOT_JSEARCH_KEY: "ak_test",
+      ROLEPILOT_JSEARCH_HOST: "rapidapi",
+      ROLEPILOT_ADZUNA_APP_ID: "app",
+      ROLEPILOT_ADZUNA_KEY: "adz",
+      ROLEPILOT_FREEHIRE_URL: "https://jobs.example",
     });
-    expect(parseEnv({ ...valid, DOSSIER_JOBS_SOURCE: "freehire" }).DOSSIER_JOBS_SOURCE).toBe("freehire");
+    expect(parseEnv({ ...valid, ROLEPILOT_JOBS_SOURCE: "freehire" }).ROLEPILOT_JOBS_SOURCE).toBe("freehire");
   });
 
   it("reads whether the Bundesagentur für Arbeit is offered, and refuses choosing it while it's off (#223)", () => {
-    expect(parseEnv(valid).DOSSIER_JOBS_ARBEITSAGENTUR).toBeUndefined();
-    expect(parseEnv({ ...valid, DOSSIER_JOBS_ARBEITSAGENTUR: " OFF " }).DOSSIER_JOBS_ARBEITSAGENTUR).toBe("off");
-    expect(problems({ ...valid, DOSSIER_JOBS_ARBEITSAGENTUR: "no" })).toEqual(['DOSSIER_JOBS_ARBEITSAGENTUR must be on or off (got "no").']);
-    expect(problems({ ...valid, DOSSIER_JOBS_SOURCE: "arbeitsagentur", DOSSIER_JOBS_ARBEITSAGENTUR: "off" })).toEqual([
-      "DOSSIER_JOBS_SOURCE is arbeitsagentur, but DOSSIER_JOBS_ARBEITSAGENTUR is off. Choose another source, or remove one of the two.",
+    expect(parseEnv(valid).ROLEPILOT_JOBS_ARBEITSAGENTUR).toBeUndefined();
+    expect(parseEnv({ ...valid, ROLEPILOT_JOBS_ARBEITSAGENTUR: " OFF " }).ROLEPILOT_JOBS_ARBEITSAGENTUR).toBe("off");
+    expect(problems({ ...valid, ROLEPILOT_JOBS_ARBEITSAGENTUR: "no" })).toEqual(['ROLEPILOT_JOBS_ARBEITSAGENTUR must be on or off (got "no").']);
+    expect(problems({ ...valid, ROLEPILOT_JOBS_SOURCE: "arbeitsagentur", ROLEPILOT_JOBS_ARBEITSAGENTUR: "off" })).toEqual([
+      "ROLEPILOT_JOBS_SOURCE is arbeitsagentur, but ROLEPILOT_JOBS_ARBEITSAGENTUR is off. Choose another source, or remove one of the two.",
     ]);
   });
 
   it("rejects sources and hosts it doesn't know, without echoing keys", () => {
-    expect(problems({ ...valid, DOSSIER_JOBS_SOURCE: "linkedin", DOSSIER_JSEARCH_HOST: "google", DOSSIER_JSEARCH_KEY: "ak_secret" })).toEqual([
-      'DOSSIER_JOBS_SOURCE must be one of jsearch, adzuna, arbeitsagentur, freehire, off (got "linkedin").',
-      'DOSSIER_JSEARCH_HOST must be openwebninja or rapidapi (got "google").',
+    expect(problems({ ...valid, ROLEPILOT_JOBS_SOURCE: "linkedin", ROLEPILOT_JSEARCH_HOST: "google", ROLEPILOT_JSEARCH_KEY: "ak_secret" })).toEqual([
+      'ROLEPILOT_JOBS_SOURCE must be one of jsearch, adzuna, arbeitsagentur, freehire, off (got "linkedin").',
+      'ROLEPILOT_JSEARCH_HOST must be openwebninja or rapidapi (got "google").',
     ]);
   });
+});
+
+it("reads legacy environment keys but prefers explicit rolepilot values", () => {
+  const legacy = { DATABASE_URL: valid.DATABASE_URL, DOSSIER_PASSWORD: PASSWORD_HASH, DOSSIER_SECRET: "a".repeat(32) };
+  expect(parseEnv(legacy)).toEqual(parseEnv(valid));
+  expect(parseEnv({ ...legacy, ROLEPILOT_SECRET: "b".repeat(32) }).ROLEPILOT_SECRET).toBe("b".repeat(32));
+  expect(parseEnv({ ...valid, DOSSIER_TELEMETRY: "on" })).toEqual(parseEnv(valid));
 });

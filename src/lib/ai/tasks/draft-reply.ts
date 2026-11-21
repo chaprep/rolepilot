@@ -8,9 +8,9 @@ import { TONES } from "@/lib/tones";
 import { factSources, guardSources, unverifiedFacts } from "../fact-guard";
 
 import { emailForPrompt, UNTRUSTED_EMAIL } from "./classify-reply";
-import { applicationFacts, candidateFacts, CREATIVITY, jobForPrompt, NO_EM_DASHES, profileForPrompt, system, truthfulness, type Task } from "./prompt-parts";
+import { applicationFacts, candidateFacts, CREATIVITY, ENGLISH_WRITING, jobForPrompt, NO_EM_DASHES, profileForPrompt, system, truthfulness, type Task } from "./prompt-parts";
 
-export const DRAFT_REPLY_VERSION = "draft-reply@3";
+export const DRAFT_REPLY_VERSION = "draft-reply@4";
 
 const answerSchema = z.object({
   greeting: z.string(),
@@ -20,7 +20,7 @@ const answerSchema = z.object({
   gaps: z.array(z.string()),
 });
 
-const INSTRUCTIONS = `You write a job candidate's answer to an email from an employer about their application, as JSON. Write it as the candidate, in the email's language.
+const INSTRUCTIONS = `You write a job candidate's answer to an email from an employer about their application, as JSON. Write it as the candidate.
 
 - greeting: the salutation to the person who wrote, with its punctuation, e.g. "Hi Anna,".
 - paragraphs: one to three short paragraphs that answer every question the email asks, briefly and warmly. When times to meet are given below, offer exactly those, each on its own line starting with "• ", and say any of them works. When they've already settled on a time, confirm it. No greeting, sign-off or name in them.
@@ -57,9 +57,10 @@ export const draftReply: Task<DraftReplyInput, DraftedReply> = async (provider, 
     system: system(
       INSTRUCTIONS,
       `Tone: ${TONES[tone].label}. ${TONES[tone].description}`,
-      truthfulness(options.strict),
+      truthfulness(options.strict, options.creativity),
       candidateFacts(profile, facts),
       CREATIVITY[options.creativity],
+      ENGLISH_WRITING,
       UNTRUSTED_EMAIL,
       NO_EM_DASHES,
     ),

@@ -1,27 +1,28 @@
 /* The app's own look, from src/app/globals.css, for the one screen it shows
    before there's a server to show. */
 
-@font-face { font-family: "Geist"; src: url("fonts/Geist-Regular.woff2") format("woff2"); font-weight: 400; }
-@font-face { font-family: "Geist"; src: url("fonts/Geist-Medium.woff2") format("woff2"); font-weight: 500; }
-@font-face { font-family: "Geist"; src: url("fonts/Geist-SemiBold.woff2") format("woff2"); font-weight: 600; }
-@font-face { font-family: "Newsreader"; src: url("fonts/Newsreader-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Inter"; src: url("fonts/Inter-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Inter"; src: url("fonts/Inter-Medium.woff2") format("woff2"); font-weight: 500; }
+@font-face { font-family: "Inter"; src: url("fonts/Inter-SemiBold.woff2") format("woff2"); font-weight: 600; }
+@font-face { font-family: "Manrope"; src: url("fonts/Manrope-SemiBold.woff2") format("woff2"); font-weight: 600; }
 
 :root {
   color-scheme: light dark;
-  --paper: light-dark(#eeebe4, #1a1917);
-  --card: light-dark(#fbfaf7, #2a2825);
-  --input: light-dark(#ffffff, #1e1c1a);
-  --ink: light-dark(#1d1c1a, #f0ede7);
-  --muted: light-dark(#69655d, #aaa59c);
-  --line: light-dark(rgb(29 28 26 / 0.1), rgb(240 237 231 / 0.1));
-  --line-strong: light-dark(rgb(29 28 26 / 0.2), rgb(240 237 231 / 0.24));
-  --line-input: light-dark(rgb(29 28 26 / 0.5), rgb(240 237 231 / 0.42));
-  --primary: light-dark(#222222, #ebe7df);
-  --primary-hover: light-dark(#3a3936, #ffffff);
-  --on-primary: light-dark(#fbfaf7, #1d1c1a);
+  --paper: light-dark(#eef2f8, #0b1220);
+  --card: light-dark(#ffffff, #162238);
+  --input: light-dark(#ffffff, #111d31);
+  --ink: light-dark(#14213d, #edf3ff);
+  --muted: light-dark(#475569, #a8b5cc);
+  --line: light-dark(rgb(20 33 61 / 0.1), rgb(237 243 255 / 0.1));
+  --line-strong: light-dark(rgb(20 33 61 / 0.2), rgb(237 243 255 / 0.24));
+  --line-input: light-dark(rgb(20 33 61 / 0.5), rgb(237 243 255 / 0.42));
+  --primary: light-dark(#2064f3, #296cf4);
+  --primary-hover: light-dark(#0956de, #2f6df5);
+  --on-primary: #ffffff;
   --error: light-dark(#9a3a2c, #f87171);
   --warning: light-dark(#6b4f1a, #fbbf24);
-  --hover: light-dark(rgb(29 28 26 / 0.05), rgb(240 237 231 / 0.07));
+  --focus: light-dark(#2064f3, #9cbcff);
+  --hover: light-dark(rgb(20 33 61 / 0.05), rgb(237 243 255 / 0.07));
 }
 
 * { box-sizing: border-box; }
@@ -37,12 +38,12 @@ body {
   padding: 32px 24px;
   background: var(--paper);
   color: var(--ink);
-  font: 400 15px/1.5 "Geist", Helvetica, Arial, sans-serif;
+  font: 400 15px/1.5 "Inter", Helvetica, Arial, sans-serif;
 }
 
 main { width: 100%; max-width: 560px; }
 .mark { display: block; margin-bottom: 24px; border-radius: 10px; }
-h1 { margin: 0; font: 400 36px/1.15 "Newsreader", Georgia, serif; letter-spacing: -0.015em; }
+h1 { margin: 0; font: 600 34px/1.2 "Manrope", Helvetica, Arial, sans-serif; letter-spacing: -0.025em; }
 .lead { margin: 10px 0 28px; color: var(--muted); }
 
 .options { display: grid; gap: 12px; }
@@ -99,7 +100,7 @@ button.primary:disabled { opacity: 0.6; cursor: progress; }
 button.text { min-height: 24px; padding: 0; border: 0; background: none; color: var(--muted); font: 500 14px/1.4 inherit; font-family: inherit; cursor: pointer; }
 button.text:hover { color: var(--ink); }
 
-:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .log { margin: -16px 0 24px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 

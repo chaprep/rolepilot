@@ -7,4 +7,6 @@ export const READ_POSTING_STEPS = [
   "Comparing it with your profile",
 ] as const;
 
+export const RESEARCH_STEP = "Researching the company";
+
 export const WRITE_DOCUMENTS_STEPS = ["Tailoring your resume", "Writing your cover letter", "Saving the application"] as const;

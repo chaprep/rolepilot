@@ -63,7 +63,7 @@ export function ThemeMenu({
 
 export function LetterFormatMenu({ current, onChange }: { current: CoverLetterLayout; onChange: (layout: CoverLetterLayout) => void }) {
   return <DropdownMenu>
-    <DropdownMenuTrigger asChild><Button variant="text" size="sm" aria-label="Letter format">{current === "SIDEBAR" ? "Sidebar" : "Classic"} format <span aria-hidden="true" className="text-[10px]">▼</span></Button></DropdownMenuTrigger>
+    <DropdownMenuTrigger asChild><Button variant="text" size="sm" aria-label={`Letter format: ${current === "SIDEBAR" ? "Sidebar" : "Classic"} format`}>{current === "SIDEBAR" ? "Sidebar" : "Classic"} format <span aria-hidden="true" className="text-[10px]">▼</span></Button></DropdownMenuTrigger>
     <DropdownMenuContent align="start">
       <DropdownMenuLabel>Format for this cover letter</DropdownMenuLabel>
       <DropdownMenuRadioGroup value={current} onValueChange={value => { if ((value === "CLASSIC" || value === "SIDEBAR") && value !== current) onChange(value); }}>

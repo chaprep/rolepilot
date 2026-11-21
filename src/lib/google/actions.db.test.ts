@@ -17,12 +17,12 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("@/lib/env", () => ({
-  env: { DOSSIER_SECRET: "s".repeat(40), DOSSIER_GOOGLE_CLIENT_ID: "client", DOSSIER_GOOGLE_CLIENT_SECRET: "secret", DOSSIER_DATA_DIR: "/tmp" },
+  env: { ROLEPILOT_SECRET: "s".repeat(40), ROLEPILOT_GOOGLE_CLIENT_ID: "client", ROLEPILOT_GOOGLE_CLIENT_SECRET: "secret", ROLEPILOT_DATA_DIR: "/tmp" },
 }));
 const ai = vi.hoisted(() => ({ provider: undefined as unknown, ready: true }));
 vi.mock("@/lib/ai", () => ({ getAiProvider: async () => ai.provider }));
 vi.mock("@/lib/ai/config", () => ({ isAiConfigured: async () => ai.ready }));
-vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true, language: null }) }));
+vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true }) }));
 vi.mock("@/lib/time-zone", () => ({ userTimeZone: async () => "Europe/Berlin", lastKnownTimeZone: async () => "Europe/Berlin" }));
 vi.mock("@/lib/jobs/runner", () => ({
   defineJob: <T,>(definition: T) => definition,
@@ -81,9 +81,9 @@ beforeEach(async () => {
   const base = { direction: "INCOMING" as const, fromName: "Anna", fromAddress: "anna@northwind.example", subject: "Re: Application", sentAt: new Date("2026-10-17T13:00:00Z") };
   await prisma().emailMessage.createMany({
     data: [
-      { ...base, id: "e1", gmailId: "g1", threadId: "t1", applicationId: "nw", body: "Could we talk?", kind: "INTERVIEW", summary: "Invites you to a call.", questions: ["When are you free?"], suggestedStatus: "INTERVIEW", classifiedWith: "classify-reply@1" },
+      { ...base, id: "e1", gmailId: "g1", threadId: "t1", applicationId: "nw", body: "Could we talk?", kind: "INTERVIEW", summary: "Invites you to a call.", questions: ["When are you free?"], suggestedStatus: "INTERVIEW", classifiedWith: "classify-reply@3" },
       { ...base, id: "e2", gmailId: "g2", threadId: "t2", applicationId: null, fromAddress: "talent@acme.example", body: "Interested in a role?" },
-      { ...base, id: "e3", gmailId: "g3", threadId: "t1", applicationId: "nw", body: "Thanks!", kind: "ACKNOWLEDGEMENT", handledAt: new Date(), classifiedWith: "classify-reply@1" },
+      { ...base, id: "e3", gmailId: "g3", threadId: "t1", applicationId: "nw", body: "Thanks!", kind: "ACKNOWLEDGEMENT", handledAt: new Date(), classifiedWith: "classify-reply@3" },
     ],
   });
 });
@@ -221,7 +221,7 @@ describe("Settings → Google (E15-1)", () => {
       data: { id: "client", idState: "set", secretState: "set" },
     });
     const stored = await prisma().setting.findUnique({ where: { key: "googleClientSecretEnc" } });
-    expect(stored?.value).toMatch(/^v1\./);
+    expect(stored?.value).toMatch(/^v2\./);
     expect(stored?.value).not.toContain("new-secret");
     // Same client ID, new secret: the account stays connected.
     expect(await googleConnection()).toMatchObject({ status: "connected" });
@@ -241,7 +241,7 @@ describe("Settings → Google (E15-1)", () => {
     expect(await disconnectGoogleAccount({})).toMatchObject({ ok: true, toast: "Disconnected from Google." });
     expect(calls.find((call) => call.url.includes("/revoke"))?.body).toBe("token=refresh");
     expect(await googleConnection()).toEqual({ status: "disconnected" });
-    // Mail already in Dossier stays.
+    // Mail already in rolepilot stays.
     expect(await prisma().emailMessage.count()).toBe(3);
   });
 });

@@ -17,7 +17,7 @@ vi.mock("@/lib/profile-data", async () => {
   const { demoProfile } = await import("@/lib/demo-profile");
   return { loadProfile: async () => demoProfile() };
 });
-// Dossier's own model reads the posting and writes the documents; here they're done.
+// rolepilot's own model reads the posting and writes the documents; here they're done.
 const extracted = {
   title: "Product Designer · Acme",
   company: "Acme",
@@ -31,7 +31,7 @@ const extracted = {
   language: "English",
 };
 vi.mock("@/lib/jobs/read-posting", () => ({
-  readPostingJob: { run: vi.fn(async () => ({ extracted, extractedWith: "extract-posting@1", match: { items: [] }, matchedWith: "match-requirements@1" })) },
+  readPostingJob: { run: vi.fn(async () => ({ extracted, extractedWith: "extract-posting@3", match: { items: [] }, matchedWith: "match-requirements@4" })) },
 }));
 vi.mock("@/lib/jobs/write-documents", async () => {
   const { demoLetterUnits, demoResumeUnits } = await import("@/lib/demo-profile");
@@ -39,9 +39,9 @@ vi.mock("@/lib/jobs/write-documents", async () => {
     writeDocumentsJob: {
       run: vi.fn(async () => ({
         resume: demoResumeUnits(),
-        resumeWith: "tailor-resume@6",
+        resumeWith: "tailor-resume@11",
         letter: [...demoLetterUnits(), { id: "sign-off", label: "Sign-off", text: "Warm regards," }],
-        letterWith: "write-cover-letter@5",
+        letterWith: "write-cover-letter@7",
       })),
     },
   };

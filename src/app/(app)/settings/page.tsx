@@ -22,9 +22,8 @@ import { prisma } from "@/lib/prisma";
 import { loadProfileName } from "@/lib/profile-data";
 import { scoringProblem } from "@/lib/scoring";
 import { loadScoringConfig, scoringView } from "@/lib/scoring/config";
+import { secretState, ZYTE_KEY } from "@/lib/secrets";
 import { loadSettings } from "@/lib/settings-data";
-import { availableUpdate } from "@/lib/update-check";
-import { USAGE_PING_HOST, usagePingChoice } from "@/lib/usage-ping";
 
 import { AgentSection } from "./agent-section";
 import { AiBehaviour } from "./ai-behaviour";
@@ -34,8 +33,9 @@ import { DocumentsSection } from "./documents-section";
 import { GoogleSection } from "./google-section";
 import { GoogleNotice } from "./google-notice";
 import { JobSearchSection } from "./job-search-section";
+import { ResearchSection } from "./research-section";
 import { ScoringSection } from "./scoring-section";
-import { AboutSection, type AboutFacts, type UsagePingView } from "./about-section";
+import { AboutSection, type AboutFacts } from "./about-section";
 import { ConnectorSection } from "./connector-section";
 import { settingsSectionFromParam } from "./sections";
 import { SettingsScreen } from "./settings-screen";
@@ -53,6 +53,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       {section === "ai" ? (
         <>
           <AiProviderSection initial={await loadAiSettingsView()} />
+          <ResearchSection initial={{ keyState: secretState(ZYTE_KEY, settings.zyteKeyEnc), enabled: settings.companyResearchEnabled, verified: settings.zyteVerified }} />
           <AiBehaviour initial={{ creativity: settings.creativity, strict: settings.strict, showDiff: settings.showDiff }} />
         </>
       ) : section === "jobs" ? (
@@ -105,7 +106,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       ) : section === "connector" ? (
         <ConnectorSection
           initial={{ on: settings.connectorEnabledAt !== null, redirects: settings.connectorRedirects }}
-          address={mcpUrl(env.DOSSIER_PUBLIC_URL ?? (await requestOrigin()))}
+          address={mcpUrl(env.ROLEPILOT_PUBLIC_URL ?? (await requestOrigin()))}
           inDesktopApp={isDesktopApp()}
         />
       ) : section === "data" ? (
@@ -114,7 +115,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           exportName={exportFileName()}
           backups={{
             on: settings.nightlyBackup,
-            retentionDays: env.DOSSIER_BACKUP_RETENTION_DAYS,
+            retentionDays: env.ROLEPILOT_BACKUP_RETENTION_DAYS,
             dir: backupsDir(),
             lastRun: whenRan(await lastNightlyBackup()),
             problem: settings.backupProblem,
@@ -129,9 +130,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
             paper: settings.paper,
             dateFormat: settings.dateFormat,
             defaultTone: settings.defaultTone,
-            docLanguage: settings.docLanguage,
-            resumeLanguage: settings.resumeLanguage,
-            customLanguages: settings.customLanguages,
             fileNamePattern: settings.fileNamePattern,
             includeRefs: settings.includeRefs,
             documentsToWrite: settings.documentsToWrite,
@@ -141,8 +139,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       ) : (
         <AboutSection
           facts={await aboutFacts()}
-          usagePing={await usagePingView()}
-          updates={{ daily: settings.updateCheck, available: availableUpdate(settings) }}
+
         />
       )}
     </SettingsScreen>
@@ -200,14 +197,10 @@ async function aboutFacts(): Promise<AboutFacts> {
     { label: "Version", value: appVersion },
     { label: "Server", value: host },
     { label: "Database", value: `${sqlite ? "SQLite" : "PostgreSQL"} · ${formatBytes(Number(database.size))}` },
-    { label: "Sign-in", value: isDesktopApp() ? "none, on this computer" : "set via DOSSIER_PASSWORD" },
+    { label: "Sign-in", value: isDesktopApp() ? "none, on this computer" : "set via ROLEPILOT_PASSWORD" },
     { label: "AI", value: [providerOption(ai.provider).name, ai.model].filter(Boolean).join(" · ") },
     { label: "Applications", value: String(applications) },
   ];
 }
 
 /** The usage ping's switch in About (#172): the answer in effect, who gave it, and the install ID. */
-async function usagePingView(): Promise<UsagePingView> {
-  const settings = await loadSettings();
-  return { host: USAGE_PING_HOST, ...usagePingChoice(settings), id: settings.usagePingId, production: process.env.NODE_ENV === "production" };
-}

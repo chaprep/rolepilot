@@ -10,15 +10,24 @@ export async function register() {
     // A restart lifts a block on sign-ins from new browsers (#334).
     const { liftBlockOnEveryone } = await import("@/lib/auth/login-throttle");
     const { prisma } = await import("@/lib/prisma");
+    const { migrateLegacySecrets } = await import("@/lib/rebrand-secrets");
+    const credentials = await migrateLegacySecrets(prisma);
+    if (credentials.unreadable) console.warn("Some saved credentials remain unreadable; their original ciphertext has been preserved.");
+
     await liftBlockOnEveryone(prisma).catch((error: unknown) => logServerError("startup", error));
 
     // AI jobs left running by the previous process can't finish (E6-7).
     const { recoverInterruptedJobs } = await import("@/lib/jobs/runner");
     await recoverInterruptedJobs().catch((error: unknown) => logServerError("startup", error));
 
+    await prisma.memorySource.updateMany({ where: { status: "PROCESSING" }, data: { status: "PENDING" } });
+
     // Applications sent before 1.12 keep what they show now (#299).
     const { freezeSentApplications } = await import("@/lib/frozen-copy");
     await freezeSentApplications().catch((error: unknown) => logServerError("startup", error));
+
+    const { startMemorySchedule } = await import("@/lib/memory/process");
+    startMemorySchedule();
 
     // Finished jobs, with what they were given and wrote, are deleted after a while.
     const { startJobSweep } = await import("@/lib/jobs/retention");
@@ -40,7 +49,7 @@ export async function register() {
     const { startStartupsSchedule } = await import("@/lib/startups/schedule");
     startStartupsSchedule();
 
-    // DOSSIER_JOBS_SOURCE=arbeitsagentur: the log says what that choice means (#223).
+    // ROLEPILOT_JOBS_SOURCE=arbeitsagentur: the log says what that choice means (#223).
     const { arbeitsagenturStartupNotice, loadJobSearchConfig } = await import("@/lib/job-search/config");
     try {
       const notice = arbeitsagenturStartupNotice(await loadJobSearchConfig());
@@ -49,17 +58,5 @@ export async function register() {
       logServerError("job search", error);
     }
 
-    // DOSSIER_TELEMETRY, when set, is the usage ping's answer on record (#172).
-    // Then the log says what the ping sends while it's on, or how to answer
-    // while nobody has.
-    const { recordEnvChoice, usagePingNotice } = await import("@/lib/usage-ping");
-    const { loadSettings } = await import("@/lib/settings-data");
-    try {
-      await recordEnvChoice();
-      const notice = usagePingNotice(await loadSettings());
-      if (notice) console.log(notice);
-    } catch (error) {
-      logServerError("usage ping", error);
-    }
   }
 }

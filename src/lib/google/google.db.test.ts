@@ -13,7 +13,7 @@ vi.mock("@/lib/prisma", async () => {
   return { prisma: db.client };
 });
 vi.mock("@/lib/env", () => ({
-  env: { DOSSIER_SECRET: "s".repeat(40), DOSSIER_GOOGLE_CLIENT_ID: "client", DOSSIER_GOOGLE_CLIENT_SECRET: "secret", DOSSIER_DATA_DIR: "/tmp" },
+  env: { ROLEPILOT_SECRET: "s".repeat(40), ROLEPILOT_GOOGLE_CLIENT_ID: "client", ROLEPILOT_GOOGLE_CLIENT_SECRET: "secret", ROLEPILOT_DATA_DIR: "/tmp" },
 }));
 const provider = vi.hoisted(() => ({ current: undefined as unknown }));
 vi.mock("@/lib/ai", () => ({ getAiProvider: async () => provider.current }));
@@ -21,9 +21,9 @@ vi.mock("@/lib/ai/config", async (original) => {
  const actual = await original<typeof import("@/lib/ai/config")>();
  return { ...actual, isAiConfigured: async () => true,
  resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
- actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: true ? "router-test" : undefined},secret) };
+ actual.resolveAiConfig(saved, {...source, ROLEPILOT_AI_KEY: true ? "router-test" : undefined},secret) };
 });
-vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true, language: null }) }));
+vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true }) }));
 vi.mock("@/lib/pdf/render", () => ({ renderPdf: async () => new Uint8Array([37, 80, 68, 70]) }));
 vi.mock("@/lib/time-zone", () => ({ userTimeZone: async () => "Europe/Berlin", lastKnownTimeZone: async () => "Europe/Berlin" }));
 
@@ -216,20 +216,20 @@ describe("the inbox check (E15-3)", () => {
         return new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 });
       }),
     );
-    await expect(syncInbox()).rejects.toThrow("Google no longer accepts Dossier's access.");
+    await expect(syncInbox()).rejects.toThrow("Google no longer accepts rolepilot's access.");
     expect(await googleConnection()).toMatchObject({ status: "connected", signInProblem: expect.stringContaining("Connect your Google account again") });
-    await expect(syncInbox()).rejects.toThrow("Google no longer accepts Dossier's access.");
+    await expect(syncInbox()).rejects.toThrow("Google no longer accepts rolepilot's access.");
     expect(tokenCalls).toBe(1);
 
     await saveGoogleAccount({ email: "jane@gmail.com", refreshToken: "new-refresh", scopes });
     expect(await googleConnection()).toMatchObject({ signInProblem: null, syncProblem: null });
   });
 
-  it("pauses, but keeps, saved access it can't read, since the old DOSSIER_SECRET reads it again (#136)", async () => {
+  it("pauses, but keeps, saved access it can't read, since the old ROLEPILOT_SECRET reads it again (#136)", async () => {
     forgetAccessTokens();
     const other = encryptSecret(GOOGLE_TOKEN, "refresh", "o".repeat(40));
     await prisma().googleAccount.update({ where: { id: "google" }, data: { refreshTokenEnc: other } });
-    expect(await googleConnection()).toMatchObject({ signInProblem: expect.stringContaining("DOSSIER_SECRET changed") });
+    expect(await googleConnection()).toMatchObject({ signInProblem: expect.stringContaining("ROLEPILOT_SECRET changed") });
     await expect(syncInbox()).rejects.toThrow("can't be read");
     expect(await prisma().googleAccount.findUniqueOrThrow({ where: { id: "google" } })).toMatchObject({ refreshTokenEnc: other });
   });
@@ -250,7 +250,7 @@ describe("the inbox check (E15-3)", () => {
     expect(await syncInbox()).toEqual({ fetched: 3, kept: 3, read: 3, unread: 0 });
     const kept = await prisma().emailMessage.findMany({ where: { direction: "INCOMING" }, orderBy: { gmailId: "asc" } });
     expect(kept.map((email) => [email.gmailId, email.applicationId, email.kind, email.suggestedStatus])).toEqual([
-      // In the thread Dossier wrote in: linked whatever it says.
+      // In the thread rolepilot wrote in: linked whatever it says.
       ["m1", "nw", "REJECTION", "REJECTED"],
       // By the domain only, and about another role: waits for a look, with the rest of its thread.
       ["m2", null, "REJECTION", null],

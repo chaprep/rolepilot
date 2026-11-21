@@ -6,8 +6,10 @@ import type { ReasoningEffort } from "openai/resources/shared";
 
 import type { UsageSink } from "@/lib/usage";
 
+import { boundedResponse } from "@/lib/bounded-response";
+
 import { AiError } from "../errors";
-import { BaseProvider, SCHEMA_REFUSED, withJsonSchema, type ChatAnswer, type ChatCall } from "../provider";
+import { BaseProvider, SCHEMA_REFUSED, withJsonSchema, type ChatAnswer, type ChatCall, type ToolTurnRequest } from "../provider";
 import { keyGuardedFetch } from "./guarded-fetch";
 import { apiAddress, ignoresSchemas, serverAt, type Server } from "./servers";
 
@@ -101,6 +103,49 @@ export class OpenAICompatibleProvider extends BaseProvider {
       defaultHeaders: { ...(apiKey ? {} : { Authorization: null }), ...this.server?.headers?.() },
       // With a key attached, no redirects to other hosts (E11-5).
       ...(apiKey ? { fetch: keyGuardedFetch() } : {}),
+    });
+  }
+
+  protected sendToolTurn(request: ToolTurnRequest) {
+    return this.runToolTurn(request, async (model, signal, used) => {
+      const guardedFetch = keyGuardedFetch();
+      const client = this.client.withOptions({
+        logLevel: "off",
+        fetch: async (input, init) => boundedResponse(await guardedFetch(input, init)),
+      });
+      const completion = await client.chat.completions.create(
+        {
+          model,
+          messages: [{ role: "system", content: request.system }, ...request.messages.map((message) => {
+            if (message.role === "tool") return { role: "tool" as const, tool_call_id: message.callId, content: message.content };
+            if (!("calls" in message)) return message;
+            return {
+              role: "assistant" as const,
+              content: message.content || null,
+              tool_calls: message.calls.map((call) => ({
+                id: call.id, type: "function" as const, function: { name: call.name, arguments: call.arguments },
+              })),
+              ...(message.continuation === undefined ? {} : { reasoning_details: message.continuation }),
+            };
+          })],
+          max_tokens: request.maxTokens ?? 4096,
+          ...(request.tools.length ? { tools: request.tools.map((tool) => ({ type: "function" as const, function: tool })) } : {}),
+          ...(request.allowTools === false ? { tool_choice: "none" as const } : {}),
+          ...{ provider: { require_parameters: true, data_collection: "deny" } },
+        },
+        { signal, maxRetries: 1 },
+      );
+      used({ input: completion.usage?.prompt_tokens ?? null, output: completion.usage?.completion_tokens ?? null });
+      const choice = completion.choices?.[0];
+      if (!choice?.message) throw AiError.of("invalid-output");
+      const message = choice.message as typeof choice.message & { reasoning_details?: unknown };
+      return {
+        text: answerText(message.content),
+        calls: (message.tool_calls ?? []).flatMap((call) => call.type === "function"
+          ? [{ id: call.id, name: call.function.name, arguments: call.function.arguments }]
+          : []),
+        continuation: message.reasoning_details,
+      };
     });
   }
 

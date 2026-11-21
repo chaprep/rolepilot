@@ -1,3 +1,4 @@
+import { prepareCandidateProfile, assertCandidateContext, candidateMemoryRevision } from "@/lib/memory/context";
 import "server-only";
 
 import { z } from "zod";
@@ -31,7 +32,7 @@ import { agentSearchSetupProblem, type SavedAgentSearch } from "./search";
 
 // One run: collect every enabled recurring search, then fairly evaluate
 // new postings under shared score/draft limits. It never sends anything.
-// Adapted from avinashbatchala's fork of Dossier.
+// Adapted from avinashbatchala's fork of rolepilot.
 
 export const agentScanResultSchema = z.object({
   /** Postings the source returned. */
@@ -212,7 +213,7 @@ export async function evaluateAgentPostings(postings: readonly FoundPosting[], c
 
   const toScore = fresh.slice(0, settings.agentMaxScores);
   await context.step(`Scoring ${toScore.length} ${toScore.length === 1 ? "posting" : "postings"}`);
-  const [score, profile] = await Promise.all([loadPostingScorer(), loadProfile()]);
+  const [score, profile] = await Promise.all([loadPostingScorer(), loadProfile().then(profile => prepareCandidateProfile(profile, "Find jobs matching the candidate career", context.signal))]);
   let scored = 0;
   let queued = 0;
   const kept: string[] = [];
@@ -225,9 +226,10 @@ export async function evaluateAgentPostings(postings: readonly FoundPosting[], c
       // Respect cancellation before writing, but this is not an atomic fence
       // against imports/wipes; that needs the broader background-job lifecycle.
       if (context.signal.aborted) break;
-      const candidate = await prisma.agentCandidate.create({ data: candidateData(posting, data), select: { id: true } });
+      await assertCandidateContext(profile);
+      const candidate = await prisma.agentCandidate.create({ data: { ...candidateData(posting, data), memoryRevision: candidateMemoryRevision(profile) }, select: { id: true } });
       // Find jobs shows it too (#208).
-      await saveScore(posting, data, scoredWith);
+      await saveScore(posting, data, scoredWith, candidateMemoryRevision(profile));
       kept.push(candidate.id);
       scored += 1;
       if (data.score >= settings.agentMinScore) queued += 1;

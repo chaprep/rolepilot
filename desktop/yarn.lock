@@ -836,20 +836,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dossier-desktop@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "dossier-desktop@workspace:."
-  dependencies:
-    "@types/node": "npm:^24"
-    electron: "npm:45.2.3"
-    electron-builder: "npm:^26"
-    typescript: "npm:^5"
-  dependenciesMeta:
-    electron:
-      built: true
-  languageName: unknown
-  linkType: soft
-
 "dotenv-expand@npm:^11.0.6":
   version: 11.0.7
   resolution: "dotenv-expand@npm:11.0.7"
@@ -2019,6 +2005,20 @@ __metadata:
   checksum: 10c0/7d01d4c14513c461778dd673a8f9e53255221f8d04173aafeb8e11b23d8b659bb83f1c90cfe81af7f9c213b8084b404b918108fd792bda76678f555340cc64ec
   languageName: node
   linkType: hard
+
+"rolepilot-desktop@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "rolepilot-desktop@workspace:."
+  dependencies:
+    "@types/node": "npm:^24"
+    electron: "npm:45.2.3"
+    electron-builder: "npm:^26"
+    typescript: "npm:^5"
+  dependenciesMeta:
+    electron:
+      built: true
+  languageName: unknown
+  linkType: soft
 
 "safe-buffer@npm:~5.1.0, safe-buffer@npm:~5.1.1":
   version: 5.1.2

@@ -1,4 +1,4 @@
-// Dossier's data model (PRD §9). After editing, run
+// rolepilot's data model (PRD §9). After editing, run
 // `docker/bin/yarn prisma migrate dev --name <name>` and `docker compose restart app`.
 //
 // Conventions:
@@ -63,6 +63,7 @@ model Language {
 
 /// A role. Dates are month and year; `current` means "Present" (no end date).
 model Experience {
+  memories     MemoryFact[]
   id           String            @id @default(cuid())
   role         String            @default("")
   company      String            @default("")
@@ -98,6 +99,7 @@ model ExperienceSkill {
 
 /// A side, open-source, course or thesis project (PRO-13). Dates work as in Experience.
 model Project {
+  memories   MemoryFact[]
   id         String         @id @default(cuid())
   name       String         @default("")
   /// Where it can be seen, e.g. its repository or site.
@@ -238,6 +240,7 @@ model CustomItem {
 /// "Facts about me", or one for a single application. Never shown on a
 /// document; given to the AI with the profile when it writes.
 model Fact {
+  memorySources MemorySource[]
   id            String       @id @default(cuid())
   /// The application it's for; null for the profile's own.
   applicationId String?
@@ -248,6 +251,88 @@ model Fact {
   updatedAt     DateTime     @updatedAt
 
   @@index([applicationId, sort])
+}
+
+/// Candidate information retained independently of any one application.
+model MemoryFact {
+  id             String @id @default(cuid())
+  text           String
+  kind           String
+  status         String @default("ACTIVE")
+  fingerprint    String @unique
+  subject        String @default("")
+  capabilities   Json
+  experienceId   String?
+  experience     Experience? @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+  projectId      String?
+  project        Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  attribution    Json
+  supersededById String?
+  supersededBy   MemoryFact? @relation("MemoryReplacement", fields: [supersededById], references: [id], onDelete: SetNull)
+  replaces       MemoryFact[] @relation("MemoryReplacement")
+  revision       Int @default(1)
+  evidence       MemoryEvidence[]
+  assertedAt     DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+/// A durable user submission; jobs can expire without losing its provenance.
+model MemorySource {
+  id            String @id @default(cuid())
+  sourceKey     String
+  revision      Int
+  sequence      Int @unique
+  kind          String
+  text          String
+  previousText  String @default("")
+  context       Json
+  status        String @default("PENDING")
+  error         String?
+  extraction    Json?
+  extractedWith String?
+  attempts      Int @default(0)
+  profileEpoch  Int @default(0)
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  messageId     String?
+  message       ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  factId        String?
+  fact          Fact? @relation(fields: [factId], references: [id], onDelete: SetNull)
+  documentId    String?
+  document      Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  evidence      MemoryEvidence[]
+  submittedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  processedAt   DateTime?
+
+  @@unique([sourceKey, revision])
+  @@index([status, sequence])
+  @@index([applicationId])
+}
+
+model MemoryEvidence {
+  sourceId     String
+  memoryFactId String
+  source       MemorySource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  memoryFact   MemoryFact @relation(fields: [memoryFactId], references: [id], onDelete: Cascade)
+  quote        String
+  active       Boolean @default(true)
+
+  @@id([sourceId, memoryFactId])
+  @@index([memoryFactId])
+}
+
+model MemoryState {
+  id                 String @id @default("memory")
+  revision           Int @default(0)
+  nextSourceSequence Int @default(0)
+  profileEpoch       Int @default(0)
+  fingerprintKey     String
+  backfill           Json?
+  paused             Boolean @default(false)
 }
 
 // ─── Themes and settings (E2-2) ──────────────────────────────────────────────
@@ -385,7 +470,7 @@ enum AiProvider {
 enum Creativity {
   FAITHFUL
   BALANCED
-  EXPRESSIVE
+  OPTIMIZED
 }
 
 enum PaperSize {
@@ -462,6 +547,8 @@ enum FunnelStage {
 }
 
 model Application {
+  memorySources       MemorySource[]
+  matchMemoryRevision Int?
   id                  String            @id @default(cuid())
   /// Whether the user made it, or the job agent prepared it (E16).
   origin              ApplicationOrigin @default(MANUAL)
@@ -482,6 +569,8 @@ model Application {
   /// Saved, not fetched (NEW-1).
   postingUrl          String            @default("")
   postingText         String            @default("")
+  /// Versioned, sourced findings kept with the application.
+  companyResearch     Json?
   /// What the AI read from the posting (extractedSchema).
   extracted           Json?
   /// The prompt version that wrote `extracted`, e.g. "extract-posting@1" (E6-5).
@@ -515,7 +604,7 @@ model Application {
   /// The Gmail thread the application was sent in, when it went out through Gmail (E15-2).
   emailThreadId       String?
   /// The Google Calendar event of the next interview, and the calendar it's
-  /// in, when Dossier added it: kept in step with nextInterviewAt both ways.
+  /// in, when rolepilot added it: kept in step with nextInterviewAt both ways.
   interviewEventId    String?
   interviewCalendarId String?
   /// The Find jobs posting it was started from, if any (E14-8).
@@ -567,6 +656,7 @@ enum DocumentKind {
 
 /// A tailored resume, cover letter or application email, split into editable units (unitsSchema).
 model Document {
+  memorySources MemorySource[]
   id            String            @id @default(cuid())
   applicationId String
   application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
@@ -630,6 +720,7 @@ enum ChatRole {
 
 /// A message in an application's "Refine with AI" panel (APP-7).
 model ChatMessage {
+  memorySources MemorySource[]
   id            String      @id @default(cuid())
   applicationId String
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
@@ -760,6 +851,7 @@ model AgentCandidateSearch {
 /// it. Kept after it's dismissed, trimmed to what dedupe needs, so the same
 /// posting never comes back.
 model AgentCandidate {
+  memoryRevision Int?
   id            String               @id @default(cuid())
   searches      AgentCandidateSearch[]
   source        PostingSource
@@ -804,6 +896,7 @@ model AgentCandidate {
 /// the job agent. Kept by the source's id, for search results that aren't
 /// stored as postings, so the score shows again in later searches.
 model PostingScore {
+  memoryRevision Int?
   source     PostingSource
   externalId String
   /// 0–100 (score-posting, or Jev).
@@ -854,6 +947,7 @@ enum StartupStatus {
 /// with what the user did with it; untouched ones go once no refresh finds
 /// them for a while.
 model Startup {
+  memoryRevision Int?
   id                 String        @id @default(cuid())
   /// Where it was found: "YC" (YC's job posts) or "HN" ("Who is hiring?").
   source             String
@@ -934,7 +1028,7 @@ model GoogleAccount {
 }
 
 enum EmailDirection {
-  /// Sent from Dossier, or from Gmail in a thread Dossier knows.
+  /// Sent from rolepilot, or from Gmail in a thread rolepilot knows.
   OUTGOING
   INCOMING
 }
@@ -986,7 +1080,7 @@ model EmailMessage {
   /// What the draft couldn't answer from the profile (stringList).
   replyGaps       Json?
   draftedWith     String?
-  /// Answered from Dossier, or marked as needing no answer.
+  /// Answered from rolepilot, or marked as needing no answer.
   handledAt       DateTime?
   /// "Not job-related": only the ids and date are kept, so the inbox check
   /// doesn't fetch it again.

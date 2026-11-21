@@ -99,10 +99,10 @@ describe("OpenAICompatibleProvider", () => {
   it("chats through /chat/completions with a key and temperature", async () => {
     const requests = stubFetch(() => openaiChat("Hello!"));
     const provider = new OpenAICompatibleProvider("OPENAI", "https://api.example.com/v1", "sk-test", "gpt-x", 60_000);
-    expect(await provider.complete({ ...ask, creativity: "EXPRESSIVE" })).toBe("Hello!");
+    expect(await provider.complete({ ...ask, creativity: "OPTIMIZED" })).toBe("Hello!");
     expect(requests[0].url.href).toBe("https://api.example.com/v1/chat/completions");
     expect(requests[0].headers.get("authorization")).toBe("Bearer sk-test");
-    expect(requests[0].body).toMatchObject({ model: "gpt-x", temperature: 0.9, max_tokens: 4096 });
+    expect(requests[0].body).toMatchObject({ model: "gpt-x", temperature: 0.7, max_tokens: 4096 });
   });
 
   it("asks for a strict JSON schema", async () => {
@@ -214,7 +214,7 @@ describe("OpenAICompatibleProvider", () => {
     expect(requests[0].url.href).toBe("https://opencode.ai/inference/go/v1/models");
     expect(requests[0].headers.get("authorization")).toBeNull();
     expect(requests[0].headers.get("x-opencode-session")).toMatch(/^ses_[0-9a-f-]{36}$/);
-    expect(requests[0].headers.get("user-agent")).toMatch(/^Dossier\/\d/);
+    expect(requests[0].headers.get("user-agent")).toMatch(/^rolepilot\/\d/);
 
     const router = new OpenAICompatibleProvider("OPENAI", "https://openrouter.ai/v1", "sk-or", "openrouter/auto", 60_000);
     expect(await router.complete(ask)).toBe("Hello!");
@@ -271,7 +271,7 @@ describe("AnthropicProvider", () => {
   it("sends no temperature, since current models refuse one, and leaves room for thinking", async () => {
     const requests = stubFetch(() => anthropicMessage("Hello!"));
     const provider = new AnthropicProvider("https://api.anthropic.com", "sk-ant", "claude-sonnet-5", 60_000);
-    expect(await provider.complete({ ...ask, creativity: "EXPRESSIVE" })).toBe("Hello!");
+    expect(await provider.complete({ ...ask, creativity: "OPTIMIZED" })).toBe("Hello!");
     expect(requests[0].url.href).toBe("https://api.anthropic.com/v1/messages");
     expect(requests[0].headers.get("x-api-key")).toBe("sk-ant");
     expect(requests[0].headers.get("authorization")).toBeNull();
@@ -545,7 +545,7 @@ describe("LmStudioProvider", () => {
     ]);
     await make("roomy/model").complete(ask);
     const error = await failure(make("tight/model").complete(ask));
-    expect(error).toMatchObject({ kind: "config", message: expect.stringContaining("loaded with 4,096 tokens of context, and Dossier needs 16,384") });
+    expect(error).toMatchObject({ kind: "config", message: expect.stringContaining("loaded with 4,096 tokens of context, and rolepilot needs 16,384") });
     expect(requests.some((request) => request.url.pathname === "/api/v1/models/load")).toBe(false);
     expect(requests.filter((request) => request.url.pathname === "/v1/chat/completions")).toHaveLength(1);
   });

@@ -12,7 +12,7 @@ const weeks = [week(7, 2, 0), week(14, 1, 2), week(21, 3, 1), week(28, 1, 0)];
 describe("the weekly activity chart (E9-8)", () => {
   it("sums up the period in words, with a legend for both series", () => {
     render(<ActivityChart weeks={weeks} />);
-    const chart = screen.getByRole("region", { name: "Week by week" });
+    const chart = screen.getByRole("region", { name: "Weekly activity" });
     expect(within(chart).getByText("You started 7 applications and sent 3 in this period.")).toBeInTheDocument();
     expect(within(chart).getByRole("list", { name: "Legend" })).toHaveTextContent("StartedSent");
   });

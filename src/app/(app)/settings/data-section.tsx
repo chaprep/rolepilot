@@ -26,7 +26,7 @@ type ZipResult = { file: string; fileName: string; documents: number };
 export type BackupStatus = {
   on: boolean;
   retentionDays: number;
-  /** DOSSIER_DATA_DIR/backups */
+  /** ROLEPILOT_DATA_DIR/backups */
   dir: string;
   /** "today at 03:00", or null before the first one. */
   lastRun: string | null;
@@ -158,7 +158,7 @@ export function DataSection({
     <>
       <SettingsSectionIntro title="Your data">
         Everything you enter lives in one database on your server, and nothing is sold: there&apos;s no one to sell it to. What leaves it goes to
-        the AI provider and job source you choose, Google if you connect Gmail, and the daily usage ping and update check (see About).
+        the AI provider and job source you choose, Google if you connect Gmail or Calendar, and the integrations you enable. No project telemetry, release checks or product announcements are sent.
       </SettingsSectionIntro>
       <Card padding="none" className="flex flex-col px-7 pt-1.5 pb-2.5">
         <DataRow
@@ -256,7 +256,7 @@ export function DataSection({
               nightly
                 ? `Kept for ${backups.retentionDays} days in ${backups.dir}. ${
                     backups.lastRun ? `Last one ran ${backups.lastRun}.` : "The first one runs tonight at 03:00."
-                  }${backups.onlyWhileOpen ? " On this computer, they only run while Dossier is open: a night it was closed is made up soon after you open it." : ""}`
+                  }${backups.onlyWhileOpen ? " On this computer, they only run while rolepilot is open: a night it was closed is made up soon after you open it." : ""}`
                 : "Off. You'll only have what you export yourself."
             }
             checked={nightly}

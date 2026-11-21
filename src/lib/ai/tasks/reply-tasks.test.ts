@@ -6,7 +6,7 @@ import { MockProvider } from "../providers/mock";
 
 import { classifyReply, draftReply, type TaskOptions } from "./index";
 
-const options: TaskOptions = { creativity: "BALANCED", strict: true, language: null };
+const options: TaskOptions = { creativity: "BALANCED", strict: true };
 const email = {
   from: "Anna Keller <a.keller@northwind.example>",
   subject: "Re: Application: Product Designer",

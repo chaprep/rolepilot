@@ -34,16 +34,16 @@ vi.mock("next/navigation", () => ({
   },
 }));
 const dataDir = vi.hoisted(() => ({ path: "" }));
-vi.mock("@/lib/env", () => ({ env: { get DOSSIER_DATA_DIR() { return dataDir.path; }, DOSSIER_SECRET: "s".repeat(32) } }));
+vi.mock("@/lib/env", () => ({ env: { get ROLEPILOT_DATA_DIR() { return dataDir.path; }, ROLEPILOT_SECRET: "s".repeat(32) } }));
 
 const prisma = () => db.client!;
 const now = new Date(2026, 8, 28, 12);
 const snapshot = async () => JSON.stringify({ ...(await buildExport(prisma(), { now })), exportedAt: null });
 
 beforeEach(async () => {
-  dataDir.path = await mkdtemp(path.join(tmpdir(), "dossier-delete-"));
+  dataDir.path = await mkdtemp(path.join(tmpdir(), "rolepilot-delete-"));
   await mkdir(path.join(dataDir.path, "backups"));
-  await writeFile(path.join(dataDir.path, "backups", "dossier-backup-nightly-2026-09-27-030000.json"), "{}");
+  await writeFile(path.join(dataDir.path, "backups", "rolepilot-backup-nightly-2026-09-27-030000.json"), "{}");
   redirected.to = "";
   await resetDatabase(prisma());
   await seedBuiltIns(prisma());
@@ -66,7 +66,7 @@ describe("deleteEverything (E10-8)", () => {
     const candidate = await prisma().agentCandidate.create({ data: { source: "JSEARCH", externalId: "job-1", dedupeKey: "key-1" } });
     const search = await prisma().agentSearch.create({ data: { name: "Design", query: {} } });
     await prisma().agentCandidateSearch.create({ data: { candidateId: candidate.id, searchId: search.id, searchName: "Design" } });
-    await prisma().postingScore.create({ data: { source: "JSEARCH", externalId: "job-1", score: 80, reasons: [], redFlags: [], scoredWith: "score-posting@1" } });
+    await prisma().postingScore.create({ data: { source: "JSEARCH", externalId: "job-1", score: 80, reasons: [], redFlags: [], scoredWith: "score-posting@2" } });
     // And Startups, with the fingerprints of ones removed for good (#222).
     await prisma().startup.create({ data: { source: "HN", externalId: "1", company: "Acme", roles: [], emails: [], links: [], reasons: [] } });
     await prisma().startupBlock.create({ data: { hash: "a".repeat(64) } });

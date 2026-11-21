@@ -40,9 +40,9 @@ export function TabsList({ variant = "underline", className, ...props }: TabsLis
 
 const triggerClassNames: Record<TabsVariant, string> = {
   underline:
-    "-mb-px border-b-2 border-transparent pt-2.5 pb-[13px] text-sm text-muted hover:text-ink data-[state=active]:border-primary data-[state=active]:font-medium data-[state=active]:text-ink",
+    "-mb-px border-b-2 border-transparent pt-2.5 pb-[13px] text-sm text-muted hover:text-ink data-[state=active]:border-primary data-[state=active]:font-medium data-[state=active]:text-primary-text",
   segmented:
-    "flex-1 rounded-control p-2 text-control font-medium data-[state=active]:bg-card data-[state=active]:shadow-raised",
+    "flex-1 rounded-control p-2 text-control font-medium data-[state=active]:bg-selected data-[state=active]:text-primary-text data-[state=active]:shadow-raised",
 };
 
 export function TabsTrigger({ className, ...props }: TabsPrimitive.TabsTriggerProps) {

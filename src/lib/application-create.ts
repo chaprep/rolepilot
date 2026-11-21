@@ -1,4 +1,6 @@
 import "server-only";
+import { recordMemorySource } from "@/lib/memory/store";
+import { assertMemoryRevision } from "@/lib/memory/context";
 
 import { AgentCandidateStatus, ApplicationOrigin, type Tone } from "@/generated/prisma/enums";
 import { ActionError } from "@/lib/action";
@@ -36,6 +38,7 @@ export type ApplicationReading = {
   extracted: Extracted;
   extractedWith: string;
   matchedWith: string;
+  memoryRevision?: number;
 };
 
 /**
@@ -69,7 +72,7 @@ const CLAIMED = "application:";
 export async function createApplicationFromDocuments({ reading, documents, match, details, postingUrl, tone, note, evidenceFacts = [], claim }: CreateApplicationInput): Promise<string> {
   const [settings, profile] = await Promise.all([loadSettings(), loadProfile()]);
   const { extracted, extractedWith, matchedWith } = reading;
-  const language = settings.docLanguage ?? extracted.language ?? "English";
+  const language = "English";
   // E8-11: every part of the letter is a unit. The AI wrote the recipient
   // and greeting; the sender and signature come from the profile, and the
   // date is written now, in the letter's language.
@@ -100,6 +103,7 @@ export async function createApplicationFromDocuments({ reading, documents, match
   });
 
   const created = await prisma.$transaction(async (tx) => {
+    if (documents.memoryRevision !== undefined) await assertMemoryRevision(documents.memoryRevision, tx);
     if (claim.kind === "manual") {
       // Claim the job first: a second click waits here, then finds it taken.
       const { count } = await tx.job.updateMany({ where: { id: claim.writeJobId, key: null }, data: { key: `${CLAIMED}pending` } });
@@ -130,10 +134,12 @@ export async function createApplicationFromDocuments({ reading, documents, match
         deadline: details.deadline ? new Date(`${details.deadline}T00:00:00Z`) : null,
         postingUrl,
         postingText: reading.posting,
+        companyResearch: documents.companyResearch,
         extracted,
         extractedWith,
         match,
         matchedWith,
+        matchMemoryRevision: reading.memoryRevision,
         tone,
         // "Anything I should know?" becomes the application's first fact (APP-15).
         ...((note.trim() || evidenceFacts.length) ? { facts: { create: [...(note.trim() ? [{ text: note.trim(), sort: 0 }] : []), ...evidenceFacts.map((text, index) => ({ text, sort: index + 1 }))] } } : {}),
@@ -172,7 +178,17 @@ export async function createApplicationFromDocuments({ reading, documents, match
       select: { id: true },
     });
 
+    // Notes created by internal/model callers have no asserted user provenance.
+    // Mark their origin durably so historical backfill cannot promote them.
+    const createdFacts = await tx.fact.findMany({ where: { applicationId: application.id } });
+    for (const fact of createdFacts) {
+      const captured = await tx.memorySource.count({ where: { OR: [{ factId: fact.id }, ...(claim.kind === "manual" ? [{ sourceKey: { startsWith: `draft:${claim.readJobId}:` }, text: { not: "" } }] : [])] } });
+      if (!captured) await recordMemorySource(tx, { sourceKey: `fact:${fact.id}`, kind: "MODEL_NOTE", text: "", applicationId: application.id, factId: fact.id });
+    }
     if (claim.kind === "manual") {
+      const pendingSources = await tx.memorySource.findMany({ where: { sourceKey: { startsWith: `draft:${claim.readJobId}:` }, applicationId: null } });
+      const savedFacts = await tx.fact.findMany({ where: { applicationId: application.id }, orderBy: { sort: "asc" } });
+      for (const source of pendingSources) await tx.memorySource.update({ where: { id: source.id }, data: { applicationId: application.id, factId: savedFacts.find(fact => fact.text.includes(source.text))?.id } });
       const key = `${CLAIMED}${application.id}`;
       await tx.job.updateMany({ where: { id: { in: [claim.writeJobId, claim.readJobId] } }, data: { key, applicationId: application.id } });
       // The posting it came from shows it as applied for (E14-8); one already linked keeps its application.

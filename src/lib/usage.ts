@@ -5,12 +5,15 @@ import { DASHBOARD_PERIODS, type DashboardPeriod } from "@/lib/dashboard";
 
 /** Everything that asks the AI model, or Jev, for an answer, in the order the screen lists them at rest. */
 export const USAGE_TASKS = [
+  { task: "extract-memory", label: "Remembering information", hint: "Candidate information supplied in applications" },
+  { task: "select-memory", label: "Selecting remembered information", hint: "Relevant evidence for a new request" },
   { task: "extract-profile", label: "Importing a profile", hint: "A resume read into your profile" },
   { task: "score-posting", label: "Scoring postings", hint: "Score in Find jobs, and the job agent" },
   { task: "score-posting-jev", label: "Scoring postings with Jev", hint: "The same, by TypeSafe's Jev" },
   { task: "extract-posting", label: "Reading postings", hint: "What a posting asks for, when you start an application" },
   { task: "match-requirements", label: "Matching requirements", hint: "Your profile against what a posting asks for" },
   { task: "tailor-resume", label: "Writing resumes", hint: "Each application's tailored resume" },
+  { task: "research-company", label: "Researching companies", hint: "Web research for cover letters" },
   { task: "write-cover-letter", label: "Writing cover letters", hint: "Each application's cover letter" },
   { task: "write-email", label: "Writing emails", hint: "The email to send with an application" },
   { task: "regenerate-unit", label: "Rewriting parts", hint: "One part of a resume or letter, written again" },

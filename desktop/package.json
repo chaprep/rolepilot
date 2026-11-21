@@ -1,11 +1,11 @@
 {
-  "name": "dossier-desktop",
-  "productName": "Dossier",
-  "desktopName": "dossier-desktop.desktop",
+  "name": "rolepilot-desktop",
+  "productName": "rolepilot",
+  "desktopName": "rolepilot-desktop.desktop",
   "version": "1.13.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Dossier as a desktop app",
+  "description": "rolepilot as a desktop app",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
@@ -27,8 +27,7 @@
   },
   "packageManager": "yarn@4.18.1",
   "author": {
-    "name": "Dossier",
-    "email": "dossier.app@pm.me"
+    "name": "rolepilot contributors"
   },
-  "homepage": "https://dossier.aien.me"
+  "homepage": "https://github.com/chaprep/job-finder"
 }

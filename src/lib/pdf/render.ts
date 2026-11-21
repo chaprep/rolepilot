@@ -92,7 +92,7 @@ function release(): void {
  * blocked, so fonts come from the bundle and nothing leaves the server.
  */
 export async function renderPdf(path: string): Promise<Uint8Array> {
-  if (env.DOSSIER_DESKTOP_PRINT_URL) return printWithDesktopApp(env.DOSSIER_DESKTOP_PRINT_URL, path);
+  if (env.ROLEPILOT_DESKTOP_PRINT_URL) return printWithDesktopApp(env.ROLEPILOT_DESKTOP_PRINT_URL, path);
   await acquire();
   try {
     const origin = appOrigin();

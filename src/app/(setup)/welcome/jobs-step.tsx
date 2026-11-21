@@ -89,7 +89,7 @@ function SourcePanel({ choice, initial, onConnected }: { choice: JobChoice; init
   return (
     <Card className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="font-serif text-section">{choice.name}</h2>
+        <h2 className="product-heading text-section">{choice.name}</h2>
         <p className="text-sm text-pretty text-muted">{choice.about}</p>
       </div>
       <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[140px_1fr]">
@@ -123,7 +123,7 @@ function SourcePanel({ choice, initial, onConnected }: { choice: JobChoice; init
         </Button>
       </form>
       <div role="status" className="text-sm empty:hidden">
-        {status.state === "connected" && <p className="text-success">It works: Dossier can search {choice.name}.</p>}
+        {status.state === "connected" && <p className="text-success">It works: rolepilot can search {choice.name}.</p>}
         {status.state === "failed" && <p className="rounded-card bg-warning-surface px-4 py-3 font-medium text-warning">{status.message}</p>}
       </div>
       <a href={JOB_SOURCES_HELP} target="_blank" rel="noopener noreferrer" className="self-start text-meta text-muted underline underline-offset-2 hover:text-ink">

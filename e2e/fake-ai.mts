@@ -53,11 +53,19 @@ const answers: Record<string, (messages: Message[]) => unknown> = {
     language: "English",
   }),
 
+  candidate_memory: (messages) => {
+    const input = JSON.parse(messages.at(-1)?.content ?? "{}");
+    const text = String(input.text ?? "");
+    const qualify = /I (?:used|built|led|mentored|deployed)|reduced|saved|At Company/i.test(text);
+    return { claims: qualify ? [{ text: text.slice(0, 1000), quote: text.slice(0, 1000), kind: "EXPERIENCE", subject: "experience", capabilities: ["Docker", "Python", "mentoring"].filter(word => text.includes(word)), unitId: null, replaces: null, conflicts: [] }] : [] };
+  },
+  selected_memories: (messages) => ({ ids: JSON.parse(messages.at(-1)?.content ?? "{}").memories.map((row: { id: string }) => row.id) }),
   requirement_matches: (messages) => {
-    const { requirements, candidateSkills, candidateLanguages } = JSON.parse(messages[1].content) as {
+    const { requirements, candidateSkills, candidateLanguages, rememberedEvidence = [] } = JSON.parse(messages[1].content) as {
       requirements: { number: number; text: string; skill: string | null }[];
       candidateSkills: string[];
       candidateLanguages: string[];
+      rememberedEvidence?: { id: string; text: string }[];
     };
     return {
       matches: requirements.map((requirement) => ({
@@ -65,6 +73,7 @@ const answers: Record<string, (messages: Message[]) => unknown> = {
         skill: candidateSkills.find((name) => name.toLowerCase() === requirement.skill?.toLowerCase()) ?? null,
         language: candidateLanguages.find((name) => requirement.text.includes(name)) ?? null,
         certification: null,
+        evidence: rememberedEvidence.filter(fact => requirement.skill && fact.text.includes(requirement.skill)).map(fact => ({ id: fact.id, quote: fact.text.split("\n")[0] })),
       })),
     };
   },
@@ -73,11 +82,12 @@ const answers: Record<string, (messages: Message[]) => unknown> = {
     const profile = section(messages[1].content, "The candidate's profile:\n") as Profile;
     const sources = section(messages[1].content, "Candidate evidence sources:\n") as Record<string, string>;
     const extra = Object.entries(sources ?? {}).filter(([id, text]) => id.startsWith("application:") && text.startsWith("JD skill:")).map(([sourceId, text]) => ({ name: text.split("\n")[0].slice(10).trim(), group: "Additional skills", evidence: [{ sourceId, quote: text.split("Evidence: ")[1] }] }));
+    const remembered = Object.entries(sources ?? {}).filter(([id, text]) => id.startsWith("memory:") && text.includes("Docker") && !text.startsWith("Remembered limitation:")).map(([sourceId, text]) => ({ name: "Docker", group: "Additional skills", evidence: [{ sourceId, quote: text.split("\n")[0] }] }));
     return {
-      summary: profile.summary,
+      summary: remembered.length ? `${profile.summary} Experienced in Docker deployments.` : profile.summary,
       roles: profile.experience.map((entry) => ({ id: entry.id, bullets: entry.bullets })),
       projects: profile.projects.map((entry) => ({ id: entry.id, bullets: entry.bullets })),
-      skills: profile.skills.map((name, index) => ({ name, group: "Core skills", evidence: [{ sourceId: `skills:${index}`, quote: name }] })).concat(extra),
+      skills: profile.skills.map((name, index) => ({ name, group: "Core skills", evidence: [{ sourceId: `skills:${index}`, quote: name }] })).concat(extra, remembered),
       education: profile.education.map((entry) => ({ id: entry.id, notes: entry.notes })),
     };
   },

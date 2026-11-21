@@ -12,7 +12,7 @@ import localFont from "next/font/local";
 // issues 64 and 67). Documents use 400 to 700; the UI's lighter weights fall
 // back to 400.
 
-/** UI text. */
+/** Original UI face, retained for document themes. */
 export const geist = localFont({
   src: [
     { path: "./geist/Geist-Regular.woff2", weight: "400" },
@@ -22,9 +22,10 @@ export const geist = localFont({
   ],
   variable: "--typeface-geist",
   fallback: ["Helvetica", "Arial", "sans-serif"],
+  preload: false,
 });
 
-/** Page and section titles; also a resume theme font. */
+/** Editorial document theme font. */
 export const newsreader = localFont({
   src: [
     { path: "./newsreader/Newsreader-Regular.woff2", weight: "400" },
@@ -39,10 +40,11 @@ export const newsreader = localFont({
   variable: "--typeface-newsreader",
   fallback: ["Georgia", "serif"],
   adjustFontFallback: "Times New Roman",
+  preload: false,
 });
 
-// The remaining fonts are only used on some screens (code-like values, resume
-// themes), so they load when a page uses them instead of being preloaded.
+// Document and code faces load on demand. Inter and Manrope below are
+// preloaded for the product UI; document theme family mappings stay unchanged.
 
 export const plexSans = localFont({
   src: [
@@ -158,7 +160,7 @@ export const inter = localFont({
   ],
   variable: "--typeface-inter",
   fallback: ["Helvetica", "Arial", "sans-serif"],
-  preload: false,
+  preload: true,
 });
 
 export const manrope = localFont({
@@ -170,7 +172,7 @@ export const manrope = localFont({
   ],
   variable: "--typeface-manrope",
   fallback: ["Helvetica", "Arial", "sans-serif"],
-  preload: false,
+  preload: true,
 });
 
 export const workSans = localFont({

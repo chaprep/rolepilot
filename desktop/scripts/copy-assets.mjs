@@ -10,6 +10,6 @@ mkdirSync(path.join(out, "fonts"), { recursive: true });
 cpSync(path.join(desktop, "start"), out, { recursive: true });
 cpSync(path.join(desktop, "bar"), path.join(desktop, "dist", "bar"), { recursive: true });
 cpSync(path.join(desktop, "assets", "icon.png"), path.join(desktop, "dist", "icon.png"));
-for (const file of ["geist/Geist-Regular.woff2", "geist/Geist-Medium.woff2", "geist/Geist-SemiBold.woff2", "newsreader/Newsreader-Regular.woff2"]) {
+for (const file of ["inter/Inter-Regular.woff2", "inter/Inter-Medium.woff2", "inter/Inter-SemiBold.woff2", "manrope/Manrope-SemiBold.woff2"]) {
   cpSync(path.join(fonts, file), path.join(out, "fonts", path.basename(file)));
 }

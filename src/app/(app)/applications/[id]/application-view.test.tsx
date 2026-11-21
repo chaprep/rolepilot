@@ -52,7 +52,7 @@ vi.mock("./actions", () => ({
   restoreUnit: vi.fn(async () => ({ ok: true, data: null })),
   sendMessage: vi.fn(async () => ({ ok: true, data: { jobId: "reply-1" } })),
   undoMessage: vi.fn(async () => ({ ok: true, data: { edited: [{ document: "RESUME", unitId: "summary" }] } })),
-  addApplicationEvidence: vi.fn(async () => ({ ok: true, data: { fact: { id: "evidence-1", text: "Used Kubernetes" }, jobId: "evidence-job", retry: false, notice: "Evidence saved. Updating this application’s resume." } })),
+  addApplicationEvidence: vi.fn(async () => ({ ok: true, data: { fact: { id: "evidence-1", text: "Used Kubernetes" }, notice: "Information saved for this application. Ask Refine with AI to apply it to an existing document." } })),
   addNote: vi.fn(async () => ({ ok: true, data: null })),
   updateNote: vi.fn(async () => ({ ok: true, data: null })),
   deleteNote: vi.fn(async () => ({ ok: true, data: { body: "Called John.", createdAt: "2026-10-03T13:00:00.000Z", updatedAt: "2026-10-03T13:00:00.000Z" } })),
@@ -742,13 +742,14 @@ describe("the Job posting tab (E8-7)", () => {
     expect(screen.getByText("Pasted 27 Sep")).toBeInTheDocument();
   });
 
-  it("collects application-only evidence and queues a resume update", async () => {
+  it("saves application context without starting an automatic resume update", async () => {
     const user = userEvent.setup();
     open();
     await user.click(screen.getAllByRole("button", { name: "Add for this application" })[1]);
     await user.type(screen.getByLabelText("Supporting experience"), "Deployed Kubernetes services.");
     await user.click(screen.getByRole("button", { name: "Save for this application" }));
     expect(addApplicationEvidence).toHaveBeenCalledWith({ id: "app-1", evidence: expect.objectContaining({ requirementIndex: 1, text: "Deployed Kubernetes services.", targetUnitId: null }) });
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
   });
 
   it("links to the saved posting in a new tab", () => {

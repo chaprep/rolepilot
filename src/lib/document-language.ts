@@ -6,7 +6,7 @@ export type TextDirection = "ltr" | "rtl";
 
 type LanguageInfo = { name: string; tag: string; dir?: TextDirection };
 
-/** The built-in "Write documents in" list, in the prototype's order (`DOC_LANGS`). */
+/** Known historical document languages, retained for rendering old documents. */
 export const DOCUMENT_LANGUAGES: readonly LanguageInfo[] = [
   { name: "English", tag: "en" },
   { name: "Dutch", tag: "nl" },
@@ -31,7 +31,7 @@ export const DOCUMENT_LANGUAGES: readonly LanguageInfo[] = [
   { name: "Korean", tag: "ko" },
 ];
 
-/** Languages people may add with "Other language…" that are written right to left. */
+/** Historical custom language names that use right-to-left layout. */
 const OTHER_RIGHT_TO_LEFT: readonly LanguageInfo[] = [
   { name: "Farsi", tag: "fa", dir: "rtl" },
   { name: "Hebrew", tag: "he", dir: "rtl" },
@@ -91,7 +91,7 @@ export function knownLanguage(language: string | null | undefined): LanguageInfo
 
 /**
  * The `lang` and `dir` for a document written in `language` (a name from
- * the list, or one added with "Other language…"). Without a language, or
+ * the legacy language list, or a historical custom name). Without a language, or
  * for one it doesn't know, it looks at the text instead, as for the base
  * resume, which is in whatever language the profile is.
  */

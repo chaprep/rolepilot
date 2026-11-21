@@ -133,7 +133,7 @@ describe("postingStates", () => {
   });
 
   it("has each result's score, scored or not (#208)", async () => {
-    await prisma().postingScore.create({ data: { source: "JSEARCH", externalId: "job-1", score: 82, reasons: ["Research"], redFlags: [], scoredWith: "score-posting@1" } });
+    await prisma().postingScore.create({ data: { source: "JSEARCH", externalId: "job-1", score: 82, reasons: ["Research"], redFlags: [], scoredWith: "score-posting@2" } });
     const states = await postingStates([found, { ...found, externalId: "job-2" }]);
     expect(states.get("JSEARCH:job-1")?.score).toEqual({ score: 82, reasons: ["Research"], redFlags: [] });
     expect(states.get("JSEARCH:job-2")?.score).toBeNull();

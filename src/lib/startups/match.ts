@@ -45,7 +45,7 @@ export type StartupFit = { score: number; reasons: string[] };
 /** How well `startup` fits the profile, with the reasons in a few words each. */
 export function matchStartup(
   startup: FoundStartup,
-  profile: Pick<ProfileData, "basics" | "skills" | "experience">,
+  profile: Pick<ProfileData, "basics" | "skills" | "experience"> & { facts?: ProfileData["facts"] },
   place: Place,
   now = new Date(),
 ): StartupFit {
@@ -55,6 +55,11 @@ export function matchStartup(
 
   // The profile's own skills in what the startup does or asks for.
   const skills = profile.skills.map((skill) => skill.name.trim()).filter((name) => name.length > 1 && !GENERIC.test(name));
+  const remembered = (profile.facts ?? []).filter(fact => fact.id.startsWith("memory:"));
+  for (const fact of remembered) {
+    const match = fact.text.match(/Capabilities: (.+)/);
+    for (const name of (match?.[1] ?? "").split(" · ").filter(Boolean)) if (!skills.includes(name)) skills.push(name);
+  }
   const hits = skills.filter((skill) => skillPattern(skill).test(text));
   score += Math.min(40, hits.slice(0, 2).length * 12 + hits.slice(2).length * 5);
   if (hits.length > 0) reasons.push(`Mentions ${list(hits.slice(0, 4))} from your skills`);

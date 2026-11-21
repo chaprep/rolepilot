@@ -14,7 +14,7 @@ export const FAKE_AI_PORT = 3999;
 export const FAKE_JOBS_PORT = 3998;
 export const FAKE_GOOGLE_PORT = 3997;
 export const PASSWORD = "e2e-password";
-/** DOSSIER_PASSWORD for the run: `printf 'e2e-password' | yarn hash-password`. */
+/** ROLEPILOT_PASSWORD for the run: `printf 'e2e-password' | yarn hash-password`. */
 const PASSWORD_HASH = "argon2id:m=19456,t=2,p=1:wk-0a22NLDwpNVDMxLY9rw:x4bAXEh9EtlaTIqLiHwF_omyDOpcPtwPrV0_SJx_y2c";
 export const STORAGE_STATE = "e2e/.auth/state.json";
 
@@ -40,29 +40,22 @@ export function appEnv(): Record<string, string> {
     NODE_OPTIONS: `--require ${JSON.stringify(resolve("e2e/openrouter-preload.cjs"))}`,
     FAKE_AI_PORT: String(FAKE_AI_PORT),
     DATABASE_URL: e2eDatabaseUrl(),
-    DOSSIER_PASSWORD: PASSWORD_HASH,
-    DOSSIER_SECRET: "e2e-secret-e2e-secret-e2e-secret-e2e",
-    DOSSIER_DATA_DIR: "/tmp/dossier-e2e",
-    DOSSIER_AI_PROVIDER: "openai",
-    DOSSIER_AI_URL: `http://localhost:${FAKE_AI_PORT}/v1`,
-    DOSSIER_AI_MODEL: "fake-model",
-    DOSSIER_AI_KEY: "e2e-fake-key",
+    ROLEPILOT_PASSWORD: PASSWORD_HASH,
+    ROLEPILOT_SECRET: "e2e-secret-e2e-secret-e2e-secret-e2e",
+    ROLEPILOT_DATA_DIR: "/tmp/rolepilot-e2e",
+    ROLEPILOT_AI_PROVIDER: "openai",
+    ROLEPILOT_AI_URL: `http://localhost:${FAKE_AI_PORT}/v1`,
+    ROLEPILOT_AI_MODEL: "fake-model",
+    ROLEPILOT_AI_KEY: "e2e-fake-key",
     // Find jobs searches the fake job sources (E14-9).
-    DOSSIER_JOBS_SOURCE: "jsearch",
-    DOSSIER_JSEARCH_KEY: "e2e-jsearch-key",
-    DOSSIER_JOBS_TEST_BASE_URL: `http://localhost:${FAKE_JOBS_PORT}`,
+    ROLEPILOT_JOBS_SOURCE: "jsearch",
+    ROLEPILOT_JSEARCH_KEY: "e2e-jsearch-key",
+    ROLEPILOT_JOBS_TEST_BASE_URL: `http://localhost:${FAKE_JOBS_PORT}`,
     // Google's sign-in, Gmail and Calendar are the fake Google's (E15). It's
     // only used once a spec enters an OAuth client in Settings → Google.
-    DOSSIER_GOOGLE_TEST_BASE_URL: `http://localhost:${FAKE_GOOGLE_PORT}`,
-    // A production server, so it would ask GitHub for the latest release daily.
-    DOSSIER_UPDATES_TEST_BASE_URL: `http://localhost:${FAKE_JOBS_PORT}/github`,
-    // A production server asks whether to send the usage ping (#172); resetData
-    // answers no, and a yes sends it to the fake job sources, never the project.
-    DOSSIER_USAGE_PING_TEST_URL: `http://localhost:${FAKE_JOBS_PORT}/ping`,
+    ROLEPILOT_GOOGLE_TEST_BASE_URL: `http://localhost:${FAKE_GOOGLE_PORT}`,
     // Jev is the fake job sources' too, once a spec chooses it in Settings → Scoring (#274).
-    DOSSIER_TYPESAFE_TEST_BASE_URL: `http://localhost:${FAKE_JOBS_PORT}/typesafe`,
-    // A production server, so it would ask the project's backend for its notices (E18).
-    DOSSIER_API_URL: `http://localhost:${FAKE_JOBS_PORT}/v1`,
+    ROLEPILOT_TYPESAFE_TEST_BASE_URL: `http://localhost:${FAKE_JOBS_PORT}/typesafe`,
     PORT: String(APP_PORT),
   };
 }
@@ -75,26 +68,7 @@ export async function sql<Row extends object = Record<string, unknown>>(text: st
   return (await pool.query<Row>(text, values)).rows;
 }
 
-/** USAGE_PING_TEXT_VERSION in src/lib/usage-ping.ts, which a spec can't import (it's server-only). */
-const USAGE_PING_TEXT_VERSION = "1";
-
-/** Answers the usage ping question (#172) as if in the dialog; null leaves it unanswered, so the dialog shows. */
-export async function answerUsagePing(choice: "on" | "off" | null): Promise<void> {
-  await sql(`DELETE FROM "Setting" WHERE key IN ('usagePingChoice', 'usagePingChoiceAt', 'usagePingChoiceText')`);
-  if (!choice) return;
-  await sql(
-    `INSERT INTO "Setting" (key, value, "updatedAt") VALUES ('usagePingChoice', $1, now()), ('usagePingChoiceAt', $2, now()), ('usagePingChoiceText', $3, now())`,
-    [choice, new Date().toISOString(), USAGE_PING_TEXT_VERSION],
-  );
-}
-
-/** The usage pings the fake receiver got so far. */
-export async function fakePings(): Promise<{ id: string; version: string }[]> {
-  const response = await fetch(`http://localhost:${FAKE_JOBS_PORT}/pings`);
-  return ((await response.json()) as { pings: { id: string; version: string }[] }).pings;
-}
-
-/** Empties every table, then loads the built-in themes and the demo data, with the usage ping question answered no. */
+/** Empties every table, then loads the built-in themes and the demo data. */
 export async function resetData(): Promise<void> {
   const tables = await sql<{ tablename: string }>(
     "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'",
@@ -104,24 +78,12 @@ export async function resetData(): Promise<void> {
     env: { ...process.env, DATABASE_URL: e2eDatabaseUrl() },
     stdio: "pipe",
   });
-  await answerUsagePing("off");
 }
 
 /** The startups' pages the app asked the fake sites for (#222), with its user agent. */
 export async function fakeStartupRequests(): Promise<{ url: string; userAgent: string }[]> {
   const response = await fetch(`http://localhost:${FAKE_JOBS_PORT}/startup-requests`);
   return ((await response.json()) as { requests: { url: string; userAgent: string }[] }).requests;
-}
-
-/** What the fake backend answers from now on (E18): these notices, 503, or no answer at all. */
-export async function fakeAnnouncements(announcements: unknown[], answer: "ok" | "down" | "silent" = "ok"): Promise<void> {
-  await fetch(`http://localhost:${FAKE_JOBS_PORT}/announcement-answer`, { method: "POST", body: JSON.stringify({ announcements, answer }) });
-}
-
-/** The requests the fake backend got so far, with their headers. */
-export async function fakeAnnouncementRequests(): Promise<{ url: string; headers: Record<string, string> }[]> {
-  const response = await fetch(`http://localhost:${FAKE_JOBS_PORT}/announcement-requests`);
-  return ((await response.json()) as { requests: { url: string; headers: Record<string, string> }[] }).requests;
 }
 
 /** How many searches the fake JSearch has answered so far (E14-10). */

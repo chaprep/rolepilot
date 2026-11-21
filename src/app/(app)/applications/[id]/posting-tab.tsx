@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useId } from "react";
 
+import { MemoryMatchStatus } from "@/components/memory-match-status";
 import { FactList } from "@/components/fact-list";
 import { MatchRows } from "@/components/match-rows";
 import type { Match, Requirement, ApplicationEvidence, EvidenceOption } from "@/lib/application-data";
@@ -101,6 +102,7 @@ export function PostingTab({
         <span>Pasted {posting.pasted}</span>
       </div>
       <div className="flex w-full max-w-[640px] flex-col gap-[22px] rounded-panel border border-line-card bg-card px-[30px] py-7">
+        <MemoryMatchStatus applicationId={applicationId} />
         {match && match.items.length > 0 && <MatchRows match={match} requirements={requirements} onAddEvidence={onAddEvidence} evidenceOptions={evidenceOptions} />}
         <div className={match && match.items.length > 0 ? "flex flex-col gap-2.5 border-t border-line pt-5" : "flex flex-col gap-2.5"}>
           <h2 className="text-[15px] font-medium">Original posting</h2>

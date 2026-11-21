@@ -37,7 +37,7 @@ export function createProvider(config: AiConfig): AIProvider {
   }
 }
 
-/** The provider configured in Settings, or by the DOSSIER_AI_* variables. */
+/** The provider configured in Settings, or by the ROLEPILOT_AI_* variables. */
 export async function getAiProvider(): Promise<AIProvider> {
   const config = await loadAiConfig();
   if (config.apiKeyProblem) throw AiError.config(config.apiKeyProblem);

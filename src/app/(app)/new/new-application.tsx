@@ -17,7 +17,7 @@ import type { DocumentsToWrite } from "@/lib/settings";
 import { type ApplicationEvidence, type EvidenceOption, type Extracted } from "@/lib/application-data";
 import type { PostingFit } from "@/lib/fit";
 import { cancel, retry } from "@/lib/jobs/actions";
-import { READ_POSTING_STEPS, WRITE_DOCUMENTS_STEPS } from "@/lib/jobs/application-steps";
+import { READ_POSTING_STEPS, RESEARCH_STEP, WRITE_DOCUMENTS_STEPS } from "@/lib/jobs/application-steps";
 import type { ReadPostingResult } from "@/lib/jobs/read-posting";
 import type { WriteDocumentsResult } from "@/lib/jobs/write-documents";
 
@@ -64,14 +64,14 @@ export type Draft = {
   writeJobId: string | null;
   /** The Find jobs posting it was started from (E14-8); missing in drafts from before. */
   postingId?: string | null;
-  /** The startup it was started from with "Write to them" (#222). */
+  /** The startup it was started from with "Draft outreach" (#222). */
   startupId?: string | null;
   /** "Score it" (public issue 66): the job scoring the posting, and its score; missing in drafts from before. */
   scoreJobId?: string | null;
   score?: PostingFit | null;
 };
 
-/** A posting handed over by "Start application" on Find jobs (E14-8), or by "Write to them" on Startups (#222). */
+/** A posting handed over by "Start application" on Find jobs (E14-8), or by "Draft outreach" on Startups (#222). */
 export type FromPosting = {
   /** The Find jobs posting; null for a startup. */
   id: string | null;
@@ -143,7 +143,7 @@ export type NewApplicationProps = {
   evidenceOptions?: EvidenceOption[];
   /** Whether an AI provider is set up; without one, the page points to Settings. */
   aiReady: boolean;
-  /** The Claude connector is on and Dossier has no usable AI model: a Claude chat writes it instead (#221). */
+  /** The Claude connector is on and rolepilot has no usable AI model: a Claude chat writes it instead (#221). */
   writeInClaude?: boolean;
   /** Offered through "Use a sample posting" before the first application. */
   samplePosting: string | null;
@@ -306,6 +306,7 @@ export function NewApplication({ evidenceOptions = [],
 
   // E7-6: write the documents, then create the application from them.
   const [writeRevision, setWriteRevision] = useState(0);
+  const [researchedJob, setResearchedJob] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const saving = useRef(false);
 
@@ -331,14 +332,19 @@ export function NewApplication({ evidenceOptions = [],
   };
 
   const writeJob = useJob<WriteDocumentsResult>(draft.writeJobId, writeRevision, (job) => {
+    if (job.step === RESEARCH_STEP) setResearchedJob(job.id);
     if (job.status === "DONE" && job.id === draft.writeJobId) void save(job.id);
   });
+
+  const writeSteps = draft.writeJobId && (writeJob?.step === RESEARCH_STEP || researchedJob === draft.writeJobId)
+    ? [WRITE_DOCUMENTS_STEPS[0], RESEARCH_STEP, ...WRITE_DOCUMENTS_STEPS.slice(1)]
+    : WRITE_DOCUMENTS_STEPS;
 
   const create = async () => {
     if (!draft.read || !draft.readJobId || starting) return;
     setStarting(true);
     const result = toastResult(
-      await startWritingDocuments({ readJobId: draft.readJobId, details: draft.details, match: draft.read.match, tone: draft.tone, note: draft.note, evidence: draft.evidence ?? [], write: draft.write ?? "both" }),
+      await startWritingDocuments({ readJobId: draft.readJobId, ...(draft.postingUrl ? { postingUrl: draft.postingUrl } : {}), ...(draft.startupId ? { startupId: draft.startupId } : {}), details: draft.details, match: draft.read.match, tone: draft.tone, note: draft.note, evidence: draft.evidence ?? [], write: draft.write ?? "both" }),
     );
     setStarting(false);
     if (!result.ok) return;
@@ -384,9 +390,9 @@ export function NewApplication({ evidenceOptions = [],
             <>
               {writeInClaude ? (
                 <p role="note" className="rounded-card border border-line-card bg-card px-4 py-3 text-meta text-muted">
-                  Dossier has no AI model of its own, so Claude writes this one: <strong className="text-ink">Write it with Claude</strong> opens a
-                  chat in Claude that uses your Claude plan and the Dossier connector, and saves the resume and cover letter here as a Draft. To
-                  have Dossier write it instead,{" "}
+                  rolepilot has no AI model of its own, so Claude writes this one: <strong className="text-ink">Write it with Claude</strong> opens a
+                  chat in Claude that uses your Claude plan and the rolepilot connector, and saves the resume and cover letter here as a Draft. To
+                  have rolepilot write it instead,{" "}
                   <Link href="/settings?section=ai" className="font-medium text-ink underline underline-offset-2">
                     choose a model in Settings → AI provider
                   </Link>
@@ -493,9 +499,9 @@ export function NewApplication({ evidenceOptions = [],
           {draft.step === "creating" && (
             <JobProgress
               title="Putting your application together…"
-              steps={WRITE_DOCUMENTS_STEPS}
+              steps={writeSteps}
               // "Saving the application" is the last step, once the documents are written.
-              current={writeJob?.status === "DONE" ? 2 : jobStep(WRITE_DOCUMENTS_STEPS, writeJob)}
+              current={writeJob?.status === "DONE" ? writeSteps.length - 1 : jobStep(writeSteps, writeJob)}
               error={writeJob?.status === "FAILED" ? writeJob.error : saveError}
               onRetry={() => void retryCreating()}
               onBack={() => update({ step: "review" })}

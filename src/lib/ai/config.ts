@@ -15,7 +15,7 @@ export type AiConfig = {
   baseUrl: string;
   model: string | null;
   apiKey: string | null;
-  /** Why the saved key can't be used, e.g. DOSSIER_SECRET changed. */
+  /** Why the saved key can't be used, e.g. ROLEPILOT_SECRET changed. */
   apiKeyProblem: string | null;
   timeoutMs: number;
 };
@@ -39,7 +39,7 @@ type SavedSettings = {
 
 type AiEnv = Pick<
   Env,
-  "DOSSIER_AI_PROVIDER" | "DOSSIER_AI_URL" | "DOSSIER_AI_MODEL" | "DOSSIER_AI_KEY" | "DOSSIER_AI_TIMEOUT_SECONDS"
+  "ROLEPILOT_AI_PROVIDER" | "ROLEPILOT_AI_URL" | "ROLEPILOT_AI_MODEL" | "ROLEPILOT_AI_KEY" | "ROLEPILOT_AI_TIMEOUT_SECONDS"
 >;
 
 /** A saved credential is reused only when it belongs to OpenRouter. */
@@ -57,11 +57,11 @@ export function resolveAiConfig(saved: SavedSettings | null, source: AiEnv, secr
       if (!(error instanceof ApiKeyUnreadable)) throw error;
       apiKeyProblem = API_KEY_UNREADABLE;
     }
-  } else { apiKey = source.DOSSIER_AI_KEY ?? null; }
+  } else { apiKey = source.ROLEPILOT_AI_KEY ?? null; }
   return {
     provider: AiProvider.OPENAI, baseUrl: OPENROUTER_URL, model: LUNA,
     apiKey, apiKeyProblem,
-    timeoutMs: (source.DOSSIER_AI_TIMEOUT_SECONDS ?? 120) * 1000,
+    timeoutMs: (source.ROLEPILOT_AI_TIMEOUT_SECONDS ?? 120) * 1000,
   };
 }
 
@@ -72,7 +72,7 @@ export async function loadAiConfig(): Promise<AiConfig> {
 
 /**
  * The AI settings as the settings screen shows them: what's in effect,
- * whether it comes from Settings or DOSSIER_AI_*, and never the key.
+ * whether it comes from Settings or ROLEPILOT_AI_*, and never the key.
  */
 export async function loadAiSettingsView(): Promise<AiSettingsView> {
   const saved = await loadSettings();

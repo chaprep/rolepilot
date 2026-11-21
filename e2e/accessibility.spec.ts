@@ -73,8 +73,8 @@ for (const path of SCREENS) {
 test.describe("dark, with the sidebar collapsed", () => {
   test.beforeEach(async ({ context, baseURL }) => {
     await context.addCookies([
-      { name: "dossier_theme", value: "dark", url: baseURL! },
-      { name: "dossier_sidebar", value: "collapsed", url: baseURL! },
+      { name: "rolepilot_theme", value: "dark", url: baseURL! },
+      { name: "rolepilot_sidebar", value: "collapsed", url: baseURL! },
     ]);
   });
 
@@ -100,8 +100,8 @@ test.describe("dark, with the sidebar collapsed", () => {
     await page.goto(application);
     await page.getByRole("button", { name: "More actions" }).click();
     await expectAccessible(page);
-    await context.clearCookies({ name: "dossier_session" });
-    await context.addCookies([{ name: "dossier_theme", value: "dark", url: baseURL! }]);
+    await context.clearCookies({ name: "rolepilot_session" });
+    await context.addCookies([{ name: "rolepilot_theme", value: "dark", url: baseURL! }]);
     await page.goto("/login");
     await expectAccessible(page);
   });
@@ -123,7 +123,7 @@ test("axe: an application, on every tab and with a part being edited", async ({ 
     await page.getByRole("tab", { name: tab }).click();
     await expectAccessible(page);
   }
-  await page.getByRole("tab", { name: "Resume" }).click();
+  await page.getByRole("tab", { name: "Resume", exact: true }).click();
   const summary = page.locator('[data-unit="summary"]');
   await summary.hover();
   await summary.getByRole("button", { name: "Edit" }).click();
@@ -148,7 +148,7 @@ test("axe: an application's email, once it's written", async ({ page }) => {
 
 test("axe: the dashboard for the last 30 days, with the charts' numbers showing", async ({ page }) => {
   await page.goto("/?period=30d");
-  for (const chart of ["Your funnel", "Week by week"]) await page.getByRole("region", { name: chart }).getByText("Show the numbers").click();
+  for (const chart of ["Application pipeline", "Weekly activity"]) await page.getByRole("region", { name: chart }).getByText("Show the numbers").click();
   await expect(page.getByRole("table", { name: /^How far your sent applications got/ })).toBeVisible();
   await expect(page.getByRole("table", { name: "Applications started and sent per week" })).toBeVisible();
   await expectAccessible(page);
@@ -189,7 +189,8 @@ test("axe: a resume's sections (#297, #298)", async ({ page }) => {
   await expectAccessible(page);
 
   await page.goto(application);
-  await page.getByRole("button", { name: /^Sections/ }).click();
+  await page.getByRole("tab", { name: "Resume controls", exact: true }).click();
+  await page.getByRole("tab", { name: "Sections", exact: true }).click();
   await expect(page.getByRole("button", { name: "Remove Experience" })).toBeVisible();
   await expectAccessible(page);
   await page.keyboard.press("Escape");
@@ -231,7 +232,7 @@ test("keyboard: a part's toolbar opens from the keyboard, and Escape comes back"
   await page.goto(application);
   const summary = page.locator('[data-unit="summary"]');
   // Tab from the tabs to the first part, as a keyboard user would.
-  await page.getByRole("tab", { name: "Resume" }).focus();
+  await page.getByRole("tab", { name: "Resume", exact: true }).focus();
   for (let step = 0; step < 20 && !(await summary.evaluate((element) => element === document.activeElement)); step++) {
     await page.keyboard.press("Tab");
   }

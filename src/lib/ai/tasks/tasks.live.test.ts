@@ -28,7 +28,7 @@ const provider = mistral
   : lmStudio
     ? new LmStudioProvider(lmStudio.url, lmStudio.key, lmStudio.model, 600_000)
     : new LocalProvider(process.env.OLLAMA_URL ?? "http://ollama:11434", process.env.OLLAMA_MODEL ?? "qwen2.5:3b", 600_000);
-const options: TaskOptions = { creativity: "BALANCED", strict: true, language: null };
+const options: TaskOptions = { creativity: "BALANCED", strict: true };
 
 describe.runIf(live.has("ollama") || mistral !== null || lmStudio !== null)("live: the application chain", { timeout: 900_000 }, () => {
   it("extracts, matches, tailors and writes the Ledgerly application", async () => {

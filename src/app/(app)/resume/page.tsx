@@ -19,7 +19,7 @@ export default async function BaseResumePage({ searchParams }: PageProps<"/resum
       baseThemeId={settings.baseThemeId}
       paper={settings.paper}
       includeReferences={settings.includeRefs}
-      language={settings.resumeLanguage}
+      language={"English"}
       sections={settings.resumeSections}
       fitToPage={settings.fitBaseResume}
       initialPanel={panel === "sections" ? "sections" : "themes"}

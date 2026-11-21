@@ -2,13 +2,13 @@ import { expect, it, vi } from "vitest";
 import { encryptApiKey } from "./api-key";
 import { resolveAiConfig, isAiUsable, keyStateOf } from "./config";
 import { LUNA, OPENROUTER_URL } from "./assignments";
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 const state = vi.hoisted(() => ({ settings: { provider: "OPENAI", baseUrl: "https://openrouter.ai/api/v1", model: null, apiKeyEnc: null } as Record<string, unknown> }));
 vi.mock("@/lib/settings-data", () => ({ loadSettings: async () => state.settings }));
 const source = {} as Parameters<typeof resolveAiConfig>[1];
 it("fixes the endpoint and model even with legacy overrides", () => {
-  expect(resolveAiConfig(null, { ...source, DOSSIER_AI_PROVIDER: "anthropic", DOSSIER_AI_URL: "https://other.example", DOSSIER_AI_MODEL: "other" })).toMatchObject({ provider: "OPENAI", baseUrl: OPENROUTER_URL, model: LUNA, apiKey: null });
+  expect(resolveAiConfig(null, { ...source, ROLEPILOT_AI_PROVIDER: "anthropic", ROLEPILOT_AI_URL: "https://other.example", ROLEPILOT_AI_MODEL: "other" })).toMatchObject({ provider: "OPENAI", baseUrl: OPENROUTER_URL, model: LUNA, apiKey: null });
 });
 it("reuses an encrypted OpenRouter key, with no plaintext in the settings view", () => {
   const saved = { provider: "OPENAI" as const, baseUrl: OPENROUTER_URL, model: "old-model", apiKeyEnc: encryptApiKey("router-key") };
@@ -23,7 +23,7 @@ it("never reuses another provider key, including a deceptive hostname", () => {
   }
 });
 it("uses the environment fallback and reports unreadable saved credentials", () => {
-  expect(resolveAiConfig(null, { ...source, DOSSIER_AI_KEY: "env-key" }).apiKey).toBe("env-key");
+  expect(resolveAiConfig(null, { ...source, ROLEPILOT_AI_KEY: "env-key" }).apiKey).toBe("env-key");
   const saved = { provider: "OPENAI" as const, baseUrl: OPENROUTER_URL, model: null, apiKeyEnc: "broken" };
   const config = resolveAiConfig(saved, source);
   expect(config.apiKeyProblem).toBeTruthy();

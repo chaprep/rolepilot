@@ -11,6 +11,8 @@ describe("application evidence form", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save for this application" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Describe your supporting experience");
     expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText(/Ask Refine with AI to apply it/)).toBeInTheDocument();
+    expect(screen.queryByText(/updates automatically/)).not.toBeInTheDocument();
   });
   it("submits the selected role with a stable identifier across a retry", async () => {
     const save = vi.fn<(evidence: ApplicationEvidence) => Promise<boolean>>(async () => false);

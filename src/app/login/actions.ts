@@ -17,7 +17,7 @@ import { loadProfileName } from "@/lib/profile-data";
 import { loginMessages } from "./messages";
 
 /**
- * Signs in with the password that DOSSIER_PASSWORD is a hash of (PRD AUTH-1, AUTH-4).
+ * Signs in with the password that ROLEPILOT_PASSWORD is a hash of (PRD AUTH-1, AUTH-4).
  * Attempts are rate-limited per IP and globally, or per IP and browser for a
  * browser that signed in before (AUTH-5, #334). Returns
  * where to go next: the requested page if it's on this site, or the dashboard.

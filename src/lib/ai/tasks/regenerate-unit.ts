@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { acceptedSkills, RESUME_RULES, resumeEvidenceSources, tailoredSkillsSchema } from "./tailor-resume";
+
+import type { CompanyResearch } from "@/lib/research/schema";
+import { acceptedSkills, RESUME_RULES, RESUME_STRATEGY, resumeEvidenceSources, tailoredSkillsSchema } from "./tailor-resume";
 
 import { DocumentKind, type Tone } from "@/generated/prisma/enums";
 import { SIGN_OFF_UNIT, type Extracted, type Unit } from "@/lib/application-data";
@@ -9,15 +11,16 @@ import type { ProfileData } from "@/lib/profile";
 import { TONES } from "@/lib/tones";
 import { bulletLines, isBulletUnit } from "@/lib/unit-text";
 
-import { guardSources, guardUnits, resumeFactSources } from "../fact-guard";
+import { guardCoverLetter, guardSources, guardUnits, resumeFactSources } from "../fact-guard";
 
 import {
   applicationFacts,
+  companyResearchForPrompt,
   candidateFacts,
   COVER_LETTER_APPROACH,
   CREATIVITY,
   jobForPrompt,
-  languageRule,
+  ENGLISH_WRITING,
   NO_EM_DASHES,
   profileForPrompt,
   postingForPrompt,
@@ -27,7 +30,9 @@ import {
   type Task,
 } from "./prompt-parts";
 
-export const REGENERATE_UNIT_VERSION = "regenerate-unit@7";
+import { EMAIL_WRITING_BRIEF } from "./write-email";
+
+export const REGENERATE_UNIT_VERSION = "regenerate-unit@11";
 
 /** What the letter's frame parts are, for the model (E8-11). */
 const FRAME_PARTS: Record<string, string> = {
@@ -40,7 +45,7 @@ const FRAME_PARTS: Record<string, string> = {
 /** What the email's parts are, for the model. */
 const EMAIL_PARTS: Record<string, string> = {
   subject: "It's the email's subject line: the role and the candidate's name, or the reference or subject line the posting asks for. One line.",
-  body: "It's the email's whole message, sent with the resume and cover letter attached: the greeting (to the contact person the posting names, else the hiring team), two or three short paragraphs (about 80–150 words together) on the role the candidate is applying for, what makes them a strong fit and that the resume and cover letter are attached, then the sign-off and the candidate's name. A blank line between paragraphs. It doesn't repeat the cover letter.",
+  body: `It's the email's whole message. ${EMAIL_WRITING_BRIEF} A blank line between paragraphs.`,
 };
 
 /** What each document is called in the prompt. */
@@ -65,6 +70,7 @@ export type RegenerateInput = {
   facts: string[];
   /** The posting as pasted, for the fact guard. */
   posting: string;
+  companyResearch?: CompanyResearch;
 };
 
 /** APP-5: a fresh version of one part, the rest left alone; the unit comes back with its new text. */
@@ -90,11 +96,12 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
       kind === DocumentKind.COVER_LETTER && FRAME_PARTS[unit.id],
       kind === DocumentKind.EMAIL && EMAIL_PARTS[unit.id],
       kind === DocumentKind.RESUME && RESUME_RULES,
+      kind === DocumentKind.RESUME && RESUME_STRATEGY,
       kind === DocumentKind.RESUME && unit.id === "skills" && "Return the full grouped skills list in skills; text is ignored for this section.",
-      truthfulness(options.strict),
+      truthfulness(options.strict, options.creativity),
       candidateFacts(profile, facts),
       CREATIVITY[options.creativity],
-      languageRule(options.language),
+      ENGLISH_WRITING,
       UNTRUSTED_POSTING,
       NO_EM_DASHES,
     ),
@@ -108,6 +115,7 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
           kind === DocumentKind.RESUME && `Original posting (reference only):\n${postingForPrompt(posting)}`,
           kind === DocumentKind.RESUME && `Candidate evidence sources:\n${JSON.stringify(resumeEvidenceSources(profile, facts))}`,
           applicationFacts(facts),
+          kind === DocumentKind.COVER_LETTER && companyResearchForPrompt(input.companyResearch),
           `Write a new version of "${unit.label}" (${unit.id}). Its current text:\n${unit.text}`,
         ]
           .filter(Boolean)
@@ -121,14 +129,15 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
   });
   const text = kind === DocumentKind.RESUME && unit.id === "skills" ? acceptedSkills(profile, answer.skills ?? [], facts) : bullets ? bulletLines(answer.text) : answer.text.trim();
   // An English sign-off stays the tone's.
-  const english = /^english$/i.test(options.language ?? extracted.language ?? "English");
-  const updated = { ...unit, text: unit.id === SIGN_OFF_UNIT && english ? TONES[tone].signOff : text || unit.text };
+  const updated = { ...unit, text: unit.id === SIGN_OFF_UNIT ? TONES[tone].signOff : text || unit.text };
   return {
     // The letter's recipient and greeting aren't claims about the candidate.
     data:
       options.strict && !isFrameUnit(unit.id)
-        ? // The email's greeting names its recipient, from the posting or typed in by the user.
-          guardUnits([updated], kind === DocumentKind.RESUME ? resumeFactSources(profile, facts) : guardSources(profile, extracted, kind === DocumentKind.EMAIL ? [posting, emailParts(document).to].join("\n") : posting, facts))[0]
+        ? kind === DocumentKind.COVER_LETTER
+          ? guardCoverLetter([updated], guardSources(profile, extracted, posting, facts), profile.basics.name, input.companyResearch)[0]
+          // The email's greeting names its recipient, from the posting or typed in by the user.
+          : guardUnits([updated], kind === DocumentKind.RESUME ? resumeFactSources(profile, facts) : guardSources(profile, extracted, [posting, emailParts(document).to].join("\n"), facts))[0]
         : { ...updated, unverified: undefined },
     promptVersion: REGENERATE_UNIT_VERSION,
   };

@@ -14,13 +14,13 @@ vi.mock("@/lib/prisma", async () => {
   db.client = createTestClient();
   return { prisma: db.client };
 });
-// Settings → Scoring reads DOSSIER_SCORER, and the AI model scores until Jev is chosen (#274).
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
+// Settings → Scoring reads ROLEPILOT_SCORER, and the AI model scores until Jev is chosen (#274).
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
 vi.mock("@/lib/ai/config", async (original) => {
  const actual = await original<typeof import("@/lib/ai/config")>();
  return { ...actual, isAiConfigured: async () => true,
  resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
- actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: true ? "router-test" : undefined},secret) };
+ actual.resolveAiConfig(saved, {...source, ROLEPILOT_AI_KEY: true ? "router-test" : undefined},secret) };
 });
 vi.mock("@/lib/profile-data", async () => {
   const { demoProfile } = await import("@/lib/demo-profile");
@@ -78,7 +78,7 @@ describe("Score in Find jobs (#208)", () => {
   });
 
   it("scores the start when the rest can't be had, and replaces an older score", async () => {
-    await prisma().postingScore.create({ data: { source: "ADZUNA", externalId: "az-1", score: 20, reasons: [], redFlags: [], scoredWith: "score-posting@1" } });
+    await prisma().postingScore.create({ data: { source: "ADZUNA", externalId: "az-1", score: 20, reasons: [], redFlags: [], scoredWith: "score-posting@2" } });
     const run = context();
     await scorePostingJob.run({ posting }, run);
     expect(fake.sent[0]).toContain("The start…");

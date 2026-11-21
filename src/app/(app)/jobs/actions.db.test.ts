@@ -32,12 +32,12 @@ vi.mock("@/lib/prisma", async () => {
 vi.mock("@/lib/auth/session", () => ({
   getSession: async () => ({ persistent: false, issuedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) }),
 }));
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
 const ai = vi.hoisted(() => ({ ready: true }));
 vi.mock("@/lib/ai/config", async (original) => {
  const actual=await original<typeof import("@/lib/ai/config")>();
  return {...actual,isAiConfigured:async()=>ai.ready,isAiUsable:async()=>ai.ready,
- resolveAiConfig:(saved:Parameters<typeof actual.resolveAiConfig>[0],source:Parameters<typeof actual.resolveAiConfig>[1],secret?:string)=>actual.resolveAiConfig(saved,{...source,DOSSIER_AI_KEY:ai.ready?"router-test":undefined},secret)};
+ resolveAiConfig:(saved:Parameters<typeof actual.resolveAiConfig>[0],source:Parameters<typeof actual.resolveAiConfig>[1],secret?:string)=>actual.resolveAiConfig(saved,{...source,ROLEPILOT_AI_KEY:ai.ready?"router-test":undefined},secret)};
 });
 vi.mock("@/lib/jobs/runner", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/jobs/runner")>()),

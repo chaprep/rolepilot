@@ -13,13 +13,13 @@ vi.mock("@/lib/prisma", async () => {
 });
 const provider = vi.hoisted(() => ({ current: undefined as unknown }));
 vi.mock("@/lib/ai", () => ({ getAiProvider: async () => provider.current }));
-vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true, language: null }) }));
+vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true }) }));
 vi.mock("@/lib/profile-data", async () => {
   const { demoProfile } = await import("@/lib/demo-profile");
   return { loadProfile: async () => demoProfile(), loadFactTexts: async () => ["Relocating in January."] };
 });
 vi.mock("@/lib/settings-data", () => ({
-  loadSettings: async () => ({ resumeSections: { order: [], off: [] }, skillOrder: "auto", baseThemeId: null, dateFormat: "DAY_MONTH_YEAR", docLanguage: null }),
+  loadSettings: async () => ({ resumeSections: { order: [], off: [] }, skillOrder: "auto", baseThemeId: null, dateFormat: "DAY_MONTH_YEAR", includeRefs: false }),
 }));
 vi.mock("./runner", () => ({ defineJob: <T,>(definition: T) => definition }));
 
@@ -50,7 +50,7 @@ describe("writeDocumentJob (#367)", () => {
   it("writes the cover letter an application was created without, with its frame and a first version", async () => {
     await writeDocumentJob.run({ applicationId: "app-1", kind: "COVER_LETTER" }, context);
     const letter = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "COVER_LETTER" } }, include: { versions: true } });
-    expect(letter.writtenWith).toBe("write-cover-letter@6");
+    expect(letter.writtenWith).toBe("write-cover-letter@8");
     expect(letter.initialLetterLayout).toBe("SIDEBAR");
     expect((letter.units as { id: string }[]).map((unit) => unit.id)).toEqual(["sender", "headline", "contacts", "date", "recipient", "greeting", "paragraph:1", "sign-off", "signature"]);
     expect(letter.versions.map((version) => version.cause)).toEqual(["WRITTEN"]);
@@ -63,4 +63,13 @@ describe("writeDocumentJob (#367)", () => {
     expect(mock.calls).toHaveLength(0);
     expect(await prisma().document.count({ where: { applicationId: "app-1" } })).toBe(1);
   });
+});
+
+it("writes a missing document in English without relabeling an older application", async () => {
+  await prisma().application.update({ where: { id: "app-1" }, data: { language: "Arabic" } });
+  await writeDocumentJob.run({ applicationId: "app-1", kind: "COVER_LETTER" }, context);
+  const letter = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "COVER_LETTER" } }, include: { versions: true } });
+  expect(letter.state).toMatchObject({ language: "English", coverLetterLayout: "SIDEBAR" });
+  expect(letter.versions[0].state).toMatchObject({ language: "English" });
+  expect(await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } })).toMatchObject({ language: "Arabic" });
 });

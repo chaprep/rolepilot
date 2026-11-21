@@ -3,18 +3,20 @@ import { z } from "zod";
 import { matchSchema, type Extracted, type Match } from "@/lib/application-data";
 import { experienceMonths, formatMonthYear, languageLevelLabel, paidRoles, sameName, type CertificationItem, type ProfileData } from "@/lib/profile";
 
+import { resumeEvidenceSources } from "./tailor-resume";
 import { system, UNTRUSTED_POSTING, type Task } from "./prompt-parts";
 
-export const MATCH_REQUIREMENTS_VERSION = "match-requirements@2";
+export const MATCH_REQUIREMENTS_VERSION = "match-requirements@4";
 
-// The model only says which profile skill, language or certification each
-// requirement is about; code decides covered, partial or gap from the profile itself, so the
-// match is deterministic and explainable (NEW-4, E7-4).
+// The model maps named qualifications and cited capabilities. Code validates provenance
+// and keeps years, qualification validity and adjacent support conservative.
 const answerSchema = z.object({
   matches: z.array(
     z.object({
       /** The requirement's number in the list. */
       requirement: z.number().int(),
+      support: z.enum(["direct", "transferable", "adjacent"]).nullable().optional(),
+      evidence: z.array(z.object({ id: z.string(), quote: z.string() })).nullable().optional(),
       /** A skill from the profile's list, spelled as there, or null. */
       skill: z.string().nullable(),
       /** A language from the profile's list, or null. */
@@ -25,7 +27,9 @@ const answerSchema = z.object({
   ),
 });
 
-const INSTRUCTIONS = `You compare a job's requirements with a candidate's skills, languages and certifications.
+const INSTRUCTIONS = `You may cite candidateEvidence by stable id and exact supporting quote. Examine role and project actions for demonstrated capabilities even when no skill label exists. Set support to direct, transferable or adjacent. Direct and transferable support must establish the actual requested capability; related tools are only adjacent to an exact-tool requirement. Never turn participation into management or exposure into proficiency. Related tools, credentials or language exposure cannot satisfy an exact tool, credential or proficiency requirement. Preserve ownership, limitations and corrections.
+For skill/experience requirements you may also cite rememberedEvidence with evidence: [{id, quote}], quoting an exact supporting passage. Never use LIMITATION statements as positive support. Memory cannot establish language proficiency, certification validity or years. Omit evidence when it supports neither the requested capability nor an explicitly adjacent capability.
+You compare a job's requirements with a candidate's skills, languages and certifications.
 
 For each numbered requirement, answer which ONE of the candidate's skills it is about, if any, which of the candidate's languages, if any, and which ONE of the candidate's certifications meets it, if any. Copy names exactly as they appear in the candidate's lists. Match on meaning ("Strong prototyping skills in Figma" is about "Figma"; "Has built or maintained a design system" is about "Design systems"; "Security certifications such as CEH" is met by "Certified Ethical Hacker (CEH v12)"), but don't stretch: when nothing really fits, answer null. A certification only counts when the requirement asks for that certification or one of its kind. Answer every requirement once.`;
 
@@ -33,6 +37,7 @@ export type MatchInput = { requirements: Extracted["requirements"]; profile: Pro
 
 /** NEW-4: each requirement covered, partial or a gap, with its evidence. */
 export const matchRequirements: Task<MatchInput, Match> = async (provider, { requirements, profile, today = new Date() }, { signal }) => {
+  const sources = resumeEvidenceSources(profile, []);
   const needsModel = requirements.some((requirement) => requirement.kind !== "years");
   const answer = needsModel
     ? await provider.complete({
@@ -44,6 +49,8 @@ export const matchRequirements: Task<MatchInput, Match> = async (provider, { req
             content: JSON.stringify(
               {
                 requirements: requirements.map((requirement, index) => ({ number: index, text: requirement.text, kind: requirement.kind, skill: requirement.skill })),
+                candidateEvidence: sources,
+                rememberedEvidence: profile.facts.filter(fact => fact.id.startsWith("memory:")),
                 candidateSkills: profile.skills.map((skill) => skill.name),
                 candidateLanguages: profile.languages.map((language) => language.name),
                 candidateCertifications: named(profile.certifications).map((entry) => entry.name),
@@ -64,7 +71,22 @@ export const matchRequirements: Task<MatchInput, Match> = async (provider, { req
   const mapped = new Map(answer.matches.map((match) => [match.requirement, match]));
   return {
     data: matchSchema.parse({
-      items: requirements.map((requirement, index) => classify(requirement, mapped.get(index), profile, today)),
+      items: requirements.map((requirement, index) => {
+        const item = classify(requirement, mapped.get(index), profile, today);
+        if (requirement.kind !== "skill" && requirement.kind !== "other") return item;
+        if (mapped.get(index)?.certification || /\b(certification|certified|degree|diploma|fluent|native|proficiency|years?)\b/i.test(requirement.text)) return item;
+        const evidence = (mapped.get(index)?.evidence ?? []).flatMap(reference => {
+          const source = sources[reference.id];
+          if (!reference.id.startsWith("memory:") && /^(experience|projects|education):/.test(reference.id) && source && reference.quote.trim().length >= 3 && source.includes(reference.quote.trim())) return [{ id: reference.id, text: source }];
+          const fact = profile.facts.find(fact => fact.id === reference.id && fact.id.startsWith("memory:") && /^Remembered (?:experience|achievement|capability):/.test(fact.text));
+          return fact && reference.quote.trim().length >= 3 && fact.text.includes(reference.quote.trim()) ? [fact] : [];
+        });
+        const support = mapped.get(index)?.support ?? "direct";
+        if (!evidence.length) return support === "adjacent" && item.result === "covered" ? { ...item, result: "partial", note: `Adjacent experience: ${item.note}` } : item;
+        if (item.result === "covered" && support !== "adjacent") return item;
+        const roles = profile.experience.filter(role => evidence.some(fact => fact.id === `experience:${role.id}` || fact.text.includes(`(experience:${role.id})`)));
+        return { ...item, result: support === "adjacent" ? "partial" : roles.length ? "covered" : "partial", skill: item.skill ?? requirement.skill, experienceIds: roles.map(role => role.id), evidenceIds: evidence.map(fact => fact.id), evidenceOrigin: evidence.every(fact => fact.id.startsWith("memory:")) ? "memory" : "profile", note: `Supported by ${evidence.every(fact => fact.id.startsWith("memory:")) ? "remembered information; " : ""}${support} evidence${roles.length ? ` from ${roles.map(role => role.company || role.role).join(", ")}` : "; not attributed to a profile role"}` };
+      }),
     }),
     promptVersion: MATCH_REQUIREMENTS_VERSION,
   };

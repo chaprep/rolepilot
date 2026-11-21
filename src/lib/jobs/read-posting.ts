@@ -1,3 +1,4 @@
+import { prepareCandidateProfile, assertCandidateContext, candidateMemoryRevision } from "@/lib/memory/context";
 import "server-only";
 
 import { z } from "zod";
@@ -23,18 +24,22 @@ export const readPostingJob = defineJob({
     extractedWith: z.string(),
     match: matchSchema,
     matchedWith: z.string(),
+    memoryRevision: z.number().int().optional(),
   }),
   async run({ posting }, { step, signal }) {
     await step(READ_POSTING_STEPS[0]);
-    const [provider, options, profile] = await Promise.all([getAiProvider(), loadTaskOptions(), loadProfile()]);
+    const [provider, options, baseProfile] = await Promise.all([getAiProvider(), loadTaskOptions(), loadProfile()]);
 
     await step(READ_POSTING_STEPS[1]);
     const extraction = await extractPosting(provider, { posting }, { ...options, signal });
 
     await step(READ_POSTING_STEPS[2]);
+    const profile = await prepareCandidateProfile(baseProfile, posting, signal, provider);
     const matching = await matchRequirements(provider, { requirements: extraction.data.requirements, profile }, { ...options, signal });
 
+    await assertCandidateContext(profile);
     return {
+      memoryRevision: candidateMemoryRevision(profile),
       extracted: extraction.data,
       extractedWith: extraction.promptVersion,
       match: matching.data,

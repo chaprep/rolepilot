@@ -13,7 +13,7 @@ import {
   candidateFacts,
   CREATIVITY,
   jobForPrompt,
-  languageRule,
+  ENGLISH_WRITING,
   NO_EM_DASHES,
   postingForPrompt,
   profileForPrompt,
@@ -24,7 +24,7 @@ import {
 } from "./prompt-parts";
 import { withoutFrame } from "./write-cover-letter";
 
-export const WRITE_EMAIL_VERSION = "write-email@2";
+export const WRITE_EMAIL_VERSION = "write-email@5";
 
 const answerSchema = z.object({
   contactName: z.string().nullable(),
@@ -35,13 +35,57 @@ const answerSchema = z.object({
   signOff: z.string(),
 });
 
-const INSTRUCTIONS = `You write the email a candidate sends their job application with, as JSON. The resume and the cover letter are attached to it, so the email doesn't repeat them: it's a short, friendly note that gets them opened.
+export const EMAIL_WRITING_BRIEF = `Write a personal application email from the candidate to the company.
+
+Use three body paragraphs with this progression:
+
+1. Interest and relevant background
+Open with interest in the company and the role. Make the connection specific when the available information supports it. Introduce the candidate's relevant background, drawing on their primary work, specialization, relevant employers, and a contribution that demonstrates their fit. Include years of experience and the team name only when supported.
+
+2. Strengths and concrete work
+Develop the strongest connection between the candidate's experience and this role. Show their capabilities through specific responsibilities, projects, systems, or achievements. Where relevant, explain how they work across disciplines or deliver work from beginning to end. Select the most persuasive examples rather than listing every skill or employer. Build on the first paragraph without repeating it.
+
+3. Interest in joining
+Close by expressing interest in joining the company or team and contributing to its work. Connect that contribution to the opportunity where possible. End with a friendly invitation to continue the conversation.
+
+You have freedom over wording, sentence structure, paragraph lengths, and emphasis. Preserve this progression, but write each email naturally for the specific candidate and opportunity. Let the available evidence determine which details deserve space.
+
+Voice and style:
+- Conversational, confident, warm, and professional.
+- Sound like a person reaching out directly.
+- Use clear language and concrete details.
+- Express interest without exaggerated praise or invented familiarity.
+- Avoid generic claims, buzzwords, long skill lists, and repetitive sentences.
+- Use the resume and cover letter as context without copying their prose.
+- Keep the email focused; do not stretch it to fill space.
+- Do not use em dashes.
+
+Factual boundaries:
+- Use only facts supported by the supplied profile, application notes, and job posting.
+- Never invent years of experience, employers, team names, projects, responsibilities, metrics, or achievements.
+- Do not turn related experience into a claim of direct experience.
+- Omit missing details naturally. Never leave placeholders in the email.
+- Do not force a particular number of employers, skills, or examples.
+
+Format:
+Hi,
+
+[Three body paragraphs]
+
+Best,
+[Candidate's name]
+
+Do not add an attachment paragraph, portfolio link, or LinkedIn signature.`;
+
+const INSTRUCTIONS = `You write the email a candidate sends their job application with, as JSON.
+
+${EMAIL_WRITING_BRIEF}
 
 - contactName and contactEmail: the person and the email address the posting says to send applications to, exactly as the posting writes them. Use null for anything the posting doesn't give; never guess an address.
 - subject: a clear subject line with the role and the candidate's name, e.g. "Application: Senior Product Designer, Jane Doe". If the posting asks for a reference number or a particular subject line, use that.
-- greeting: the salutation, usual for an email in its language, with its punctuation: the contact person by name when the posting names one, else the hiring team, e.g. "Dear Ledgerly team,".
-- paragraphs: two or three short paragraphs, about 80–150 words together: the role the candidate is applying for, the one or two things that make them a strong fit for it (not a summary of the resume or the letter), that the resume and cover letter are attached, and that they'd be glad to talk. No greeting, sign-off or name in them: those are separate.
-- signOff: the closing line before the name, matching the tone, with its punctuation (e.g. "Warm regards,").
+- greeting: exactly "Hi,".
+- paragraphs: exactly three body paragraphs following the writing brief above: interest and relevant background; strengths and concrete projects; interest in joining and contributing to the team. No greeting, sign-off or name in them: those are separate.
+- signOff: exactly "Best,".
 - The candidate's name is added after the sign-off; don't write it.`;
 
 export type EmailInput = {
@@ -69,10 +113,10 @@ export const writeEmail: Task<EmailInput, Unit[]> = async (provider, { profile, 
     system: system(
       INSTRUCTIONS,
       `Tone: ${TONES[tone].label}. ${TONES[tone].description}`,
-      truthfulness(options.strict),
+      truthfulness(options.strict, options.creativity),
       candidateFacts(profile, facts),
       CREATIVITY[options.creativity],
-      languageRule(options.language),
+      ENGLISH_WRITING,
       UNTRUSTED_POSTING,
       NO_EM_DASHES,
     ),
@@ -96,13 +140,11 @@ export const writeEmail: Task<EmailInput, Unit[]> = async (provider, { profile, 
     signal: options.signal,
   });
 
-  // English emails get the tone's own sign-off, as letters do; other languages keep the model's.
-  const language = options.language ?? extracted.language ?? "English";
-  const signOff = /^english$/i.test(language) || !answer.signOff.trim() ? TONES[tone].signOff : answer.signOff.trim();
+  const signOff = "Best,";
   const paragraphs = withoutFrame(answer.paragraphs.map((text) => ({ text })), signOff)
     .map((paragraph) => paragraph.text.trim())
     .filter(Boolean);
-  const body = [answer.greeting.trim(), ...paragraphs, [signOff, profile.basics.name.trim()].filter(Boolean).join("\n")]
+  const body = ["Hi,", ...paragraphs, [signOff, profile.basics.name.trim()].filter(Boolean).join("\n")]
     .filter(Boolean)
     .join("\n\n");
 

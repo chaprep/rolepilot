@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { AiProvider, Creativity, DateFormat, PaperSize, Tone } from "@/generated/prisma/enums";
-import { announcementFeedSchema } from "@/lib/announcements/contract";
 import { JOB_SOURCES, JSEARCH_HOSTS } from "@/lib/job-search/search";
 import { DEFAULT_SECTION_LAYOUT, sectionLayoutSchema } from "@/lib/resume-sections";
 import { setupGuideSchema } from "@/lib/setup-guide";
@@ -107,13 +106,16 @@ export const AGENT_RUNS_KEPT = 10;
 
 export const settingsSchema = z.object({
   // AI provider (SET-1). Null means "not set in the app": fall back to the
-  // DOSSIER_AI_* environment variables, then to the built-in defaults.
+  // ROLEPILOT_AI_* environment variables, then to the built-in defaults.
   provider: z.enum(AiProvider).nullable().catch(null),
   baseUrl: z.string().nullable().catch(null),
   model: z.string().nullable().catch(null),
-  /** Encrypted with a key derived from DOSSIER_SECRET (E6-2); never sent to the client. */
+  /** Encrypted with a key derived from ROLEPILOT_SECRET (E6-2); never sent to the client. */
   apiKeyEnc: z.string().nullable().catch(null),
-  creativity: z.enum(Creativity).catch(Creativity.BALANCED),
+  zyteKeyEnc: z.string().nullable().catch(null),
+  zyteVerified: flag(false),
+  companyResearchEnabled: flag(false),
+  creativity: z.preprocess(value => value === "EXPRESSIVE" ? "OPTIMIZED" : value, z.enum(Creativity).catch(Creativity.BALANCED)),
   /** "Never invent experience" (SET-4). */
   strict: flag(true),
   /** "Show what changed" (SET-5). */
@@ -121,12 +123,6 @@ export const settingsSchema = z.object({
   paper: z.enum(PaperSize).catch(PaperSize.A4),
   dateFormat: z.enum(DateFormat).catch(DateFormat.DAY_MONTH_YEAR),
   defaultTone: z.enum(Tone).catch(Tone.WARM),
-  /** Language for generated documents; null means "the posting's language" (SET-7). */
-  docLanguage: z.string().nullable().catch(null),
-  /** The base resume's language, for its headings and dates; null means English, with the direction read from the profile. */
-  resumeLanguage: z.string().nullable().catch(null),
-  /** Languages added with "Other language…", kept in the list. */
-  customLanguages: stringList.catch([]),
   fileNamePattern: z.string().catch("{name} – {company} – {doc}"),
   includeRefs: flag(false),
   /** What New application writes unless chosen there (#367). */
@@ -158,7 +154,7 @@ export const settingsSchema = z.object({
   fitBaseResume: flag(false),
   /** Why the last nightly backup failed; null once one works again (E10-7). */
   backupProblem: z.string().nullable().catch(null),
-  // Job search (E14-4). Null means "not set in the app": DOSSIER_JOBS_SOURCE
+  // Job search (E14-4). Null means "not set in the app": ROLEPILOT_JOBS_SOURCE
   // decides. "OFF" is a choice. Each source keeps its own key, encrypted
   // like the AI key, so switching back and forth loses nothing.
   jobSource: z.enum([...JOB_SOURCES, "OFF"]).nullable().catch(null),
@@ -170,7 +166,7 @@ export const settingsSchema = z.object({
   /** When "I understand" was ticked under the Bundesagentur für Arbeit's note (#223); its searches wait for it. */
   arbeitsagenturAcceptedAt: z.iso.datetime().nullable().catch(null),
   // Scoring (#274): what Score in Find jobs and the job agent score postings
-  // with. Null means "not set in the app": DOSSIER_SCORER decides, else the
+  // with. Null means "not set in the app": ROLEPILOT_SCORER decides, else the
   // AI model. Jev's key is encrypted like the others, under its own key.
   scorer: z.enum(SCORERS).nullable().catch(null),
   typesafeKeyEnc: z.string().nullable().catch(null),
@@ -193,29 +189,15 @@ export const settingsSchema = z.object({
   // to the install, not its data, so exports leave them out (INSTALL_SETTINGS).
   startupsViewedAt: z.iso.datetime().nullable().catch(null),
   startupsLastRefresh: json(startupsRefreshSchema).nullable().catch(null),
-  /** "Check for updates daily" in Settings → About (update-check.ts). */
-  updateCheck: flag(true),
-  // The newest release the update check has seen, the UTC day it last
-  // asked, and the release "Not now" hid the sidebar notice for. They belong
-  // to the install, not its data, so exports leave them out (INSTALL_SETTINGS).
-  latestVersion: z.string().nullable().catch(null),
-  latestVersionUrl: z.string().nullable().catch(null),
-  updateCheckDay: z.string().nullable().catch(null),
-  updateDismissed: z.string().nullable().catch(null),
-  // The backend's notices (announcements/check.ts): its last answer, and the
-  // ones dismissed here. They belong to the install, not its data, so exports
-  // leave them out (INSTALL_SETTINGS).
-  announcementFeed: json(announcementFeedSchema).nullable().catch(null),
-  announcementsDismissed: stringList.catch([]),
   // Gmail and Calendar (E15). Off until the Google account is connected.
   // The OAuth client, entered in Settings → Google. Null means "not set in the
-  // app": DOSSIER_GOOGLE_CLIENT_ID and DOSSIER_GOOGLE_CLIENT_SECRET decide.
+  // app": ROLEPILOT_GOOGLE_CLIENT_ID and ROLEPILOT_GOOGLE_CLIENT_SECRET decide.
   googleClientId: z.string().nullable().catch(null),
   /** Encrypted like the API keys (GOOGLE_CLIENT_SECRET); never sent to the client. */
   googleClientSecretEnc: z.string().nullable().catch(null),
   /** Read replies from Gmail. */
   gmailRead: flag(true),
-  /** Which mail the inbox check reads: only threads Dossier knows and company domains, or every new mail. */
+  /** Which mail the inbox check reads: only threads rolepilot knows and company domains, or every new mail. */
   gmailScope: z.enum(["known", "all"]).catch("known"),
   /** Minutes between inbox checks. */
   gmailInterval: z.coerce.number().int().min(5).max(120).catch(10),
@@ -235,17 +217,6 @@ export const settingsSchema = z.object({
   /** Interview length and the gap kept around other meetings, in minutes. */
   slotMinutes: z.coerce.number().int().min(15).max(240).catch(45),
   bufferMinutes: z.coerce.number().int().min(0).max(120).catch(15),
-  // The usage ping (usage-ping.ts): this install's random ID, made by its
-  // first ping, and the UTC day of the last one. They belong to the install,
-  // not its data, so exports leave them out (INSTALL_SETTINGS).
-  usagePingId: z.string().nullable().catch(null),
-  usagePingDay: z.string().nullable().catch(null),
-  // Whether the operator agreed to the usage ping (#172), when, and which
-  // version of the question they answered (USAGE_PING_TEXT_VERSION), so the
-  // consent can be shown. Null: not answered yet, and nothing is sent.
-  usagePingChoice: z.enum(["on", "off"]).nullable().catch(null),
-  usagePingChoiceAt: z.string().nullable().catch(null),
-  usagePingChoiceText: z.coerce.number().int().nullable().catch(null),
   // The Claude connector (#221): when it was turned on, or Claude was last
   // disconnected; null while it's off, and then its addresses answer 404.
   // Every connector token carries it, so a new value signs Claude out. It

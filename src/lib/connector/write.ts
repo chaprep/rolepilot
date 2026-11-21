@@ -1,9 +1,10 @@
+import { prepareCandidateProfile, candidateMemoryRevision } from "@/lib/memory/context";
 import "server-only";
 
 import { z } from "zod";
 
 import { guardSources, guardUnits } from "@/lib/ai/fact-guard";
-import { resumeUnits } from "@/lib/ai/tasks/tailor-resume";
+import { acceptedSkills, resumeUnits, tailoredSkillSchema } from "@/lib/ai/tasks/tailor-resume";
 import { withoutFrame } from "@/lib/ai/tasks/write-cover-letter";
 import { createApplicationFromDocuments } from "@/lib/application-create";
 import { SIGN_OFF_UNIT, unitsSchema, type Extracted, type Match, type Unit } from "@/lib/application-data";
@@ -16,14 +17,14 @@ import { TONES } from "@/lib/tones";
 
 // An application written in Claude chat and saved through the connector
 // (#221, save_application): Claude reads the profile and the posting, writes
-// the tailored resume and cover letter itself, and Dossier keeps them as a
-// Draft application, as if it had written them. So Dossier needs no AI model
+// the tailored resume and cover letter itself, and rolepilot keeps them as a
+// Draft application, as if it had written them. So rolepilot needs no AI model
 // of its own for this. The parts are checked like the AI's: roles, projects
 // and degrees must be the profile's, skills its own skills, certifications,
 // publications and custom sections come from the profile word for word, and with "Never invent experience" on,
 // names and numbers the profile and posting don't back are marked "check this".
 
-/** Shown as what wrote the documents, where Dossier would show a prompt version. */
+/** Shown as what wrote the documents, where rolepilot would show a prompt version. */
 export const WRITTEN_IN_CLAUDE = "claude-chat";
 
 export const writtenResumeSchema = z.object({
@@ -33,6 +34,7 @@ export const writtenResumeSchema = z.object({
     .describe("Every role from get_profile by its id, with 2–5 tailored bullets; a role left out keeps its own bullets"),
   projects: z.array(z.object({ id: z.string(), bullets: z.array(z.string().max(400)).max(6) })).default([]),
   skills: z.array(z.string().max(100)).describe("The profile's own skills, most relevant first; others are dropped"),
+  remembered_skills: z.array(tailoredSkillSchema).max(100).optional().describe("Additional skills with exact memory source IDs and quotes returned by get_profile; names and groups must be evidence-supported"),
   education: z.array(z.object({ id: z.string(), notes: z.string().max(600) })).default([]),
 });
 
@@ -55,7 +57,6 @@ export const writtenDetailsSchema = z.object({
   mode: z.string().max(100).default("").describe("e.g. Remote, Hybrid, On-site"),
   salary: z.string().max(200).default(""),
   deadline: z.iso.date().nullable().default(null),
-  language: z.string().max(60).default("English").describe("The language the documents are written in"),
 });
 
 export const writtenMatchSchema = z
@@ -102,7 +103,8 @@ export function letterUnits(letter: z.output<typeof writtenLetterSchema>, signOf
 export async function saveWrittenApplication(input: WrittenApplication): Promise<{ applicationId: string; unverified: { part: string; items: string[] }[] }> {
   const [fullProfile, settings] = await Promise.all([loadProfile(), loadSettings()]);
   // A section that's off on the base resume isn't on it (#297).
-  const profile = withoutSectionsOff(fullProfile, settings.resumeSections);
+  const candidate = await prepareCandidateProfile(fullProfile, input.posting);
+  const profile = withoutSectionsOff(candidate, settings.resumeSections);
   const { details } = input;
   const extracted: Extracted = {
     title: details.title?.trim() || null,
@@ -114,14 +116,18 @@ export async function saveWrittenApplication(input: WrittenApplication): Promise
     deadline: details.deadline,
     requirements: input.match.map((item) => ({ text: item.requirement, kind: "other", skill: null, years: null, language: null })),
     asksForReferences: false,
-    language: details.language.trim() || null,
+    language: "English",
   };
   const match: Match = { items: input.match.map((item) => ({ requirement: item.requirement, result: item.result, skill: null, experienceIds: [], note: item.note })) };
 
   const tone = settings.defaultTone;
-  const english = /^english$/i.test(details.language.trim() || "English");
-  const signOff = english || !input.letter.sign_off.trim() ? TONES[tone].signOff : input.letter.sign_off.trim();
-  let resume = resumeUnits(profile, input.resume, documentLabels(details.language));
+  const signOff = TONES[tone].signOff;
+  let resume = resumeUnits(profile, input.resume, documentLabels("English"));
+  if (input.resume.remembered_skills?.length) {
+    const text = acceptedSkills(candidate, [...input.resume.skills, ...input.resume.remembered_skills]);
+    const unit = resume.find(unit => unit.id === "skills");
+    if (unit) unit.text = text;
+  }
   let letter = letterUnits(input.letter, signOff);
   if (settings.strict) {
     const facts = input.note.trim() ? [input.note.trim()] : [];
@@ -133,7 +139,7 @@ export async function saveWrittenApplication(input: WrittenApplication): Promise
 
   const applicationId = await createApplicationFromDocuments({
     reading: { posting: input.posting, extracted, extractedWith: WRITTEN_IN_CLAUDE, matchedWith: WRITTEN_IN_CLAUDE },
-    documents: { resume, resumeWith: WRITTEN_IN_CLAUDE, letter, letterWith: WRITTEN_IN_CLAUDE },
+    documents: { memoryRevision: candidateMemoryRevision(candidate), resume, resumeWith: WRITTEN_IN_CLAUDE, letter, letterWith: WRITTEN_IN_CLAUDE },
     match,
     details: {
       title: details.title?.trim() || [details.role, details.company].filter((part) => part.trim()).join(" · "),

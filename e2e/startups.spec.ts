@@ -7,7 +7,7 @@ import { fakeStartupRequests, resetData, sql } from "./support";
 // (e2e/fake-jobs.mts), for the demo profile in Rotterdam: what a refresh
 // keeps and leaves out, the addresses it reads (people's only when asked),
 // robots.txt and "no unsolicited applications", the filters, Dismiss with
-// Undo, and Remove for good, which a refresh doesn't undo.
+// Undo, and Delete permanently, which a refresh doesn't undo.
 test.beforeAll(resetData);
 
 async function expectAccessible(page: Page) {
@@ -35,19 +35,19 @@ test("finds hiring startups with the addresses they publish, and leaves alone wh
   await expect(addresses).toContainText("hello@canalworks.example");
   await expect(addresses).not.toContainText("lena@canalworks.example");
   expect((await fakeStartupRequests()).map((request) => request.url)).not.toContain("https://canalworks.example/team");
-  await canal.getByRole("button", { name: "Look for people's addresses" }).click();
+  await canal.getByRole("button", { name: "Find contact emails" }).click();
   await expect(addresses).toContainText("lena@canalworks.example");
   await expect(canal).toContainText("People's own addresses are dropped after 14 days unless you write to this startup.");
 
   // A site that takes no unsolicited applications gets none from here.
   const quiet = page.getByRole("article", { name: "Quietco" });
   await expect(quiet.getByRole("note")).toContainText("We do not accept unsolicited applications.");
-  await expect(quiet.getByRole("link", { name: "Write to them" })).toHaveCount(0);
+  await expect(quiet.getByRole("link", { name: "Draft outreach" })).toHaveCount(0);
 
-  // Tulipworks' robots.txt keeps Dossier out, and every request says what it is.
+  // Tulipworks' robots.txt keeps rolepilot out, and every request says what it is.
   const requests = await fakeStartupRequests();
   expect(requests.filter((request) => request.url.includes("tulipworks")).map((request) => request.url)).toEqual(["https://tulipworks.example/robots.txt"]);
-  expect(requests.every((request) => /Dossier\/[\w.-]+; \+https:\/\/github\.com\/AienTech\/dossier\/blob\/main\/PRIVACY\.md#startups/.test(request.userAgent))).toBe(true);
+  expect(requests.every((request) => /rolepilot\/[\w.-]+; \+https:\/\/github\.com\/chaprep\/job-finder\/blob\/main\/PRIVACY\.md#startups/.test(request.userAgent))).toBe(true);
   await expect(page.getByRole("article", { name: "Tulipworks" }).getByRole("list", { name: "Addresses they publish" })).toHaveCount(0);
 
   await expectAccessible(page);
@@ -68,9 +68,9 @@ test("finds hiring startups with the addresses they publish, and leaves alone wh
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(faraway).toBeVisible();
 
-  // Write to them: New application starts from what's known, without any
+  // Draft outreach: New application starts from what's known, without any
   // address, and the email goes to the address the startup publishes.
-  await canal.getByRole("link", { name: "Write to them" }).click();
+  await canal.getByRole("link", { name: "Draft outreach" }).click();
   await expect(page).toHaveURL(/\/new$/);
   const posting = page.getByLabel("Job posting");
   await expect(posting).toHaveValue(/Canalworks \(YC W25\) Is Hiring a Product Designer/);
@@ -86,8 +86,8 @@ test("finds hiring startups with the addresses they publish, and leaves alone wh
 
   // Removed for good: only hashes stay, and a refresh doesn't bring it back.
   const harbour = page.getByRole("article", { name: "Harbourlight" });
-  await harbour.getByRole("button", { name: "Remove for good" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Remove for good" }).click();
+  await harbour.getByRole("button", { name: "Delete permanently" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete permanently" }).click();
   await expect(harbour).toHaveCount(0);
   expect(await sql(`SELECT count(*)::int AS n FROM "StartupBlock"`)).toEqual([{ n: 3 }]);
   await page.getByRole("button", { name: "Refresh" }).click();

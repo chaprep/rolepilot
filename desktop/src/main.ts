@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -11,18 +12,17 @@ import { startPrintService, type PrintService } from "./print-service";
 import { googleConnectPath, mayOpenExternally, navigationFor, permissionAllowed, redirectAllowed } from "./window-rules";
 
 // The desktop app: one window with the app's own top bar, and below it either
-// its start screen or Dossier, from the user's server or from a server the app
-// starts on this computer. Dossier is the same either way, as a web page in a view.
+// its start screen or rolepilot, from the user's server or from a server the app
+// starts on this computer. rolepilot is the same either way, as a web page in a view.
 
-const RELEASES_URL = "https://github.com/AienTech/dossier/releases/latest";
-const REPOSITORY_URL = "https://github.com/AienTech/dossier";
-const SERVER_SESSION = "persist:dossier";
+const REPOSITORY_URL = "https://github.com/chaprep/job-finder";
+const SERVER_SESSION = "persist:rolepilot";
 const LOCAL_SESSION = "persist:local";
-const DESKTOP_TOKEN_HEADER = "x-dossier-desktop-token";
+const DESKTOP_TOKEN_HEADER = "x-rolepilot-desktop-token";
 /** Where the server and Node that come with the app are. */
 const RESOURCES = app.isPackaged ? process.resourcesPath : path.join(__dirname, "..", "build-server");
 /** The cookie the sidebar's light/dark switch sets on the server's page. */
-const THEME_COOKIE = "dossier_theme";
+const THEME_COOKIE = "rolepilot_theme";
 const ICON = path.join(__dirname, "icon.png");
 const BAR_PAGE = path.join(__dirname, "bar", "index.html");
 const START_PAGE = path.join(__dirname, "start", "index.html");
@@ -116,7 +116,7 @@ function showStart(screen: StartScreen) {
   void view.webContents.loadFile(START_PAGE);
 }
 
-/** Shows Dossier from this address. With a token, it's the server on this computer, which the app signs in to by itself. */
+/** Shows rolepilot from this address. With a token, it's the server on this computer, which the app signs in to by itself. */
 function showServer(origin: string, signInToken?: string) {
   const view = new WebContentsView({
     webPreferences: {
@@ -214,7 +214,7 @@ async function openLocal() {
     }
     showServer(local.origin, local.token);
   } catch (error) {
-    const problem: LocalProblem = error instanceof LocalServerError ? error.problem : { kind: "failed", detail: error instanceof Error ? error.message : "Dossier couldn't start.", log: logFile() };
+    const problem: LocalProblem = error instanceof LocalServerError ? error.problem : { kind: "failed", detail: error instanceof Error ? error.message : "rolepilot couldn't start.", log: logFile() };
     showStart({ screen: "local-problem", ...problem });
   }
 }
@@ -224,7 +224,7 @@ function stopLocal() {
   local = null;
 }
 
-/** Only what's asked for is allowed in the sessions that show Dossier, and the bar follows its light/dark switch. */
+/** Only what's asked for is allowed in the sessions that show rolepilot, and the bar follows its light/dark switch. */
 function prepareSessions() {
   for (const partition of [SERVER_SESSION, LOCAL_SESSION]) {
     const serverSession = session.fromPartition(partition);
@@ -257,11 +257,6 @@ function registerCalls() {
       savePreferences({ ...preferences, mode: "local" });
       void openLocal();
     }),
-  );
-
-  ipcMain.handle(
-    "start:releases",
-    fromStartScreen(() => void shell.openExternal(RELEASES_URL)),
   );
 
   ipcMain.handle(
@@ -346,8 +341,7 @@ function buildMenu() {
         ...(preferences.mode === "local"
           ? [{ label: "Sign in my browser", click: () => void (local ? openSignedIn(local.origin, local.token, "/") : undefined) }, { type: "separator" as const }]
           : []),
-        { label: "Download the latest version", click: () => void shell.openExternal(RELEASES_URL) },
-        { label: "Dossier on GitHub", click: () => void shell.openExternal(REPOSITORY_URL) },
+        { label: "rolepilot on GitHub", click: () => void shell.openExternal(REPOSITORY_URL) },
         { type: "separator" },
         { role: "about" },
       ],
@@ -364,7 +358,7 @@ function createWindow() {
     minWidth: 480,
     minHeight: 480,
     show: false,
-    title: "Dossier",
+    title: "rolepilot",
     icon: ICON,
     backgroundColor: colors.background,
     autoHideMenuBar: true,
@@ -395,7 +389,7 @@ function createWindow() {
 
 function start() {
   preferences = readPreferences(preferencesFile());
-  app.setAboutPanelOptions({ applicationName: "Dossier", applicationVersion: app.getVersion(), copyright: "Free software under the AGPL-3.0", website: REPOSITORY_URL, iconPath: ICON });
+  app.setAboutPanelOptions({ applicationName: "rolepilot", applicationVersion: app.getVersion(), copyright: "Free software under the AGPL-3.0", website: REPOSITORY_URL, iconPath: ICON });
   prepareSessions();
   registerCalls();
   buildMenu();
@@ -406,9 +400,14 @@ function start() {
   else showStart({ screen: "choose" });
 }
 
-app.setName("Dossier");
+// Existing installs keep their complete data directory, including secrets and browser partitions.
+const legacyDataDir = process.platform === "win32" && process.env.LOCALAPPDATA
+  ? path.join(process.env.LOCALAPPDATA, "Dossier")
+  : path.join(app.getPath("appData"), "Dossier");
+app.setName("rolepilot");
 // %LOCALAPPDATA%, not Roaming: a database doesn't belong in a folder that follows a person between computers.
-if (process.platform === "win32" && process.env.LOCALAPPDATA) app.setPath("userData", path.join(process.env.LOCALAPPDATA, "Dossier"));
+if (process.platform === "win32" && process.env.LOCALAPPDATA) app.setPath("userData", path.join(process.env.LOCALAPPDATA, "rolepilot"));
+if (existsSync(legacyDataDir)) app.setPath("userData", legacyDataDir);
 
 // One app at a time: a second launch brings the running one forward.
 if (app.requestSingleInstanceLock()) {

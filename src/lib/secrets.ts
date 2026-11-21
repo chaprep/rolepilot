@@ -2,28 +2,29 @@ import "server-only";
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
-import { deriveKey, type KeyPurpose } from "@/lib/keys";
+import { deriveKey, deriveLegacyKey, type KeyPurpose } from "@/lib/keys";
 
 // Secrets kept in the database, such as API keys (SET-1, PRD §11): AES-256-GCM
-// under a key derived from DOSSIER_SECRET for that kind of secret only, a
+// under a key derived from ROLEPILOT_SECRET for that kind of secret only, a
 // random IV per encryption, and a version prefix so the format can change
-// later. Stored as "v1.<iv>.<ciphertext + tag>", both base64url.
+// later. New values use "v2.<iv>.<ciphertext + tag>"; v1 remains readable.
 
 /** What a secret is: its own derived key, and associated data that binds the ciphertext to it. */
 export type SecretKind = { purpose: KeyPurpose; associatedData: string };
 
 /** The AI provider's API key (E6-2). */
-export const AI_API_KEY: SecretKind = { purpose: "api-key-encryption", associatedData: "dossier api key v1" };
+export const AI_API_KEY: SecretKind = { purpose: "api-key-encryption", associatedData: "rolepilot api key v2" };
 /** A job source's API key (E14-4). */
-export const JOB_SOURCE_KEY: SecretKind = { purpose: "job-source-key-encryption", associatedData: "dossier job source key v1" };
+export const JOB_SOURCE_KEY: SecretKind = { purpose: "job-source-key-encryption", associatedData: "rolepilot job source key v2" };
+export const ZYTE_KEY: SecretKind = { purpose: "zyte-key-encryption", associatedData: "rolepilot zyte key v2" };
 /** The TypeSafe key Jev scores postings with (#274). */
-export const TYPESAFE_KEY: SecretKind = { purpose: "typesafe-key-encryption", associatedData: "dossier typesafe key v1" };
+export const TYPESAFE_KEY: SecretKind = { purpose: "typesafe-key-encryption", associatedData: "rolepilot typesafe key v2" };
 /** The Google account's refresh token (E15-1). */
-export const GOOGLE_TOKEN: SecretKind = { purpose: "google-token-encryption", associatedData: "dossier google token v1" };
+export const GOOGLE_TOKEN: SecretKind = { purpose: "google-token-encryption", associatedData: "rolepilot google token v2" };
 /** The Google OAuth client's secret, entered in Settings → Google. */
-export const GOOGLE_CLIENT_SECRET: SecretKind = { purpose: "google-client-secret-encryption", associatedData: "dossier google client secret v1" };
+export const GOOGLE_CLIENT_SECRET: SecretKind = { purpose: "google-client-secret-encryption", associatedData: "rolepilot google client secret v2" };
 
-const VERSION = "v1";
+const VERSION = "v2";
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
@@ -45,11 +46,11 @@ export function encryptSecret(kind: SecretKind, value: string, secret?: string):
 
 export function decryptSecret(kind: SecretKind, stored: string, secret?: string): string {
   const [version, iv, encrypted, ...rest] = stored.split(".");
-  if (version !== VERSION || !iv || !encrypted || rest.length > 0) throw new SecretUnreadable();
+  if ((version !== VERSION && version !== "v1") || !iv || !encrypted || rest.length > 0) throw new SecretUnreadable();
   try {
     const data = Buffer.from(encrypted, "base64url");
-    const decipher = createDecipheriv("aes-256-gcm", deriveKey(kind.purpose, secret), Buffer.from(iv, "base64url"));
-    decipher.setAAD(Buffer.from(kind.associatedData));
+    const decipher = createDecipheriv("aes-256-gcm", (version === "v1" ? deriveLegacyKey(kind.purpose, secret) : deriveKey(kind.purpose, secret)), Buffer.from(iv, "base64url"));
+    decipher.setAAD(Buffer.from(version === "v1" ? kind.associatedData.replace("rolepilot ", "dossier ").replace(" v2", " v1") : kind.associatedData));
     decipher.setAuthTag(data.subarray(data.length - TAG_BYTES));
     return Buffer.concat([decipher.update(data.subarray(0, data.length - TAG_BYTES)), decipher.final()]).toString("utf8");
   } catch {
@@ -81,8 +82,14 @@ export type SecretChange = { action: "keep" } | { action: "set"; value: string }
 /** The stored value after `change`. */
 export function applySecretChange(kind: SecretKind, stored: string | null, change: SecretChange, secret?: string): string | null {
   switch (change.action) {
-    case "keep":
-      return stored;
+    case "keep": {
+      if (!stored?.startsWith("v1.")) return stored;
+      try { return encryptSecret(kind, decryptSecret(kind, stored, secret), secret); }
+      catch (error) {
+        if (!(error instanceof SecretUnreadable)) throw error;
+        return stored;
+      }
+    }
     case "clear":
       return null;
     case "set": {

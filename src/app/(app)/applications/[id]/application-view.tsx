@@ -64,6 +64,7 @@ import { ThemePicker } from "../../resume/theme-picker";
 import { ThemeBuilder, draftFrom, type ThemeDraft } from "../../resume/theme-builder";
 import { ResumeSidebar } from "./resume-sidebar";
 import { ResumeScore } from "./resume-score";
+import { ResearchPanel, type ResearchPanelData } from "./research-panel";
 import { WriteMissingDocument } from "./write-missing-document";
 import { ApplicationHeader } from "./application-header";
 import { ApplicationMenu } from "./application-menu";
@@ -163,6 +164,7 @@ export type ApplicationViewProps = {
   /** The email being written, e.g. since before a reload. */
   writingEmail: string | null;
   /** A resume or letter it was created without, being written (#367), e.g. since before a reload. */
+  research?: ResearchPanelData;
   writingDocuments?: { resume: string | null; letter: string | null };
   /** The PDFs to attach to the email. */
   attachments: Attachments;
@@ -216,6 +218,7 @@ export function ApplicationView({
   baseSections,
   email,
   writingEmail,
+  research,
   writingDocuments = { resume: null, letter: null },
   attachments,
   gmail,
@@ -542,9 +545,8 @@ export function ApplicationView({
     const result = await addApplicationEvidence({ id: application.id, evidence });
     if (!result.ok) { toast(result.error); return false; }
     setFacts((current) => [...current.filter((fact) => fact.id !== result.data.fact.id), result.data.fact]);
-    if (result.data.jobId) setReply({ jobId: result.data.jobId, revision: 0 });
     toast(result.data.notice);
-    return !result.data.retry;
+    return true;
   };
 
   /** "Put back" something left out by hand (#217), or by the page limit of earlier versions (E10-10). */
@@ -779,7 +781,8 @@ export function ApplicationView({
           )}
         </TabsContent>
 
-        <TabsContent value="letter" className="flex min-h-0 min-w-0 flex-[999_1_480px]">
+        <TabsContent value="letter" className="flex min-h-0 min-w-0 flex-[999_1_480px] flex-col">
+          {research && (research.enabled || research.saved || research.jobId) && <ResearchPanel applicationId={application.id} data={research} />}
           {letter && letterTheme && letterUnits ? (
             <DocumentPreview
               label={
@@ -990,7 +993,7 @@ function PreviewSwitch({ label, checked, onCheckedChange }: { label: string; che
         onCheckedChange={onCheckedChange}
         className="flex h-4 w-7 shrink-0 items-center rounded-full bg-toggle-off p-0.5 data-[state=checked]:bg-primary motion-safe:transition-colors"
       >
-        <Switch.Thumb className="block size-3 rounded-full bg-white shadow-knob data-[state=checked]:translate-x-3 motion-safe:transition-transform" />
+        <Switch.Thumb className="block size-3 rounded-full bg-white shadow-knob data-[state=checked]:bg-on-primary data-[state=checked]:translate-x-3 motion-safe:transition-transform" />
       </Switch.Root>
       <label htmlFor={id} className="cursor-pointer">
         {label}

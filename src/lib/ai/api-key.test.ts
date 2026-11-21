@@ -9,7 +9,7 @@ import {
   encryptApiKey,
 } from "./api-key";
 
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
 
 const KEY = "sk-ant-api03-example-key";
 
@@ -22,7 +22,7 @@ describe("API key encryption", () => {
     const first = encryptApiKey(KEY);
     const second = encryptApiKey(KEY);
     expect(first).not.toBe(second);
-    expect(first).toMatch(/^v1\.[\w-]+\.[\w-]+$/);
+    expect(first).toMatch(/^v2\.[\w-]+\.[\w-]+$/);
     expect(first).not.toContain("example");
   });
 
@@ -40,7 +40,7 @@ describe("API key encryption", () => {
 
   it("refuses unknown versions and malformed values", () => {
     const [, iv, data] = encryptApiKey(KEY).split(".");
-    for (const stored of [`v2.${iv}.${data}`, "garbage", "v1..", `v1.${iv}.${data}.extra`]) {
+    for (const stored of [`v99.${iv}.${data}`, "garbage", "v1..", `v1.${iv}.${data}.extra`]) {
       expect(() => decryptApiKey(stored), stored).toThrow(ApiKeyUnreadable);
     }
   });

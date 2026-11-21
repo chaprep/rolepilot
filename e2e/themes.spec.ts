@@ -19,8 +19,8 @@ test("duplicates, exports, deletes and imports a theme", async ({ page }) => {
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: `Export ${original} copy` }).click()]);
   const exported = JSON.parse(await readFile((await download.path())!, "utf8"));
   expect(exported).toMatchObject({
-    format: "dossier-theme",
-    version: 3,
+    format: "rolepilot-theme",
+    version: 4,
     theme: {
       name: `${original} copy`,
       headerStyle: expect.any(String),
@@ -42,7 +42,7 @@ test("duplicates, exports, deletes and imports a theme", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Editorial theme, in use" })).toBeFocused();
 
   await page.locator("input[type=file][accept*=json]").setInputFiles({
-    name: "theme.dossier-theme.json",
+    name: "theme.rolepilot-theme.json",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(exported)),
   });
@@ -59,9 +59,9 @@ test("changes an application's theme from its Resume tab", async ({ page }) => {
   expect(await pdf()).not.toContain("Garamond");
 
   await page.goto(`/applications/${ledgerly.id}`);
-  await page.getByRole("button", { name: "Editorial theme" }).click();
-  await page.getByRole("menuitemradio", { name: "Classic" }).click();
-  await expect(page.getByRole("button", { name: "Classic theme" })).toBeVisible();
+  await page.getByRole("tab", { name: "Resume controls", exact: true }).click();
+  await page.getByRole("button", { name: "Classic theme", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Classic theme, in use", exact: true })).toBeVisible();
   const name = page.getByRole("article", { name: "Resume" }).getByRole("heading", { level: 1 });
   await expect(name).toHaveCSS("font-family", /Garamond/);
 

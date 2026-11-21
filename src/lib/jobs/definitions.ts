@@ -8,6 +8,7 @@ import "./regenerate-unit";
 import "./refine";
 import "./write-email";
 import "./write-document";
+import "./refresh-research";
 import "./score-resume";
 import "./zip-pdfs";
 import "./import-profile";
@@ -17,3 +18,5 @@ import "@/lib/agent/draft";
 import "./score-posting";
 import "@/lib/startups/refresh";
 import "@/lib/connector/draft";
+
+import "./capture-memory";

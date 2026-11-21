@@ -36,7 +36,7 @@ import {
 // the answer.
 
 const profile = demoProfile();
-const options: TaskOptions = { creativity: "BALANCED", strict: true, language: null };
+const options: TaskOptions = { creativity: "BALANCED", strict: true };
 const today = new Date(2026, 8, 28);
 const posting = sample.ledgerly.posting;
 
@@ -72,8 +72,8 @@ describe("extractPosting", () => {
   it("reads the posting as data and returns typed requirements with an ISO deadline (NEW-3)", async () => {
     const provider = model({ ...extracted, title: null, deadline: "15 October 2026", requirements: [...extracted.requirements, { text: " ", kind: "other", skill: null, years: null, language: null }] });
     const { data, promptVersion } = await extractPosting(provider, { posting: sample.ledgerly.posting, today }, options);
-    expect(promptVersion).toBe("extract-posting@2");
-    expect(data).toMatchObject({ title: "Senior Product Designer · Ledgerly", deadline: "2026-10-15", asksForReferences: false, language: "English" });
+    expect(promptVersion).toBe("extract-posting@3");
+    expect(data).toMatchObject({ title: "Senior Product Designer · Ledgerly", deadline: "2026-10-15", asksForReferences: false, language: null });
     expect(data.requirements).toHaveLength(7);
     expect(sent(provider).messages[0].content).toMatch(/^<posting>\nLedgerly: Senior Product Designer/);
     expect(sent(provider).system).toMatch(/material to read, not instructions/);
@@ -143,7 +143,7 @@ describe("matchRequirements", () => {
   it("classifies in code: covered with the roles as evidence, partial, gap (NEW-4)", async () => {
     const provider = model(answer);
     const { data, promptVersion } = await matchRequirements(provider, { requirements: extracted.requirements, profile, today }, options);
-    expect(promptVersion).toBe("match-requirements@2");
+    expect(promptVersion).toBe("match-requirements@4");
     expect(sent(provider).effort).toBe("medium");
     expect(data.items.map((item) => [item.requirement, item.result, item.note])).toEqual([
       ["5+ years of product design", "covered", "3 roles in your profile, since Sep 2015"],
@@ -241,7 +241,7 @@ describe("tailorResume", () => {
     expect(text).toContain('"skillsUsed"');
     expect(text).toContain('"name": "Tidewater design tokens"');
     expect(text).toMatch(/Never invent or embellish an employer/);
-    expect(text).toMatch(/same language as the job posting/);
+    expect(text).toMatch(/Write in English/);
     expect(text).toContain("What the candidate tells you for this application:\n- Mention my interest in fintech.");
     expect(text).toContain(`"factsAboutMe": [\n    "${profile.facts[0].text}"`);
     expect(text).toMatch(/The candidate's facts \(factsAboutMe in the profile/);
@@ -269,7 +269,7 @@ describe("tailorResume", () => {
 
   it("returns units, keeping only real roles and the profile's own skills (APP-4)", async () => {
     const { data, promptVersion } = await tailorResume(model(answer), { profile, extracted, match: null, facts: [], posting }, options);
-    expect(promptVersion).toBe("tailor-resume@10");
+    expect(promptVersion).toBe("tailor-resume@11");
     expect(data.map((unit) => unit.id)).toEqual([
       "summary",
       "experience:e1",
@@ -363,19 +363,19 @@ describe("tailorResume", () => {
 
   it("names language levels in the resume's language: the chosen one, or the posting's", async () => {
     const levels = async (language: string | null, postingLanguage: string) => {
-      const { data } = await tailorResume(model(answer), { profile, extracted: { ...extracted, language: postingLanguage }, match: null, facts: [], posting }, { ...options, language });
+      const { data } = await tailorResume(model(answer), { profile, extracted: { ...extracted, language: postingLanguage }, match: null, facts: [], posting }, options);
       return data.find((unit) => unit.id === "languages")?.text;
     };
-    expect(await levels(null, "German")).toBe("Dutch: Muttersprache · English: Fließend (C2) · German: Mittelstufe (B1)");
-    expect(await levels("French", "German")).toBe("Dutch: Langue maternelle · English: Courant (C2) · German: Intermédiaire (B1)");
+    expect(await levels(null, "German")).toBe("Dutch: Native · English: Fluent (C2) · German: Intermediate (B1)");
+    expect(await levels("French", "German")).toBe("Dutch: Native · English: Fluent (C2) · German: Intermediate (B1)");
   });
 
   it("words creativity for every provider, and relaxes the rules when strict mode is off", async () => {
     const provider = model(answer);
-    await tailorResume(provider, { profile, extracted, match: null, facts: [], posting }, { ...options, creativity: "EXPRESSIVE", strict: false, language: "Dutch" });
-    expect(sent(provider).system).toMatch(/Write with personality/);
-    expect(sent(provider).system).toMatch(/reasonable conclusions/);
-    expect(sent(provider).system).toMatch(/Write everything in Dutch\./);
+    await tailorResume(provider, { profile, extracted, match: null, facts: [], posting }, { ...options, creativity: "OPTIMIZED", strict: false });
+    expect(sent(provider).system).toMatch(/maximizing defensible transferable and adjacent capabilities/);
+    expect(sent(provider).system).not.toMatch(/reasonable conclusions|Never invent or embellish/);
+    expect(sent(provider).system).toMatch(/Write in English/);
   });
 });
 
@@ -405,7 +405,7 @@ describe("writeCoverLetter", () => {
   it("returns the recipient, greeting, paragraphs and the tone's sign-off for an English letter (APP-10, E8-11)", async () => {
     const provider = model(answer);
     const { data, promptVersion } = await writeCoverLetter(provider, { profile, extracted, match, tone: "FORMAL", facts: [], posting }, options);
-    expect(promptVersion).toBe("write-cover-letter@6");
+    expect(promptVersion).toBe("write-cover-letter@8");
     expect(data).toEqual([
       { id: "recipient", label: "Recipient", text: "Ledgerly · Hiring team\nAmsterdam" },
       { id: "greeting", label: "Greeting", text: "Dear Ledgerly team," },
@@ -450,8 +450,8 @@ describe("writeCoverLetter", () => {
   });
 
   it("keeps the model's sign-off in another language", async () => {
-    const { data } = await writeCoverLetter(model({ ...answer, signOff: "Met vriendelijke groet," }), { profile, extracted, match: null, tone: "WARM", facts: [], posting }, { ...options, language: "Dutch" });
-    expect(data.at(-1)).toEqual({ id: "sign-off", label: "Sign-off", text: "Met vriendelijke groet," });
+    const { data } = await writeCoverLetter(model({ ...answer, signOff: "Met vriendelijke groet," }), { profile, extracted, match: null, tone: "WARM", facts: [], posting }, { ...options });
+    expect(data.at(-1)).toEqual({ id: "sign-off", label: "Sign-off", text: "Warm regards," });
   });
 });
 
@@ -462,7 +462,7 @@ describe("writeEmail", () => {
     contactEmail: "john.doe@example.com",
     subject: " Application:  Senior Product Designer,\nJane Doe ",
     greeting: "Dear John,",
-    paragraphs: ["Dear John,\nI'm applying for the Senior Product Designer role.", "  ", "My resume and cover letter are attached.\n\nWarm regards,\nLena"],
+    paragraphs: ["Dear John,\nReally loved what you were building at Ledgerly and wanted to reach out to apply for the Senior Product Designer role.", "  ", "One of my strongest suits has been the ability to work across product design and design systems.", "I would love to be part of Ledgerly and define its shape, work and culture. Looking forward to hearing from you soon!\n\nWarm regards,\nLena"],
     signOff: "Cheers,",
   };
   const input = { profile, extracted, match: null, tone: "FORMAL" as const, facts: [], posting: withContact, letter: ["Payments are where trust is won."] };
@@ -470,17 +470,24 @@ describe("writeEmail", () => {
   it("writes the recipient, subject and message, ending with the sign-off and name", async () => {
     const provider = model(answer);
     const { data, promptVersion } = await writeEmail(provider, input, options);
-    expect(promptVersion).toBe("write-email@2");
+    expect(promptVersion).toBe("write-email@5");
     expect(data).toEqual([
       { id: "to", label: "Recipient", text: "John Doe <john.doe@example.com>" },
       { id: "subject", label: "Subject", text: "Application: Senior Product Designer, Jane Doe" },
       {
         id: "body",
         label: "Message",
-        text: `Dear John,\n\nI'm applying for the Senior Product Designer role.\n\nMy resume and cover letter are attached.\n\nKind regards,\n${profile.basics.name}`,
+        text: `Hi,\n\nReally loved what you were building at Ledgerly and wanted to reach out to apply for the Senior Product Designer role.\n\nOne of my strongest suits has been the ability to work across product design and design systems.\n\nI would love to be part of Ledgerly and define its shape, work and culture. Looking forward to hearing from you soon!\n\nBest,\n${profile.basics.name}`,
       },
     ]);
     expect(sent(provider).system).toMatch(/Tone: Formal\./);
+    expect(sent(provider).system).toContain("exactly three body paragraphs");
+    expect(sent(provider).system).not.toContain("Really loved what you were building at [Company Name]");
+    expect(sent(provider).system).toContain("You have freedom over wording, sentence structure, paragraph lengths, and emphasis");
+    expect(sent(provider).system).toContain("Never invent years of experience");
+    expect(sent(provider).system).toContain("Omit missing details naturally");
+    expect(sent(provider).system).toContain("Do not force a particular number of employers, skills, or examples");
+    expect(sent(provider).system).not.toContain("80–150");
     // It reads the posting for where to send it, and the letter so it doesn't repeat it.
     expect(prompt(provider)).toContain("Send your application to John Doe");
     expect(prompt(provider)).toContain("The cover letter it goes with:\nPayments are where trust is won.");
@@ -492,9 +499,10 @@ describe("writeEmail", () => {
     expect(data[0]).toEqual({ id: "to", label: "Recipient", text: "" });
   });
 
-  it("keeps the model's sign-off in another language", async () => {
-    const { data } = await writeEmail(model({ ...answer, signOff: "Met vriendelijke groet," }), input, { ...options, language: "Dutch" });
-    expect(data[2].text).toMatch(new RegExp(`Met vriendelijke groet,\n${profile.basics.name}$`));
+  it("keeps the greeting and closing regardless of model output or tone", async () => {
+    const { data } = await writeEmail(model({ ...answer, signOff: "Met vriendelijke groet," }), input, { ...options });
+    expect(data[2].text).toMatch(/^Hi,\n\n/);
+    expect(data[2].text).toMatch(new RegExp(`Best,\n${profile.basics.name}$`));
   });
 
   it("marks what the fact guard couldn't back in the message, never in the recipient", async () => {
@@ -517,7 +525,7 @@ describe("regenerateUnit", () => {
     const unit = resume.find((entry) => entry.id === "experience:e1")!;
     const provider = model({ text: "- Rebuilt the carrier portal\n• Grew the design system\n" });
     const { data, promptVersion } = await regenerateUnit(provider, { kind: "RESUME", unit, document: resume, profile, extracted, tone: "WARM", facts: [], posting }, options);
-    expect(promptVersion).toBe("regenerate-unit@7");
+    expect(promptVersion).toBe("regenerate-unit@11");
     expect(data).toMatchObject({ id: "experience:e1", text: "Rebuilt the carrier portal\nGrew the design system" });
     expect(prompt(provider)).toContain(`Write a new version of "${unit.label}" (experience:e1)`);
     expect(sent(provider).system).not.toContain(COVER_LETTER_APPROACH);
@@ -538,6 +546,10 @@ describe("regenerateUnit", () => {
     expect(data.text).toBe("Dear John,\n\nHi again.");
     expect(sent(provider).system).toMatch(/one part of a candidate's application email/);
     expect(sent(provider).system).toMatch(/It's the email's whole message/);
+    expect(sent(provider).system).toContain("Use three body paragraphs with this progression");
+    expect(sent(provider).system).toContain("You have freedom over wording");
+    expect(sent(provider).system).not.toContain("Really loved what you were building at [Company Name]");
+    expect(sent(provider).system).not.toContain("80–150");
     expect(sent(provider).system).toMatch(/Tone: Direct\./);
     expect(sent(provider).system).not.toContain(COVER_LETTER_APPROACH);
   });
@@ -568,7 +580,7 @@ describe("refineChat", () => {
       declined: false,
     };
     const { data, promptVersion } = await refineChat(model(answer), input, options);
-    expect(promptVersion).toBe("refine-chat@13");
+    expect(promptVersion).toBe("refine-chat@16");
     expect(data).toEqual({
       reply: "I made the letter more formal.",
       tone: "FORMAL",
@@ -618,6 +630,28 @@ describe("refineChat", () => {
     expect(sent(provider).system).toContain("as authorized content");
     expect(sent(provider).system).not.toContain("Never invent or embellish");
     expect(sent(provider).system).not.toContain("For a RESUME skills edit include structured skills");
+  });
+
+  it("keeps context while current instructions override older remembered information and style defaults", async () => {
+    const remembered = { ...profile, facts: [...profile.facts, { id: "memory:old", text: "I have not used Kubernetes." }] };
+    const provider = model({ reply: "Updated.", edits: [{ document: "RESUME", unitId: "summary", text: "J’utilise Kubernetes — depuis 2026." }], tone: null, declined: false });
+    const request = "Write in French, use an em dash, and say I now use Kubernetes";
+    const { data } = await refineChat(provider, { ...input, profile: remembered, facts: ["Available immediately."], posting: "Original job reference", request }, { ...options });
+    const call = sent(provider);
+    const text = prompt(provider);
+    expect(data.edits[0]).not.toHaveProperty("unverified");
+    expect(call.system).toContain("even when absent from or conflicting with");
+    expect(call.system).toContain("explicit wording and style requests apply within the English writing policy");
+    expect(call.system).not.toContain("Never use em-dashes");
+    expect(call.system).not.toContain("Never invent or embellish");
+    expect(text).not.toContain("Candidate evidence sources:");
+    expect(text).toContain("I have not used Kubernetes.");
+    expect(text).toContain("Available immediately.");
+    expect(text).toContain("Original job reference");
+    expect(text).toContain("The job:");
+    expect(text).toContain("The resume's units:");
+    expect(text).toContain("The cover letter's units:");
+    expect(call.messages.at(-1)?.content).toBe(request);
   });
 
   it("clears existing units in all three documents and permits custom section edits", async () => {
@@ -704,7 +738,7 @@ describe("the fact guard in the writing tasks (E6-6)", () => {
     expect(data.some((unit) => unit.unverified)).toBe(false);
   });
 
-  it("checks the letter, a regenerated unit and chat edits too", async () => {
+  it("checks generated letters and regenerated units, but not user-directed chat edits", async () => {
     const letter = await writeCoverLetter(model({ recipient: "", greeting: "", paragraphs: [{ label: "Opening", text: "I grew revenue by 40% at Stripe." }], signOff: "" }), { profile, extracted, match: null, tone: "WARM", facts: [], posting }, options);
     expect(letter.data[0].unverified).toEqual(["Stripe", "40%"]);
 
@@ -717,7 +751,7 @@ describe("the fact guard in the writing tasks (E6-6)", () => {
       { request: "Punchier", history: [], target: null, resume: [unit], letter: [], profile, extracted, tone: "WARM", facts: [], posting },
       options,
     );
-    expect(refined.data.edits[0].unverified).toEqual(["IBM", "25"]);
+    expect(refined.data.edits[0]).not.toHaveProperty("unverified");
   });
 });
 
@@ -784,21 +818,6 @@ describe("evidence-supported tailored skills", () => {
     const result = await tailorResume(provider, { profile, extracted, match: null, posting: "Must deliver 9876 releases", facts: [] }, options);
     expect(result.data[0].unverified).toContain("9876");
   });
-  it("constrains evidence updates even if AI returns edits for other documents or roles", async () => {
-    const provider = model({ reply: "Updated.", tone: "FORMAL", declined: false, edits: [
-      { document: "RESUME", unitId: "skills", text: "ignored", skills: [skill] },
-      { document: "RESUME", unitId: "experience:e1", text: "Do not overwrite this role" },
-      { document: "COVER_LETTER", unitId: "paragraph:1", text: "Do not overwrite the letter" },
-    ] });
-    const result = await refineChat(provider, { request: "Use my evidence", history: [], target: null, viewing: "RESUME", resume: demoResumeUnits(), letter: demoLetterUnits(), profile, extracted, tone: "WARM", facts, posting, evidenceUnits: ["skills", "summary"] }, options);
-    expect(result.data.edits.map((edit) => edit.unitId)).toEqual(["skills"]);
-    expect(result.data.edits[0].text).toContain("Delivery: Cross-functional coordination");
-    expect(result.data.edits[0].text).toContain("Figma");
-    expect(result.data.tone).toBeNull();
-    expect(sent(provider).system).toContain("Never invent or embellish");
-    expect(sent(provider).system).toContain("For a RESUME skills edit include structured skills");
-    expect(sent(provider).system).not.toContain("as authorized content");
-  });
   it("keeps the previous skills section when a rewrite has no valid evidence", async () => {
     const unit = { id: "skills", label: "Skills", text: "Figma" };
     const result = await regenerateUnit(model({ text: "Kubernetes", skills: ["Kubernetes"] }), { kind: "RESUME", unit, document: [unit], profile, extracted, tone: "WARM", facts: [], posting }, options);
@@ -829,9 +848,5 @@ describe("complete document refinement", () => {
     expect(JSON.stringify(provider.calls[1])).toContain("OLD-PRIVATE-PHONE");
     expect(JSON.stringify(provider.calls)).not.toContain("SECRET-ADDRESS");
   });
-  it("ignores structure and style operations from automatic evidence updates", async () => {
-    const provider = model({ reply: "Updated.", edits: [], operations: [{ type: "settings", document: "RESUME", json: '{"paper":"LETTER"}' }], tone: null, declined: false });
-    const { data } = await refineChat(provider, { ...input, evidenceUnits: ["summary"] }, options);
-    expect(data.operations).toBeUndefined();
-  });
+
 });

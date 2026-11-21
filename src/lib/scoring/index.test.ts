@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({
 vi.mock("./config", async (importOriginal) => ({ ...(await importOriginal<typeof import("./config")>()), loadScoringConfig: async () => state.config }));
 vi.mock("@/lib/ai/config", () => ({ isAiConfigured: async () => state.aiReady }));
 vi.mock("@/lib/ai", () => ({ getAiProvider: async () => state.provider }));
-vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true, language: null }) }));
+vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true }) }));
 vi.mock("@/lib/usage-data", () => ({ recordUsage: vi.fn() }));
 vi.mock("./jev", () => ({ scoreWithJev: vi.fn(async () => ({ data: { score: 80, reasons: ["Covers: Figma"], redFlags: [] }, scoredWith: "score-posting-jev@1 (jev-1.14.0)" })) }));
 

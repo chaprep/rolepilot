@@ -1,4 +1,7 @@
 import "server-only";
+import { memoryExportSchema } from "@/lib/memory/schema";
+
+import { savedCompanyResearch, companyResearchSchema } from "@/lib/research/schema";
 
 import { z } from "zod";
 
@@ -36,7 +39,7 @@ import { appVersion } from "@/lib/version";
 
 import { themeMarginSchema } from "./theme-file";
 
-// Everything a user keeps in Dossier as one JSON file (E10-4, SET-10): the
+// Everything a user keeps in rolepilot as one JSON file (E10-4, SET-10): the
 // profile, custom themes, settings and applications with their history,
 // documents, chat and notes, the postings kept from Find jobs (E14-9) and
 // the job agent's candidates (E16), so its dedupe survives a restore, and
@@ -45,17 +48,17 @@ import { themeMarginSchema } from "./theme-file";
 // built-in themes, the Google account and the mail fetched from Gmail stay
 // behind: they belong to the server or the mailbox, not the user's data.
 
-export const EXPORT_FORMAT = "dossier-export";
-/** Bump when the file's shape changes; imports refuse versions they don't know. 2 added Find jobs' postings and keys (E14-9), 3 projects (PRO-13) and the job agent (E16), 4 facts (PRO-14, APP-15), 5 publications (#218), the profile photo's theme and application options (#224) and Startups (#222), 6 the line about a role's company (#257), 7 skill groups (#280), 8 certifications (#293) and volunteering (#294), 9 resume section order (#297), custom sections (#298) and what sent applications were sent with (#299), and the board's order (public issue 60), 10 the tailored resume's score (#370), 11 the job agent's recurring searches and which found each candidate (public PR 61), 12 custom theme page margins, 13 independent application document state and history, 14 initial cover-letter format. */
-export const EXPORT_SCHEMA_VERSION = 14;
+export const EXPORT_FORMAT = "rolepilot-export";
+/** Bump when the file's shape changes; imports refuse versions they don't know. 2 added Find jobs' postings and keys (E14-9), 3 projects (PRO-13) and the job agent (E16), 4 facts (PRO-14, APP-15), 5 publications (#218), the profile photo's theme and application options (#224) and Startups (#222), 6 the line about a role's company (#257), 7 skill groups (#280), 8 certifications (#293) and volunteering (#294), 9 resume section order (#297), custom sections (#298) and what sent applications were sent with (#299), and the board's order (public issue 60), 10 the tailored resume's score (#370), 11 the job agent's recurring searches and which found each candidate (public PR 61), 12 custom theme page margins, 13 independent application document state and history, 14 initial cover-letter format, 15 reusable candidate memory and its sources, 16 saved company research. */
+export const EXPORT_SCHEMA_VERSION = 16;
 /** The versions imports can read. */
-export const EXPORT_SCHEMA_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+export const EXPORT_SCHEMA_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 
 /** The setting that holds the encrypted API key, which only this server can read. */
 const API_KEY_SETTING = "apiKeyEnc";
 /** The settings that hold encrypted keys, which only this server can read: never exported as they are. */
-export const SECRET_SETTINGS: readonly string[] = [API_KEY_SETTING, "jsearchKeyEnc", "adzunaKeyEnc", "typesafeKeyEnc"];
-/** The settings that belong to this install rather than its data (the usage ping's and its consent, the update check's, the Google client and the browser's time zone): never exported, and kept by an import. */
+export const SECRET_SETTINGS: readonly string[] = [API_KEY_SETTING, "jsearchKeyEnc", "adzunaKeyEnc", "typesafeKeyEnc", "zyteKeyEnc"];
+/** The settings that belong to this install rather than its data (the usage ping's and its consent, the Google client and the browser's time zone): never exported, and kept by an import. */
 export const INSTALL_SETTINGS: readonly string[] = [
   "usagePingId",
   "usagePingDay",
@@ -69,6 +72,8 @@ export const INSTALL_SETTINGS: readonly string[] = [
   // When Startups was last opened and what its last refresh found (#222).
   "startupsViewedAt",
   "startupsLastRefresh",
+  // Retired notification keys remain excluded for compatibility with existing databases and backups.
+  "updateCheck",
   "latestVersion",
   "latestVersionUrl",
   "updateCheckDay",
@@ -78,6 +83,8 @@ export const INSTALL_SETTINGS: readonly string[] = [
   "googleClientId",
   "googleClientSecretEnc",
   "browserTimeZone",
+  "companyResearchEnabled",
+  "zyteVerified",
   // An import must never open the MCP connector's addresses on this server (#221), or let another app sign in (#281).
   "connectorEnabledAt",
   "connectorRedirects",
@@ -245,6 +252,7 @@ const chatMessage = z.object({
 });
 const note = z.object({ id: text, body: text, createdAt: date, updatedAt: date });
 const application = z.object({
+  matchMemoryRevision: z.number().int().nullable().optional(),
   id: text,
   title: text,
   company: text,
@@ -255,6 +263,7 @@ const application = z.object({
   deadline: optionalDate,
   postingUrl: text,
   postingText: text,
+  companyResearch: companyResearchSchema.nullable().optional(),
   extracted: z.unknown().nullable(),
   extractedWith: text.nullable(),
   match: z.unknown().nullable(),
@@ -296,6 +305,7 @@ const application = z.object({
 
 /** A posting the job agent found (E16). */
 const agentCandidate = z.object({
+  memoryRevision: z.number().int().nullable().optional(),
   id: text,
   source: z.enum(PostingSource),
   externalId: text,
@@ -327,6 +337,7 @@ const agentCandidateSearch = z.object({
 
 /** A startup from Startups (#222), with the addresses it publishes and what the user did with it. */
 const startup = z.object({
+  memoryRevision: z.number().int().nullable().optional(),
   id: text,
   source: text,
   externalId: text,
@@ -391,8 +402,9 @@ const postingSearch = z.object({
 
 /** An export file as read back (E10-6). */
 export const exportSchema = z.object({
-  format: z.literal(EXPORT_FORMAT),
-  schemaVersion: z.literal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]),
+  memory: memoryExportSchema.optional(),
+  format: z.enum([EXPORT_FORMAT, "dossier-export"]),
+  schemaVersion: z.literal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]),
   appVersion: text,
   exportedAt: date,
   profile: z.object({
@@ -432,25 +444,25 @@ export const exportSchema = z.object({
   startups: z.array(startup).default([]),
   startupBlocks: z.array(z.object({ hash: text, createdAt: date })).default([]),
 });
-export type DossierExport = z.infer<typeof exportSchema>;
+export type RolepilotExport = z.infer<typeof exportSchema>;
 
-/** "dossier-export-2026-09-28.json", dated in the server's time zone. */
+/** "rolepilot-export-2026-09-28.json", dated in the server's time zone. */
 export function exportFileName(now = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `dossier-export-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`;
+  return `rolepilot-export-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`;
 }
 
 /**
  * Collects everything into an export (E10-4). The API key is left out,
  * unless `includeApiKey`: then it's decrypted, since another server's
- * DOSSIER_SECRET couldn't read the encrypted copy (PRD §11). One read-only
+ * ROLEPILOT_SECRET couldn't read the encrypted copy (PRD §11). One read-only
  * transaction, so the export is a consistent snapshot. Also used for
  * backups (E10-6, E10-7).
  */
 export async function buildExport(
   db: PrismaClient,
   { includeApiKey = false, now = new Date() }: { includeApiKey?: boolean; now?: Date } = {},
-): Promise<DossierExport> {
+): Promise<RolepilotExport> {
   return db.$transaction(async (tx) => {
     const [fields, skills, languages, experience, projects, education, certifications, customSections, publications, references, facts, themes, settings, applications, postings, searches, agentCandidates, agentSearches, agentCandidateSearches, startups, startupBlocks] = await Promise.all([
       tx.profileField.findMany({ select: { key: true, value: true }, orderBy: { key: "asc" } }),
@@ -491,7 +503,7 @@ export async function buildExport(
       tx.startupBlock.findMany({ orderBy: { createdAt: "asc" } }),
     ]);
 
-    // Keys only when asked for, decrypted; one that's unreadable here too (DOSSIER_SECRET changed) has nothing to export.
+    // Keys only when asked for, decrypted; one that's unreadable here too (ROLEPILOT_SECRET changed) has nothing to export.
     const stored = (key: string) => (includeApiKey ? settings.find((setting) => setting.key === key)?.value : undefined);
     const readable = (value: string | undefined, decrypt: (value: string) => string) => {
       try {
@@ -508,7 +520,9 @@ export async function buildExport(
       }).filter(([, value]) => value),
     );
 
+    const memory = memoryExportSchema.parse({ state: await tx.memoryState.findUnique({ where: { id: "memory" } }), facts: await tx.memoryFact.findMany(), sources: await tx.memorySource.findMany(), evidence: await tx.memoryEvidence.findMany() });
     return {
+      memory,
       format: EXPORT_FORMAT,
       schemaVersion: EXPORT_SCHEMA_VERSION,
       appVersion,
@@ -527,10 +541,10 @@ export async function buildExport(
         facts,
       },
       themes,
-      settings: settings.filter((setting) => setting.key !== "agentQuery" && !SECRET_SETTINGS.includes(setting.key) && !INSTALL_SETTINGS.includes(setting.key)),
+      settings: settings.map(setting => setting.key === "creativity" && setting.value === "EXPRESSIVE" ? { ...setting, value: "OPTIMIZED" } : setting).filter((setting) => !["docLanguage", "resumeLanguage", "customLanguages"].includes(setting.key) && setting.key !== "agentQuery" && !SECRET_SETTINGS.includes(setting.key) && !INSTALL_SETTINGS.includes(setting.key)),
       ...(apiKey ? { apiKey } : {}),
       ...(Object.keys(jobSourceKeys).length > 0 ? { jobSourceKeys } : {}),
-      applications: applications.map(application => ({ ...application, documents: application.documents.map(document => ({ ...document, initialLetterLayout: document.initialLetterLayout === null ? null : coverLetterLayoutSchema.parse(document.initialLetterLayout) })) })),
+      applications: applications.map(application => ({ ...application, companyResearch: savedCompanyResearch(application.companyResearch) ?? null, documents: application.documents.map(document => ({ ...document, initialLetterLayout: document.initialLetterLayout === null ? null : coverLetterLayoutSchema.parse(document.initialLetterLayout) })) })),
       postings,
       searches,
       agentCandidates,

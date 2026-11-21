@@ -3,7 +3,7 @@ import "server-only";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { photoFromFields } from "@/lib/photo";
 import { prisma } from "@/lib/prisma";
-import { basicsFromFields, factTexts, inEntryOrder, type FactItem, type ProfileData } from "@/lib/profile";
+import { basicsFromFields, inEntryOrder, type FactItem, type ProfileData } from "@/lib/profile";
 import { loadSettings } from "@/lib/settings-data";
 
 /** The profile's name, "" without one: for the sidebar, the sign-in greeting and file names. */
@@ -122,7 +122,8 @@ export async function loadProfile(db: PrismaClient | Prisma.TransactionClient = 
 
 /** One application's facts as the AI gets them (APP-15): trimmed, without empty ones. */
 export async function loadFactTexts(applicationId: string): Promise<string[]> {
-  return factTexts(await loadFacts(applicationId));
+  const { currentApplicationFactTexts } = await import("@/lib/memory/context");
+  return currentApplicationFactTexts(applicationId, await loadFacts(applicationId));
 }
 
 /** The profile's facts (null), or one application's, in the order they were added. */

@@ -1,5 +1,6 @@
 "use server";
 
+import { recordMemorySource } from "@/lib/memory/store";
 import { z } from "zod";
 
 import { JobStatus, Tone } from "@/generated/prisma/enums";
@@ -26,7 +27,7 @@ export const startReadingPosting = action(
 
 /**
  * "Write it with Claude →" (#221, the connector on and no AI model of
- * Dossier's own): keeps the posting for the connector to read and gives the
+ * rolepilot's own): keeps the posting for the connector to read and gives the
  * claude.ai chat to open, where Claude writes the application on the user's
  * own Claude plan.
  */
@@ -70,6 +71,8 @@ async function finishedReading(id: string) {
 export const startWritingDocuments = action(
   z.object({
     readJobId: z.string().min(1),
+    postingUrl: z.string().max(2000).optional(),
+    startupId: z.string().min(1).max(100).nullish(),
     details: detailsSchema,
     match: matchSchema,
     tone: z.enum(Tone),
@@ -77,7 +80,7 @@ export const startWritingDocuments = action(
     evidence: z.array(applicationEvidenceSchema).max(49).optional(),
     write: z.enum(DOCUMENTS_TO_WRITE).default("both"),
   }),
-  async ({ readJobId, details, match, tone, note, write, evidence = [] }) => {
+  async ({ readJobId, postingUrl, startupId, details, match, tone, note, write, evidence = [] }) => {
     const reading = await finishedReading(readJobId);
     const [profile, settings] = await Promise.all([loadProfile(), loadSettings()]);
     const options = evidenceOptions(withoutSectionsOff(profile, settings.resumeSections));
@@ -98,7 +101,12 @@ export const startWritingDocuments = action(
       salary: orNull(details.salary),
       deadline: orNull(details.deadline),
     };
-    return startJob(writeDocumentsJob, { readJobId, posting: reading.input.posting, extracted, match, tone, note, write, evidenceFacts });
+    await prisma.$transaction(async tx => {
+      if (note.trim()) await recordMemorySource(tx, { sourceKey: `draft:${readJobId}:note`, kind: "INITIAL_NOTE", text: note, context: { scope: "UNRESOLVED" } });
+      for (const entry of evidence) await recordMemorySource(tx, { sourceKey: `draft:${readJobId}:evidence:${entry.id}`, kind: "EVIDENCE", text: entry.text, context: { unitId: entry.targetUnitId, scope: entry.targetUnitId ? "UNRESOLVED" : "GENERAL", label: options.find(option => option.id === entry.targetUnitId)?.label ?? "" } });
+    });
+    const startup = startupId && write !== "resume" && settings.companyResearchEnabled ? await prisma.startup.findUnique({ where: { id: startupId }, select: { website: true } }) : null;
+    return startJob(writeDocumentsJob, { readJobId, ...(postingUrl ? { postingUrl: postingLink(postingUrl) } : {}), ...(startup?.website ? { companyWebsite: startup.website } : {}), posting: reading.input.posting, extracted, match, tone, note, write, evidenceFacts });
   },
 );
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { detachProfileMemory } from "@/lib/memory/store";
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { citationText } from "@/lib/citation";
@@ -22,6 +23,7 @@ export async function applyImportedProfile(db: PrismaClient, profile: ImportedPr
   await db.$transaction(
     async (tx) => {
       if (mode === "replace") {
+        await detachProfileMemory(tx);
         await tx.experience.deleteMany();
         await tx.project.deleteMany();
         await tx.education.deleteMany();

@@ -4,7 +4,7 @@ import { extractedSchema, requirementSchema, type Extracted } from "@/lib/applic
 
 import { postingForPrompt, system, UNTRUSTED_POSTING, type Task } from "./prompt-parts";
 
-export const EXTRACT_POSTING_VERSION = "extract-posting@2";
+export const EXTRACT_POSTING_VERSION = "extract-posting@3";
 
 // What the model returns. The deadline is free text here and checked in
 // code, since models like to answer "15 Oct" rather than an ISO date. Small
@@ -25,7 +25,6 @@ const answerSchema = z.object({
     }),
   ),
   asksForReferences: z.boolean(),
-  language: z.string().nullable(),
 });
 
 const INSTRUCTIONS = `You read job postings and pull out their details as JSON.
@@ -41,8 +40,7 @@ const INSTRUCTIONS = `You read job postings and pull out their details as JSON.
   - "skill" for a skill, tool or method, with skill set to a short name ("Figma", "Design systems", "User research");
   - "other" for anything else, such as domain experience.
   Leave the fields that don't apply null.
-- asksForReferences: true only if the posting explicitly asks applicants to provide references; otherwise false.
-- language: the language the posting is written in, as its English name.`;
+- asksForReferences: true only if the posting explicitly asks applicants to provide references; otherwise false.`;
 
 /** NEW-3: title, company, role, location, work mode, salary, deadline, typed requirements and language. */
 export const extractPosting: Task<{ posting: string; today?: Date }, Extracted> = async (provider, { posting, today = new Date() }, { signal }) => {
@@ -73,6 +71,7 @@ export const extractPosting: Task<{ posting: string; today?: Date }, Extracted> 
   return {
     data: extractedSchema.parse({
       ...answer,
+      language: null,
       role,
       company,
       title: answer.title?.trim() || (role && company ? `${role} · ${company}` : null),

@@ -13,7 +13,6 @@ import { clearJobSearchCache } from "@/lib/job-search/cache";
 import { jsearchV2LastPage } from "@/test/job-search-fixtures";
 
 import {
-  addDocumentLanguage,
   addConnectorRedirect,
   disconnectApps,
   removeConnectorRedirect,
@@ -42,7 +41,7 @@ vi.mock("@/lib/prisma", async () => {
 vi.mock("@/lib/auth/session", () => ({
   getSession: async () => ({ persistent: false, issuedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) }),
 }));
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
 // The real config and key handling, with a mock model behind them.
 const provider = vi.hoisted(() => ({ current: undefined as unknown }));
 vi.mock("@/lib/ai", async (importOriginal) => ({
@@ -75,7 +74,7 @@ describe("saveApiKey", () => {
     expect(result).toEqual({ ok: true, data: { keyState: "set" } });
     expect(JSON.stringify(result)).not.toContain("sk-ant");
     const { apiKeyEnc } = await settings();
-    expect(apiKeyEnc).toMatch(/^v1\./);
+    expect(apiKeyEnc).toMatch(/^v2\./);
     expect(decryptApiKey(apiKeyEnc!)).toBe("sk-ant-secret");
   });
 
@@ -113,34 +112,14 @@ describe("testAiConnection and listAiModels", () => {
 
 describe("updateSettings (E10-2, E10-3)", () => {
   it("saves only the settings given", async () => {
-    expect(await updateSettings({ creativity: "EXPRESSIVE", strict: false })).toEqual({ ok: true, data: null });
-    expect(await settings()).toMatchObject({ creativity: "EXPRESSIVE", strict: false, showDiff: true, paper: "A4" });
+    expect(await updateSettings({ creativity: "OPTIMIZED", strict: false })).toEqual({ ok: true, data: null });
+    expect(await settings()).toMatchObject({ creativity: "OPTIMIZED", strict: false, showDiff: true, paper: "A4" });
   });
 
-  it("goes back to the posting's language with null", async () => {
-    await updateSettings({ docLanguage: "Dutch" });
-    expect((await settings()).docLanguage).toBe("Dutch");
-    await updateSettings({ docLanguage: null });
-    expect((await settings()).docLanguage).toBeNull();
-  });
 
   it("refuses settings it doesn't manage, like the API key", async () => {
     expect(await updateSettings({ apiKeyEnc: "x" } as never)).toMatchObject({ ok: false });
     expect(await updateSettings({ paper: "B5" as never })).toMatchObject({ ok: false });
-  });
-});
-
-describe("addDocumentLanguage (E10-3)", () => {
-  it("adds a new language to the list and writes in it", async () => {
-    expect(await addDocumentLanguage({ name: " Hebrew " })).toEqual({ ok: true, data: { language: "Hebrew", added: true } });
-    expect(await settings()).toMatchObject({ docLanguage: "Hebrew", customLanguages: ["Hebrew"] });
-  });
-
-  it("picks a language already in the list, in any case", async () => {
-    expect(await addDocumentLanguage({ name: "dutch" })).toEqual({ ok: true, data: { language: "Dutch", added: false } });
-    await addDocumentLanguage({ name: "Hebrew" });
-    expect(await addDocumentLanguage({ name: "HEBREW" })).toEqual({ ok: true, data: { language: "Hebrew", added: false } });
-    expect(await settings()).toMatchObject({ docLanguage: "Hebrew", customLanguages: ["Hebrew"] });
   });
 });
 
@@ -259,7 +238,7 @@ describe("the MCP connector (#221, #281)", () => {
 
     // Disconnect all apps: a new time, so every token stops working.
     await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(await disconnectApps({})).toMatchObject({ ok: true, toast: "Every app is disconnected. Connect again from an app to use Dossier there." });
+    expect(await disconnectApps({})).toMatchObject({ ok: true, toast: "Every app is disconnected. Connect again from an app to use rolepilot there." });
     expect((await settings()).connectorEnabledAt).not.toBe(since);
 
     await setConnector({ on: false });

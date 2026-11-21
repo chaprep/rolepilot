@@ -18,7 +18,7 @@ import { THEME_STYLE_DEFAULTS, type ThemeData } from "./themes";
 // A theme as a file to share or keep (E5-7, RES-8), and the rules every saved
 // theme's look follows, from the builder or a file.
 
-export const THEME_FILE_FORMAT = "dossier-theme";
+export const THEME_FILE_FORMAT = "rolepilot-theme";
 /**
  * Bump when the file's shape changes; imports refuse versions they don't
  * know. Version 2 added the header, sidebar and date styles, 3 the photo's
@@ -26,7 +26,7 @@ export const THEME_FILE_FORMAT = "dossier-theme";
  */
 export const THEME_FILE_VERSION = 4;
 
-const font = z.enum(ThemeFont, { error: (issue) => `That theme uses a font Dossier doesn't have (${String(issue.input)}).` });
+const font = z.enum(ThemeFont, { error: (issue) => `That theme uses a font rolepilot doesn't have (${String(issue.input)}).` });
 
 /** Margin controls allow half-millimetre steps, including edge-to-edge PDFs. */
 export const themeMarginSchema = z.number().min(0).max(30).multipleOf(0.5).nullable().default(null);
@@ -59,7 +59,7 @@ export const themeFieldsSchema = z.object({
 export type ThemeFields = z.output<typeof themeFieldsSchema>;
 
 export const themeFileSchema = z.object({
-  format: z.literal(THEME_FILE_FORMAT),
+  format: z.enum([THEME_FILE_FORMAT, "dossier-theme"]),
   version: z.number(),
   // Version 1 files have no header, sidebar or date style, and versions 1 and 2 no photo.
   theme: themeFieldsSchema.extend({
@@ -82,20 +82,20 @@ export function themeFile(theme: ThemeData) {
   };
 }
 
-/** "Quiet green.dossier-theme.json": the name, without characters files can't have. */
+/** "Quiet green.rolepilot-theme.json": the name, without characters files can't have. */
 export function themeFileName(theme: Pick<ThemeData, "name">): string {
   const name = theme.name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim() || "Theme";
-  return `${name}.dossier-theme.json`;
+  return `${name}.rolepilot-theme.json`;
 }
 
 /** A theme file's contents, checked, or why it can't be used, in plain words. */
 export function parseThemeFile(json: unknown): { ok: true; theme: ThemeFields } | { ok: false; error: string } {
   const header = json as { format?: unknown; version?: unknown } | null;
-  if (typeof json !== "object" || json === null || header?.format !== THEME_FILE_FORMAT) {
-    return { ok: false, error: "That file isn't a Dossier theme." };
+  if (typeof json !== "object" || json === null || ![THEME_FILE_FORMAT, "dossier-theme"].includes(String(header?.format))) {
+    return { ok: false, error: "That file isn't a rolepilot theme." };
   }
-  if (typeof header.version !== "number" || header.version > THEME_FILE_VERSION) {
-    return { ok: false, error: "That theme comes from a newer version of Dossier. Update this server first." };
+  if (typeof header?.version !== "number" || header.version > THEME_FILE_VERSION) {
+    return { ok: false, error: "That theme comes from a newer version of rolepilot. Update this server first." };
   }
   const parsed = themeFileSchema.safeParse(json);
   if (!parsed.success) {

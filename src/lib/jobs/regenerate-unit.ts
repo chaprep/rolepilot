@@ -1,4 +1,7 @@
+import { prepareCandidateProfile, assertCandidateContext } from "@/lib/memory/context";
 import "server-only";
+
+import { researchForEdits } from "@/lib/research/application";
 
 import { z } from "zod";
 
@@ -43,14 +46,15 @@ export const regenerateUnitJob = defineJob({
     await step("Rewriting");
     const application = await prisma.application.findUnique({
       where: { id: applicationId },
-      include: { documents: { where: { kind: document } } },
+      include: { startup: { select: { website: true } }, documents: { where: { kind: document } } },
     });
     const units = application?.documents[0] && unitsSchema.parse(application.documents[0].units);
     const unit = units?.find((entry) => entry.id === unitId);
     if (!application || !units || !unit || unit.text !== from) return { outcome: "changed" as const };
 
-    const [provider, options, profile, facts] = await Promise.all([getAiProvider(), loadTaskOptions(), profileOfApplication(application.frozen), loadFactTexts(applicationId)]);
+    const [provider, options, profile] = await Promise.all([getAiProvider(), loadTaskOptions(), profileOfApplication(application.frozen)]);
     const state = readDocumentState(application.documents[0].state);
+    const candidate = await prepareCandidateProfile(state?.profile ?? profile, application.postingText, signal, provider);
     const { data } = await regenerateUnit(
       provider,
       {
@@ -58,17 +62,19 @@ export const regenerateUnitJob = defineJob({
         unit,
         // The letter's sender and signature hold contact details, which never go to the model (E8-11).
         document: withoutPrivateParts(units),
-        profile: state?.profile ?? profile,
+        profile: candidate,
         extracted: extractedOf(application),
         tone: state?.tone ?? application.tone,
-        facts,
+        facts: await loadFactTexts(applicationId),
         posting: application.postingText,
+        companyResearch: document === "COVER_LETTER" ? researchForEdits(application) : undefined,
       },
-      // The rest of the document is in this language, so the new part is too.
-      { ...options, language: state?.language || application.language || options.language, signal },
+      // Only the requested part is rewritten in English; retain historical layout metadata.
+      { ...options, signal },
     );
 
-    return updateDocuments(applicationId, async (documents) => {
+    return updateDocuments(applicationId, async (documents, tx) => {
+      await assertCandidateContext(candidate, tx);
       const current = documents[document]?.find((entry) => entry.id === unitId);
       if (!current || current.text !== from) return { outcome: "changed" as const };
       const previous = { ...current };

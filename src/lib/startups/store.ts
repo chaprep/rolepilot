@@ -1,3 +1,5 @@
+import { memoryState } from "@/lib/memory/store";
+import { prepareCandidateProfile, candidateMemoryRevision } from "@/lib/memory/context";
 import "server-only";
 
 import { createHash } from "node:crypto";
@@ -30,7 +32,7 @@ const strings = (value: Prisma.JsonValue | null): string[] => (Array.isArray(val
 const emailsOf = (value: Prisma.JsonValue | null): StartupEmail[] => startupEmailSchema.array().catch([]).parse(value ?? []);
 const linksOf = (value: Prisma.JsonValue | null) => startupLinkSchema.array().catch([]).parse(value ?? []);
 
-export function startupView(row: Startup): StartupView {
+export function startupView(row: Startup, memoryRevision?: number): StartupView {
   return {
     id: row.id,
     source: (STARTUP_SOURCES as readonly string[]).includes(row.source) ? (row.source as StartupSource) : "HN",
@@ -47,7 +49,7 @@ export function startupView(row: Startup): StartupView {
     links: linksOf(row.links),
     postedAt: row.postedAt?.toISOString() ?? null,
     score: row.score,
-    reasons: strings(row.reasons),
+    reasons: [...strings(row.reasons), ...(memoryRevision !== undefined && (row.memoryRevision ?? 0) !== memoryRevision ? ["This score predates current remembered information. Refresh to update it."] : [])],
     status: row.status,
     noApplicationsFrom: row.noApplicationsFrom,
     emailsCheckedAt: row.emailsCheckedAt?.toISOString() ?? null,
@@ -74,7 +76,7 @@ export function blockHashes(startup: Pick<FoundStartup, "source" | "externalId" 
 
 /** The place and profile to score against. */
 async function scoring(): Promise<{ profile: ProfileData; place: Place }> {
-  const profile = await loadProfile();
+  const profile = await prepareCandidateProfile(await loadProfile(), "Rank startups for this candidate");
   return { profile, place: placeOf(profile.basics) };
 }
 
@@ -116,6 +118,7 @@ export async function upsertStartups(found: readonly FoundStartup[], now = new D
       score: fit.score,
       reasons: fit.reasons,
       scoredWith: MATCH_VERSION,
+      memoryRevision: candidateMemoryRevision(profile),
     };
     if (known) updates.push(prisma.startup.update({ where: { source_externalId: { source: startup.source, externalId: startup.externalId } }, data: fields }));
     else creates.push({ source: startup.source, externalId: startup.externalId, ...fields });
@@ -135,7 +138,7 @@ export async function rescoreStartups(now = new Date()): Promise<void> {
   for (const row of await prisma.startup.findMany({ where: { status: { not: StartupStatus.DISMISSED } } })) {
     const fit = matchStartup(startupView(row), profile, place, now);
     if (fit.score !== row.score || JSON.stringify(fit.reasons) !== JSON.stringify(row.reasons)) {
-      await prisma.startup.update({ where: { id: row.id }, data: { score: fit.score, reasons: fit.reasons, scoredWith: MATCH_VERSION } });
+      await prisma.startup.update({ where: { id: row.id }, data: { score: fit.score, reasons: fit.reasons, scoredWith: MATCH_VERSION, memoryRevision: candidateMemoryRevision(profile) } });
     }
   }
 }
@@ -174,6 +177,7 @@ export async function lookUpStartup(id: string, { people = false, now = new Date
         score: fit.score,
         reasons: fit.reasons,
         scoredWith: MATCH_VERSION,
+      memoryRevision: candidateMemoryRevision(profile),
       },
     }),
   );
@@ -205,7 +209,8 @@ export async function listStartups(filter: StartupFilter, place: Place, { limit 
     prisma.startup.groupBy({ by: ["status"], _count: { _all: true } }),
   ]);
   const words = filter.q.toLowerCase().split(/\s+/).filter(Boolean);
-  const matching = rows.map(startupView).filter((startup) => {
+  const memoryRevision = (await memoryState()).revision;
+  const matching = rows.map(row => startupView(row, memoryRevision)).filter((startup) => {
     if (filter.withEmail && startup.emails.length === 0) return false;
     if (!inPlace(startup, filter.place, place)) return false;
     if (words.length === 0) return true;
@@ -219,7 +224,7 @@ export async function listStartups(filter: StartupFilter, place: Place, { limit 
 
 export async function getStartup(id: string): Promise<StartupView | null> {
   const row = await prisma.startup.findUnique({ where: { id } });
-  return row ? startupView(row) : null;
+  return row ? startupView(row, (await memoryState()).revision) : null;
 }
 
 /** Saves what the user changed: its status, or the notes. */
@@ -268,7 +273,7 @@ export async function sweepStartups(now = new Date()): Promise<{ removed: number
 /**
  * What New application starts from (#222): what's known about the startup,
  * as a posting to read. Addresses are left out, written or hidden: they stay
- * in Dossier and never go to the AI.
+ * in rolepilot and never go to the AI.
  */
 export function startupPostingText(startup: StartupView): string {
   const lines = [

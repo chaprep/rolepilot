@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Design tokens, taken from the prototype (design/Dossier.dc.html).
+ * Product design tokens, coordinated with the supplied rolepilot logo.
  * Each token below becomes a Tailwind utility, e.g. --color-muted → text-muted,
  * --radius-card → rounded-card, --text-title → text-title.
  */
@@ -9,61 +9,56 @@
   /*
    * Colours come in pairs, light-dark(light, dark), and follow the
    * color-scheme set in the base layer below: the system's, unless the
-   * sidebar's switch chose one (data-theme on <html>). Every text colour
-   * meets WCAG AA (4.5:1) on every surface in both schemes.
+   * sidebar's switch chose one (data-theme on <html>). Text and control pairs are checked in both schemes.
    */
 
-  /* Surfaces: a beige shell, like the sidebar, around the screen's panel. */
-  --color-paper: light-dark(#eeebe4, #1a1917); /* shell around the panel, side columns, disabled fields */
-  --color-sidebar: light-dark(#eeebe4, #1a1917);
-  --color-surface: light-dark(#f4f2ed, #22201d); /* the panel each screen sits in */
-  --color-card: light-dark(#fbfaf7, #2a2825);
-  --color-canvas: light-dark(#e8e5de, #141311); /* behind document previews */
-  --color-input: light-dark(#ffffff, #1e1c1a); /* inputs */
+  /* Surfaces: cool neutral chrome around the screen's panel. */
+  --color-paper: light-dark(#eef2f8, #0b1220); /* shell around the panel, side columns, disabled fields */
+  --color-sidebar: light-dark(#eef2f8, #0b1220);
+  --color-surface: light-dark(#f7f9fc, #0f172a); /* the panel each screen sits in */
+  --color-card: light-dark(#ffffff, #162238);
+  --color-canvas: light-dark(#e7edf5, #080f1d); /* behind document previews */
+  --color-input: light-dark(#ffffff, #111d31); /* inputs */
 
   /* Text */
-  --color-ink: light-dark(#1d1c1a, #f0ede7);
+  --color-ink: light-dark(#14213d, #edf3ff);
   --color-document: light-dark(#2b2a27, #e5e1d9); /* posting text, set like a document */
-  /* Secondary text: hints, labels, metadata. It passes on every surface
-     and on the hover tints, but not on a selected item over the shell
-     (4.3:1 in the light scheme): use ink there. */
-  --color-muted: light-dark(#69655d, #aaa59c);
+  /* Secondary text: hints, labels and metadata. */
+  --color-muted: light-dark(#475569, #a8b5cc);
   /* Disabled and decorative only: never for text people need to read. */
-  --color-faint: light-dark(#a29d94, #6e6961);
+  --color-faint: light-dark(#8795ab, #71819a);
 
-  /* Primary actions: near-black, and near-white in the dark scheme, with
-     on-primary text at 4.5:1 or more. primary-text is for text and icons
-     marking a choice, e.g. a selected chip's label. */
-  --color-primary: light-dark(#222222, #ebe7df);
-  --color-primary-hover: light-dark(#3a3936, #ffffff);
-  --color-on-primary: light-dark(#fbfaf7, #1d1c1a);
-  --color-primary-text: light-dark(#1d1c1a, #f0ede7);
+  /* Blue actions; primary-text is the accessible selected label color. */
+  --color-primary: light-dark(#2064f3, #296cf4);
+  --color-primary-hover: light-dark(#0956de, #2f6df5);
+  --color-on-primary: #ffffff;
+  --color-primary-text: light-dark(#0046cc, #9cbcff);
   /* Focus rings: 3:1 against every surface. */
-  --color-focus: light-dark(#1d1c1a, #f0ede7);
+  --color-focus: light-dark(#2064f3, #9cbcff);
 
   /* Toasts and tooltips: a dark chip, a little raised in the dark scheme. */
-  --color-inverse: light-dark(#222222, #3b3834);
-  --color-on-inverse: light-dark(#fbfaf7, #f0ede7);
-  --color-on-inverse-muted: light-dark(rgb(251 250 247 / 0.78), rgb(240 237 231 / 0.82));
+  --color-inverse: light-dark(#14213d, #263650);
+  --color-on-inverse: light-dark(#ffffff, #edf3ff);
+  --color-on-inverse-muted: light-dark(rgb(255 255 255 / 0.78), rgb(237 243 255 / 0.82));
   /* The project's notices, on that dark chip in both schemes. */
   --color-notice-security: #fca5a5;
   --color-notice-important: #fbbf24;
 
   /* Lines */
-  --color-line: light-dark(rgb(29 28 26 / 0.08), rgb(240 237 231 / 0.07)); /* dividers */
-  --color-line-card: light-dark(rgb(29 28 26 / 0.1), rgb(240 237 231 / 0.1));
-  --color-line-field: light-dark(rgb(29 28 26 / 0.14), rgb(240 237 231 / 0.14)); /* chips and other controls named by their text */
+  --color-line: light-dark(rgb(20 33 61 / 0.08), rgb(237 243 255 / 0.07)); /* dividers */
+  --color-line-card: light-dark(rgb(20 33 61 / 0.1), rgb(237 243 255 / 0.1));
+  --color-line-field: light-dark(rgb(20 33 61 / 0.14), rgb(237 243 255 / 0.14)); /* chips and other controls named by their text */
   /* Text fields, whose border is what shows they're fields: 3:1 on every surface (E11-3, WCAG 1.4.11). */
-  --color-line-input: light-dark(rgb(29 28 26 / 0.5), rgb(240 237 231 / 0.42));
-  --color-line-control: light-dark(rgb(29 28 26 / 0.16), rgb(240 237 231 / 0.14)); /* secondary buttons */
-  --color-line-popover: light-dark(rgb(29 28 26 / 0.12), rgb(240 237 231 / 0.12)); /* menus */
-  --color-line-strong: light-dark(rgb(29 28 26 / 0.2), rgb(240 237 231 / 0.24)); /* upcoming steps */
+  --color-line-input: light-dark(rgb(20 33 61 / 0.5), rgb(237 243 255 / 0.42));
+  --color-line-control: light-dark(rgb(20 33 61 / 0.16), rgb(237 243 255 / 0.14)); /* secondary buttons */
+  --color-line-popover: light-dark(rgb(20 33 61 / 0.12), rgb(237 243 255 / 0.12)); /* menus */
+  --color-line-strong: light-dark(rgb(20 33 61 / 0.2), rgb(237 243 255 / 0.24)); /* upcoming steps */
 
   /* Tints for hover, selection and tracks */
-  --color-hover: light-dark(rgb(29 28 26 / 0.05), rgb(240 237 231 / 0.07));
-  --color-selected: light-dark(rgb(29 28 26 / 0.07), rgb(240 237 231 / 0.1));
-  --color-track: light-dark(rgb(29 28 26 / 0.06), rgb(240 237 231 / 0.08));
-  --color-toggle-off: light-dark(rgb(29 28 26 / 0.5), rgb(240 237 231 / 0.42)); /* 3:1, like text fields */
+  --color-hover: light-dark(rgb(20 33 61 / 0.05), rgb(237 243 255 / 0.07));
+  --color-selected: light-dark(#e8f0ff, #203866);
+  --color-track: light-dark(rgb(20 33 61 / 0.06), rgb(237 243 255 / 0.08));
+  --color-toggle-off: light-dark(rgb(20 33 61 / 0.5), rgb(237 243 255 / 0.42)); /* 3:1, like text fields */
 
   /* Feedback. error and danger are for text; danger-fill is behind white text. */
   --color-danger: light-dark(#9a4a3a, #f87171); /* remove / destructive text */
@@ -82,7 +77,7 @@
   --color-flash: light-dark(oklch(0.95 0.05 90), rgb(240 200 90 / 0.16)); /* briefly marks content that changed */
 
   /* Application statuses (dots and bars; the label next to them is ink) */
-  --color-status-draft: light-dark(#a29d94, #827c73);
+  --color-status-draft: light-dark(#8795ab, #827c73);
   --color-status-sent: oklch(0.62 0.09 250);
   --color-status-screening: oklch(0.62 0.09 205);
   --color-status-interview: oklch(0.6 0.09 295);
@@ -98,18 +93,18 @@
   --radius-panel: 12px; /* large cards and panels */
   --radius-dialog: 16px;
 
-  /* Shadows: warm in the light scheme, deeper in the dark one, where a faint one wouldn't show. */
-  --shadow-page: 0 1px 2px rgb(0 0 0 / 0.06), 0 12px 40px light-dark(rgb(40 35 25 / 0.1), rgb(0 0 0 / 0.5));
-  --shadow-dialog: 0 8px 32px light-dark(rgb(40 35 25 / 0.16), rgb(0 0 0 / 0.5));
+  /* Cool neutral shadows, deeper in the dark scheme. */
+  --shadow-page: 0 1px 2px rgb(0 0 0 / 0.06), 0 12px 40px light-dark(rgb(20 33 61 / 0.1), rgb(0 0 0 / 0.5));
+  --shadow-dialog: 0 8px 32px light-dark(rgb(20 33 61 / 0.16), rgb(0 0 0 / 0.5));
   --shadow-raised: 0 1px 2px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.5)); /* selected segment */
-  --shadow-control: 0 1px 3px light-dark(rgb(40 35 25 / 0.08), rgb(0 0 0 / 0.3)); /* fields and secondary buttons */
-  --shadow-cta: 0 1px 3px light-dark(rgb(40 35 25 / 0.14), rgb(0 0 0 / 0.4));
+  --shadow-control: 0 1px 3px light-dark(rgb(20 33 61 / 0.08), rgb(0 0 0 / 0.3)); /* fields and secondary buttons */
+  --shadow-cta: 0 1px 3px light-dark(rgb(20 33 61 / 0.14), rgb(0 0 0 / 0.4));
   --shadow-knob: 0 1px 2px rgb(0 0 0 / 0.2);
-  --shadow-menu: 0 8px 32px light-dark(rgb(40 35 25 / 0.16), rgb(0 0 0 / 0.55));
+  --shadow-menu: 0 8px 32px light-dark(rgb(20 33 61 / 0.16), rgb(0 0 0 / 0.55));
   --shadow-toolbar: 0 4px 14px light-dark(rgb(0 0 0 / 0.16), rgb(0 0 0 / 0.5));
   --shadow-toast: 0 8px 32px light-dark(rgb(0 0 0 / 0.18), rgb(0 0 0 / 0.55));
 
-  /* Type scale. Sizes follow the prototype; text-xs (12px) and text-sm
+  /* Product type scale. text-xs (12px) and text-sm
      (14px) keep Tailwind's defaults. */
   --text-label: 12.5px; /* field labels, hints */
   --text-label--line-height: 1.45;
@@ -121,14 +116,14 @@
   --text-field--line-height: 1.4;
   --text-lead: 15px; /* page introductions */
   --text-lead--line-height: 1.55;
-  --text-section: 24px; /* section titles (serif) */
-  --text-section--line-height: 1.2;
-  --text-section--letter-spacing: -0.01em;
-  --text-section--font-weight: 500;
-  --text-title: 40px; /* page titles (serif) */
-  --text-title--line-height: 1.1;
-  --text-title--letter-spacing: -0.015em;
-  --text-title--font-weight: 400;
+  --text-section: 22px; /* product section titles */
+  --text-section--line-height: 1.3;
+  --text-section--letter-spacing: -0.015em;
+  --text-section--font-weight: 600;
+  --text-title: 34px; /* product page titles */
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.025em;
+  --text-title--font-weight: 600;
 
   /* Motion. Use with motion-safe: so reduced-motion users don't get it. */
   --animate-toast-in: toast-in 160ms ease-out;
@@ -139,7 +134,6 @@
 
   @keyframes toast-in {
     from {
-      opacity: 0;
       transform: translateY(8px);
     }
   }
@@ -184,6 +178,9 @@
 
 /* Fonts come from next/font (src/fonts), which sets the --typeface-* variables at runtime. */
 @theme inline {
+  --font-ui: var(--typeface-inter);
+  --font-heading: var(--typeface-manrope);
+  --font-brand: var(--typeface-manrope);
   --font-sans: var(--typeface-geist);
   --font-serif: var(--typeface-newsreader);
   --font-mono: var(--typeface-plex-mono);
@@ -212,7 +209,7 @@
   body {
     background: var(--color-paper);
     color: var(--color-ink);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 14px;
   }
 
@@ -228,9 +225,7 @@
     opacity: 1;
   }
 
-  /* A visible keyboard focus ring on every control (WCAG 2.2 AA), in ink
-     (light in the dark scheme); the 2px gap keeps it apart from buttons in
-     the same colour. */
+  /* A visible brand focus ring; the 2px gap keeps it apart from controls. */
   :focus-visible {
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;
@@ -247,4 +242,17 @@
    that keep to the window. */
 @utility h-panel {
   height: calc(100dvh - 9px);
+}
+
+/* Product-only typography. Preserve serif/sans mappings used by document themes. */
+@utility product-heading {
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+
+@utility brand-wordmark {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
 }

@@ -18,14 +18,14 @@ vi.mock("./scan-lock", async (original) => {
   const { testDatabaseUrl } = await import("@/test/db");
   return { ...actual, withAgentScanLock: <T>(work: (signal: AbortSignal) => Promise<T>) => actual.withAgentScanLock(work, testDatabaseUrl()) };
 });
-// Settings → Scoring reads DOSSIER_SCORER (#274).
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
+// Settings → Scoring reads ROLEPILOT_SCORER (#274).
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
 vi.mock("@/lib/time-zone", () => ({ lastKnownTimeZone: async () => "Europe/Berlin" }));
 vi.mock("@/lib/ai/config", async (original) => {
  const actual = await original<typeof import("@/lib/ai/config")>();
  return { ...actual, isAiConfigured: async () => true,
  resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
- actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: availability.ready ? "router-test" : undefined},secret) };
+ actual.resolveAiConfig(saved, {...source, ROLEPILOT_AI_KEY: availability.ready ? "router-test" : undefined},secret) };
 });
 vi.mock("@/lib/job-search/config", () => ({
   loadJobSearchConfig: async () => ({ source: "JSEARCH", saved: true, jsearch: { key: "k", host: "openwebninja", keyState: "set" }, adzuna: { appId: "", key: null, keyState: "none" } }),

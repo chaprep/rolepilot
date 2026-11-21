@@ -35,7 +35,7 @@ Doe, J.*, & Roe, R.* (2024). Calm payouts. Journal of Studies, 12(3), 45–67. d
 Skills: Figma, Design systems, User research
 Languages: Dutch (native), English (fluent), German`;
 
-const options = { creativity: "BALANCED" as const, strict: true, language: null };
+const options = { creativity: "BALANCED" as const, strict: true };
 
 const answer = {
   basics: {

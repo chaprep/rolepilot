@@ -1,0 +1,36 @@
+import { expect, test } from "@playwright/test";
+import { resetData, sql } from "./support";
+
+test.beforeAll(resetData);
+test("automatically reuses, corrects and forgets candidate information across applications", async ({ page }) => {
+  const before = await sql(`SELECT 'fields' AS kind, row_to_json(t)::text AS data FROM "ProfileField" t UNION ALL SELECT 'experience', row_to_json(t)::text FROM "Experience" t UNION ALL SELECT 'skills', row_to_json(t)::text FROM "Skill" t ORDER BY kind, data`);
+  const [application] = await sql<{ id: string }>(`SELECT a.id FROM "Application" a JOIN "Document" d ON d."applicationId" = a.id WHERE d.kind = 'RESUME' LIMIT 1`);
+  const statement = "I used Docker and Kubernetes to deploy internal reporting tools.";
+  await page.goto(`/applications/${application.id}`);
+  await page.getByRole("textbox", { name: "Ask for a change" }).fill(statement);
+  await page.getByRole("textbox", { name: "Ask for a change" }).press("Enter");
+  await expect.poll(async () => (await sql<{ count: string }>(`SELECT count(*)::text AS count FROM "MemoryFact" WHERE text = $1 AND status = 'ACTIVE'`, [statement]))[0].count).toBe("1");
+  await expect(page.getByText("Thinking…", { exact: true })).not.toBeVisible();
+  const original = await sql(`SELECT units::text, state::text FROM "Document" WHERE "applicationId" = $1 ORDER BY kind`, [application.id]);
+  await page.goto("/new?fresh=1");
+  await page.getByLabel("Job posting", { exact: true }).fill("Senior Product Designer at Ledgerly. Experience with Kubernetes and containerization required.");
+  await page.getByRole("button", { name: "Read the posting →" }).click();
+  await expect(page.getByRole("heading", { name: "How you match" })).toBeVisible();
+  await expect(page.getByText(/Supported by remembered information/)).toBeVisible();
+  await page.getByRole("button", { name: "Create application →" }).click();
+  await page.waitForURL(/\/applications\/c/);
+  await expect(page.locator('[data-unit="summary"]')).toContainText("Docker deployments");
+  expect(await sql(`SELECT units::text, state::text FROM "Document" WHERE "applicationId" = $1 ORDER BY kind`, [application.id])).toEqual(original);
+  expect(await sql(`SELECT 'fields' AS kind, row_to_json(t)::text AS data FROM "ProfileField" t UNION ALL SELECT 'experience', row_to_json(t)::text FROM "Experience" t UNION ALL SELECT 'skills', row_to_json(t)::text FROM "Skill" t ORDER BY kind, data`)).toEqual(before);
+  await page.goto("/profile?section=facts");
+  await expect(page.getByRole("heading", { name: "Automatically remembered" })).toBeVisible();
+  const item = page.locator('section[aria-labelledby="remembered-heading"] > ul > li').filter({ hasText: statement });
+  await page.screenshot({ path: "output/playwright/memory-controls.png", fullPage: true });
+  await item.getByRole("button", { name: "Correct", exact: true }).click();
+  await page.getByLabel("Correct remembered information").fill("I used Podman to deploy internal reporting tools.");
+  await page.getByRole("button", { name: "Save correction" }).click();
+  await expect.poll(async () => (await sql<{ count: string }>(`SELECT count(*)::text AS count FROM "MemoryFact" WHERE text = $1 AND status = 'ACTIVE'`, [statement]))[0].count).toBe("0");
+  const corrected = page.locator('section[aria-labelledby="remembered-heading"] > ul > li').filter({ hasText: "I used Podman to deploy internal reporting tools." });
+  await corrected.getByRole("button", { name: "Forget", exact: true }).click();
+  await expect.poll(async () => (await sql<{ count: string }>(`SELECT count(*)::text AS count FROM "MemoryFact" WHERE text LIKE '%Podman%' AND status = 'ACTIVE'`))[0].count).toBe("0");
+});

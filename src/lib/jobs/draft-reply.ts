@@ -1,3 +1,4 @@
+import { prepareCandidateProfile, assertCandidateContext } from "@/lib/memory/context";
 import "server-only";
 
 import { z } from "zod";
@@ -58,10 +59,11 @@ export const draftReplyJob = defineJob({
       select: { direction: true, fromName: true, body: true },
     });
     const [provider, options, profile] = await Promise.all([getAiProvider(), loadTaskOptions(), loadProfile()]);
+    const candidate = await prepareCandidateProfile(profile, application?.postingText ?? email.body, signal, provider);
     const { data, promptVersion } = await draftReply(
       provider,
       {
-        profile,
+        profile: candidate,
         extracted: application ? extractedOf(application) : null,
         tone: application?.tone ?? "WARM",
         email: { from: [email.fromName, `<${email.fromAddress}>`].filter(Boolean).join(" "), subject: email.subject, body: email.body, sentAt: email.sentAt },
@@ -72,9 +74,9 @@ export const draftReplyJob = defineJob({
         facts: application ? await loadFactTexts(application.id) : [],
         posting: application?.postingText ?? "",
       },
-      { ...options, language: null, signal },
+      { ...options, signal },
     );
-    await prisma.emailMessage.update({ where: { id: emailId }, data: { replyDraft: data.body, replyGaps: data.gaps, draftedWith: promptVersion } });
+    await prisma.$transaction(async tx => { await assertCandidateContext(candidate, tx); await tx.emailMessage.update({ where: { id: emailId }, data: { replyDraft: data.body, replyGaps: data.gaps, draftedWith: promptVersion } }); });
     return { ...data, slots: starts };
   },
 });

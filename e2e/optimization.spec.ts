@@ -1,0 +1,36 @@
+import { expect, test } from "@playwright/test";
+import { resetData, sql } from "./support";
+
+test.beforeAll(resetData);
+test("Optimized persists, writes English from a German posting, and preserves section history", async ({ page }) => {
+  await page.goto("/settings?section=ai");
+  await page.getByRole("radio", { name: "Optimized", exact: true }).click();
+  await expect.poll(async () => (await sql<{ value: string }>('SELECT value FROM "Setting" WHERE key = $1', ["creativity"]))[0]?.value).toBe("OPTIMIZED");
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "Optimized", exact: true })).toBeChecked();
+  await page.goto("/settings?section=documents");
+  await expect(page.getByLabel("Write documents in")).toHaveCount(0);
+  await expect(page.getByLabel("Base resume language")).toHaveCount(0);
+  await page.goto("/new?fresh=1");
+  await page.getByLabel("Job posting", { exact: true }).fill("Ledgerly sucht einen Senior Product Designer. Erfahrung mit Figma und Designsystemen erforderlich.");
+  await page.getByRole("button", { name: "Read the posting →" }).click();
+  await expect(page.getByRole("heading", { name: "How you match" })).toBeVisible();
+  await page.getByRole("button", { name: "Create application →" }).click();
+  await page.waitForURL(/\/applications\/c/);
+  const id = page.url().split("/").at(-1)!;
+  expect((await sql<{ language: string }>('SELECT language FROM "Application" WHERE id = $1', [id]))[0].language).toBe("English");
+  const summary = page.locator('[data-unit="summary"]');
+  await expect(summary).toContainText("Product designer");
+  const before = await summary.textContent();
+  await summary.hover();
+  await summary.getByRole("button", { name: "Regenerate" }).click();
+  await expect(summary).toContainText("In short:");
+  await page.getByRole("button", { name: "History", exact: true }).first().click();
+  const versions = page.getByRole("dialog", { name: "History of the resume" }).getByRole("list", { name: "Versions" });
+  await expect(versions.getByRole("listitem")).toHaveCount(2);
+  await versions.getByRole("listitem").last().getByRole("button", { name: /^Look at the version from/ }).click();
+  await page.getByRole("button", { name: "Restore this version" }).click();
+  await expect(page.getByText(/^Restored the resume as it was then\./)).toBeVisible();
+  await page.reload();
+  await expect(summary).toHaveText(before!);
+});

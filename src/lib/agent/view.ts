@@ -1,3 +1,4 @@
+import { memoryState } from "@/lib/memory/store";
 import "server-only";
 
 import { AgentCandidateStatus, JobStatus } from "@/generated/prisma/enums";
@@ -119,6 +120,7 @@ export async function loadAgentView(now = new Date()): Promise<AgentView> {
   const draftJob = new Map(draftJobs.map((job) => [job.key?.replace(/^agent-candidate:/, ""), job.id]));
 
   const setupProblem = await agentSetupProblem();
+  const memoryRevision = (await memoryState()).revision;
 
   const view = (candidate: (typeof candidates)[number]): AgentCandidateView => ({
     searches: candidate.searches,
@@ -136,7 +138,7 @@ export async function loadAgentView(now = new Date()): Promise<AgentView> {
     url: candidate.url,
     score: candidate.score,
     reasons: stringsOf(candidate.reasons),
-    redFlags: stringsOf(candidate.redFlags),
+    redFlags: [...stringsOf(candidate.redFlags), ...((candidate.memoryRevision ?? 0) !== memoryRevision ? ["This score predates current remembered information. Refresh before relying on it."] : [])],
     error: candidate.error,
     applicationId: candidate.applicationId,
     draftJobId: draftJob.get(candidate.id) ?? null,

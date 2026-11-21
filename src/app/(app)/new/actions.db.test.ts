@@ -51,7 +51,7 @@ async function finishedJobs() {
       type: "read-posting",
       status: "DONE",
       input: { posting: "Ledgerly is hiring a Senior Product Designer." },
-      result: { extracted, extractedWith: "extract-posting@1", match, matchedWith: "match-requirements@1" },
+      result: { extracted, extractedWith: "extract-posting@3", match, matchedWith: "match-requirements@4" },
     },
   });
   await prisma().job.create({
@@ -62,9 +62,9 @@ async function finishedJobs() {
       input: { readJobId: "read-job", posting: "Ledgerly is hiring a Senior Product Designer.", extracted, match, tone: "FORMAL", note: "Relocating in January." },
       result: {
         resume: demoResumeUnits(),
-        resumeWith: "tailor-resume@1",
+        resumeWith: "tailor-resume@11",
         letter: [...demoLetterUnits(), { id: "sign-off", label: "Sign-off", text: "Kind regards," }],
-        letterWith: "write-cover-letter@1",
+        letterWith: "write-cover-letter@7",
       },
     },
   });
@@ -115,8 +115,8 @@ describe("createApplication", () => {
       postingUrl: "https://jobs.ledgerly.example/42",
       postingText: "Ledgerly is hiring a Senior Product Designer.",
       extracted: { company: "Ledgerly" },
-      extractedWith: "extract-posting@1",
-      matchedWith: "match-requirements@1",
+      extractedWith: "extract-posting@3",
+      matchedWith: "match-requirements@4",
       tone: "FORMAL",
       language: "English",
     });
@@ -125,8 +125,8 @@ describe("createApplication", () => {
     expect(application.deadline?.toISOString().slice(0, 10)).toBe("2026-10-20");
     // Sorted here: SQLite sorts enums by name, PostgreSQL in their order.
     expect(application.documents.map((document) => [document.kind, document.themeId, document.writtenWith]).sort()).toEqual([
-      ["COVER_LETTER", "editorial", "write-cover-letter@1"],
-      ["RESUME", "editorial", "tailor-resume@1"],
+      ["COVER_LETTER", "editorial", "write-cover-letter@7"],
+      ["RESUME", "editorial", "tailor-resume@11"],
     ]);
     expect(application.messages).toHaveLength(1);
     expect(application.messages[0]).toMatchObject({ role: "AI", text: expect.stringMatching(/^Here's what I tailored for Ledgerly B\.V\.:\n\n- /) });
@@ -138,7 +138,7 @@ describe("createApplication", () => {
     await finishedJobs();
     await prisma().job.update({
       where: { id: "write-job" },
-      data: { result: { resume: demoResumeUnits(), resumeWith: "tailor-resume@1", letter: [], letterWith: "" } },
+      data: { result: { resume: demoResumeUnits(), resumeWith: "tailor-resume@11", letter: [], letterWith: "" } },
     });
     const result = await createApplication({ writeJobId: "write-job", details, postingUrl: "" });
     const id = result.ok ? result.data : "";
@@ -189,10 +189,10 @@ describe("createApplication", () => {
     expect(text("headline")).toBe(details.role);
     expect(text("contacts")).toContain("jane.doe@example.com");
     expect(text("signature")).toBe("Jane Doe");
-    expect(text("date")).toBe(new Intl.DateTimeFormat("de", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(calendarDay()));
-    // This job's letter came without a recipient or greeting, so German ones stand in.
-    expect(text("recipient")).toMatch(/^Ledgerly B\.V\. · Personalabteilung/);
-    expect(text("greeting")).toBe("Sehr geehrte Damen und Herren,");
+    expect(text("date")).toBe(new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(calendarDay()));
+    // This job's letter came without a recipient or greeting, so English ones stand in.
+    expect(text("recipient")).toMatch(/^Ledgerly B\.V\. · Hiring team/);
+    expect(text("greeting")).toBe("Dear Ledgerly B.V. team,");
     expect(await prisma().documentVersion.findFirstOrThrow({ where: { documentId: letter.id } })).toMatchObject({ units });
   });
 

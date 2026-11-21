@@ -17,14 +17,14 @@ import { liveAnthropic, liveLmStudio, liveMistral } from "./test-live";
 //   AI_LIVE=anthropic docker/bin/yarn vitest run src/lib/ai/providers.live.test.ts
 //   AI_LIVE=mistral docker/bin/yarn vitest run src/lib/ai/providers.live.test.ts
 //
-// Anthropic's and Mistral's keys are DOSSIER_AI_KEY when that's set, or else
+// Anthropic's and Mistral's keys are ROLEPILOT_AI_KEY when that's set, or else
 // the one saved in Settings → AI provider with that provider chosen.
-// DOSSIER_AI_MODEL goes with DOSSIER_AI_KEY; Anthropic's checks use
+// ROLEPILOT_AI_MODEL goes with ROLEPILOT_AI_KEY; Anthropic's checks use
 // claude-haiku-4-5 when no model is given.
 //
 //   AI_LIVE=lmstudio docker/bin/yarn vitest run src/lib/ai/providers.live.test.ts
 //
-// LM Studio's model is DOSSIER_AI_MODEL (at DOSSIER_AI_URL, by default on the
+// LM Studio's model is ROLEPILOT_AI_MODEL (at ROLEPILOT_AI_URL, by default on the
 // Docker host), or else the one saved in Settings with LM Studio chosen.
 // A model that isn't loaded gets loaded, and stays loaded until ejected.
 //
@@ -108,7 +108,7 @@ describe.runIf(anthropic)("live: Anthropic", () => {
 
   // The profile's schema is more than structured output takes, so it goes in the prompt (#230).
   it("imports a profile from a resume", { timeout: 300_000 }, async () => {
-    const { data } = await extractProfile(make(), { resume }, { creativity: "FAITHFUL", strict: true, language: null });
+    const { data } = await extractProfile(make(), { resume }, { creativity: "FAITHFUL", strict: true });
     expect(data.basics).toMatchObject({ name: "John Doe", email: "john.doe@example.com", city: "Utrecht" });
     expect(data.experience.map((entry) => entry.company)).toEqual(["Acme Payments", "Fieldnote"]);
     expect(data.education).toHaveLength(1);

@@ -23,7 +23,7 @@ import { lockAgentSearches } from "./searches";
 
 // A candidate's draft (E16-5): written the way New application writes one,
 // kept off Applications until it's approved (#195), and never sent.
-// Adapted from avinashbatchala's fork of Dossier.
+// Adapted from avinashbatchala's fork of rolepilot.
 
 /** The key of a candidate's draft job, so a second click finds the one under way. */
 export const draftJobKey = (candidateId: string) => `agent-candidate:${candidateId}`;
@@ -87,7 +87,7 @@ export async function draftCandidate(candidateId: string, context: JobContext): 
     await context.step(`Writing the draft for ${name}`);
     const settings = await loadSettings();
     const documents = await writeDocumentsJob.run(
-      { readJobId: context.id, posting, extracted: reading.extracted, match: reading.match, tone: settings.defaultTone, note: "", write: "both" },
+      { readJobId: context.id, posting, postingUrl: candidate.url, extracted: reading.extracted, match: reading.match, tone: settings.defaultTone, note: "", write: "both" },
       context,
     );
     // Keep the whole text, so a retry doesn't fetch it again.

@@ -17,7 +17,7 @@ async function expected() {
 test("shows the funnel as the data has it", async ({ page }) => {
   const { sent, heard, interview } = await expected();
   await page.goto("/");
-  const funnel = page.getByRole("region", { name: "Your funnel" });
+  const funnel = page.getByRole("region", { name: "Application pipeline" });
   const figure = (label: string) => funnel.locator("dt", { hasText: label }).locator("xpath=following-sibling::dd");
   await expect(figure("sent")).toHaveText(String(sent));
   await expect(figure("heard back")).toHaveText(`${Math.round((heard / sent) * 100)}%`);
@@ -40,9 +40,9 @@ test("the time filter scopes the figures and is remembered (E9-8)", async ({ pag
   await page.getByRole("radio", { name: "Last 30 days" }).click();
   await expect(page).toHaveURL(/\?period=30d$/);
   await expect(page.getByText(`In the last 30 days you've sent ${recent.sent} applications`)).toBeVisible();
-  const funnel = page.getByRole("region", { name: "Your funnel" });
+  const funnel = page.getByRole("region", { name: "Application pipeline" });
   await expect(funnel.locator("dt", { hasText: "sent" }).locator("xpath=following-sibling::dd")).toHaveText(String(recent.sent));
-  await expect(page.getByRole("region", { name: "Week by week" })).toContainText(`You started ${recent.started} applications`);
+  await expect(page.getByRole("region", { name: "Weekly activity" })).toContainText(`You started ${recent.started} applications`);
 
   // The next visit opens on the same period.
   await page.goto("/");

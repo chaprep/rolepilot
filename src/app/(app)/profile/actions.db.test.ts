@@ -522,7 +522,7 @@ describe("applying a profile read from a resume (E4-10)", () => {
       education: [],
       references: [],
     },
-    readWith: "extract-profile@1",
+    readWith: "extract-profile@6",
   };
 
   it("applies a finished reading, taken from its job", async () => {

@@ -8,12 +8,12 @@ import { loadSettings } from "@/lib/settings-data";
 import { SCORING_KEY_MISSING, SCORING_KEY_UNREADABLE, type Scorer, type ScoringKeyState, type ScoringView } from "./scorers";
 
 // What scores postings (#274): the choice saved in Settings → Scoring, or
-// else DOSSIER_SCORER, or else the AI model; and Jev's key, saved there or
-// in DOSSIER_TYPESAFE_KEY.
+// else ROLEPILOT_SCORER, or else the AI model; and Jev's key, saved there or
+// in ROLEPILOT_TYPESAFE_KEY.
 
 export type ScoringConfig = {
   scorer: Scorer;
-  /** Whether the choice is saved in Settings, rather than coming from DOSSIER_SCORER or the default. */
+  /** Whether the choice is saved in Settings, rather than coming from ROLEPILOT_SCORER or the default. */
   saved: boolean;
   key: string | null;
   keyState: ScoringKeyState;

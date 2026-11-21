@@ -12,8 +12,8 @@ import { loadSettings } from "@/lib/settings-data";
 // authorization server, as Claude's custom connectors expect it, with
 // Dynamic Client Registration and PKCE (S256 only). Adapted from Anirudh
 // Sharma's fork of Dossier. It keeps nothing in the database: clients, codes
-// and tokens are signed with keys derived from DOSSIER_SECRET, and every one
-// carries a fingerprint of DOSSIER_PASSWORD and the time the connector was
+// and tokens are signed with keys derived from ROLEPILOT_SECRET, and every one
+// carries a fingerprint of ROLEPILOT_PASSWORD and the time the connector was
 // turned on (connectorEnabledAt). So a new password, a new secret, Disconnect
 // Claude or turning the connector off and on signs Claude out.
 
@@ -21,13 +21,13 @@ import { loadSettings } from "@/lib/settings-data";
 const HOSTED_CALLBACKS = new Set(["https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback"]);
 
 /** What a token lets Claude do; there's only one thing. */
-export const SCOPE = "dossier";
+export const SCOPE = "rolepilot";
 
 export const ACCESS_TOKEN_SECONDS = 60 * 60;
 export const REFRESH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
 const CODE_SECONDS = 5 * 60;
 
-const AUDIENCE = { client: "dossier-connector-client", code: "dossier-connector-code", access: "dossier-mcp", refresh: "dossier-connector-refresh" } as const;
+const AUDIENCE = { client: "rolepilot-connector-client", code: "rolepilot-connector-code", access: "rolepilot-mcp", refresh: "rolepilot-connector-refresh" } as const;
 type TokenKind = keyof typeof AUDIENCE;
 const key = (kind: TokenKind) => deriveKey(`connector-${kind}`);
 
@@ -199,7 +199,7 @@ export async function refresh({ refreshToken, clientId }: { refreshToken: string
   return tokens(clientId, String(claims.res ?? ""), current!);
 }
 
-/** Whether a bearer token lets Claude use Dossier now; the client it was issued to, if so. */
+/** Whether a bearer token lets Claude use rolepilot now; the client it was issued to, if so. */
 export async function verifyAccessToken(token: string | null | undefined): Promise<{ clientId: string } | null> {
   const [claims, current] = await Promise.all([verify("access", token), stamp()]);
   if (!claims || claims.scope !== SCOPE || !stillValid(claims, current)) return null;
@@ -233,6 +233,6 @@ export function protectedResourceMetadata(origin: string) {
     authorization_servers: [origin],
     scopes_supported: [SCOPE],
     bearer_methods_supported: ["header"],
-    resource_name: "Dossier",
+    resource_name: "rolepilot",
   };
 }

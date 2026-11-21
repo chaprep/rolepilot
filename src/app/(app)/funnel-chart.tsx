@@ -6,7 +6,7 @@ import type { ApplicationStatus, FunnelStage } from "@/generated/prisma/enums";
 import { FUNNEL_OUTCOMES, type FunnelOutcome, type FunnelStep } from "@/lib/dashboard";
 import { statusInfo } from "@/lib/status";
 
-// "Your funnel" as a Sankey diagram (decided 16 October 2026). Each stage is
+// "Application pipeline" as a Sankey diagram (decided 16 October 2026). Each stage is
 // a node as tall as the applications that reached it, and they flow on to
 // the next stage along the top. Those that went no further branch off below
 // into one node per outcome: still open, rejected, declined or archived.
@@ -157,7 +157,7 @@ export function FunnelChart({ funnel }: { funnel: readonly FunnelStep[] }) {
           style={index === last ? undefined : { left: percentOf(column(index, last)) }}
         >
           <span className="text-sm">{stageLabel(step.stage)}</span>
-          <span className="font-serif text-2xl leading-none tabular-nums">{step.count}</span>
+          <span className="font-ui font-semibold text-2xl leading-none tabular-nums">{step.count}</span>
           <span className="text-label leading-[1.35] text-muted">{note(index)}</span>
         </li>
       ))}

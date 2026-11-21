@@ -129,7 +129,7 @@ async function runSync(historyId: string | null, ownAddress: string, scope: "kno
   }
   mails.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  // Threads linked by the company's domain or name, not by a thread Dossier
+  // Threads linked by the company's domain or name, not by a thread rolepilot
   // wrote in: the AI checks that their mail is about the application (public issue 65).
   const tentative = new Set<string>();
   for (const mail of mails) {
@@ -137,7 +137,7 @@ async function runSync(historyId: string | null, ownAddress: string, scope: "kno
     const outgoing = mail.labels.includes("SENT") || from.address === ownAddress.toLowerCase();
     if (mail.labels.some((label) => NOISE_LABELS.includes(label))) continue;
     const match = matchMail({ threadId: mail.threadId, fromName: from.name, fromAddress: from.address, subject: mail.subject }, applications, threads);
-    // Your own mail only counts in a thread Dossier knows; other mail by the setting.
+    // Your own mail only counts in a thread rolepilot knows; other mail by the setting.
     if (!match && (outgoing || scope === "known" || !mail.labels.includes("INBOX"))) continue;
     if (outgoing && match?.by !== "thread") continue;
     if (match && match.by !== "thread") tentative.add(mail.threadId);

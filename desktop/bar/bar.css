@@ -5,7 +5,7 @@
    it has to stay exactly as tall as the bar (BAR_HEIGHT in main.ts). A drag area
    takes the mouse even under that view, so a taller one stops every click. */
 
-@font-face { font-family: "Geist"; src: url("../start/fonts/Geist-Medium.woff2") format("woff2"); font-weight: 500; }
+@font-face { font-family: "Inter"; src: url("../start/fonts/Inter-Medium.woff2") format("woff2"); font-weight: 500; }
 
 html, body { height: 32px; margin: 0; overflow: hidden; }
 
@@ -15,7 +15,7 @@ body {
   color-scheme: light dark;
   background: var(--bar);
   color: var(--bar-ink);
-  font: 500 12.5px/1 "Geist", "Segoe UI", Helvetica, Arial, sans-serif;
+  font: 500 12.5px/1 "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
   user-select: none;
   -webkit-app-region: drag;
 }

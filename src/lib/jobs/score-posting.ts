@@ -1,3 +1,4 @@
+import { prepareCandidateProfile, assertCandidateContext, candidateMemoryRevision } from "@/lib/memory/context";
 import "server-only";
 
 import { z } from "zod";
@@ -31,8 +32,10 @@ export const scorePostingJob = defineJob({
     }
     await step("Scoring it against your profile");
     const [score, profile] = await Promise.all([loadPostingScorer(), loadProfile()]);
-    const { data, scoredWith } = await score({ ...posting, description }, profile, signal);
-    await saveScore(posting, data, scoredWith);
+    const candidate = await prepareCandidateProfile(profile, description, signal);
+    const { data, scoredWith } = await score({ ...posting, description }, candidate, signal);
+    await assertCandidateContext(candidate);
+    await saveScore(posting, data, scoredWith, candidateMemoryRevision(candidate));
     return data;
   },
 });
@@ -57,7 +60,9 @@ export const scorePastedPostingJob = defineJob({
     await step("Scoring it against your profile");
     const [score, profile] = await Promise.all([loadPostingScorer(), loadProfile()]);
     const remote = /\b(remote|home ?office|hybrid)\b/i.test(mode) ? true : null;
-    const { data } = await score({ title, company, place: location, remote, salary, description: posting }, profile, signal);
+    const candidate = await prepareCandidateProfile(profile, posting, signal);
+    const { data } = await score({ title, company, place: location, remote, salary, description: posting }, candidate, signal);
+    await assertCandidateContext(candidate);
     return data;
   },
 });

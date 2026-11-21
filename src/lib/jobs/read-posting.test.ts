@@ -6,9 +6,11 @@ import { demoProfile } from "@/lib/demo-profile";
 import { READ_POSTING_STEPS } from "./application-steps";
 import { readPostingJob } from "./read-posting";
 
+vi.mock("@/lib/memory/context", () => ({ prepareCandidateProfile: async (profile: unknown) => profile, assertCandidateContext: async () => {}, candidateMemoryRevision: () => undefined }));
+
 const provider = vi.hoisted(() => ({ current: undefined as unknown }));
 vi.mock("@/lib/ai", () => ({ getAiProvider: async () => provider.current }));
-vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true, language: null }) }));
+vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true }) }));
 vi.mock("@/lib/profile-data", async () => {
   const { demoProfile } = await import("@/lib/demo-profile");
   return { loadProfile: async () => demoProfile() };
@@ -38,9 +40,9 @@ describe("readPostingJob (E7-2)", () => {
     expect(steps).toEqual([...READ_POSTING_STEPS]);
     expect(result).toMatchObject({
       extracted: { company: "Ledgerly", title: "Senior Product Designer · Ledgerly" },
-      extractedWith: "extract-posting@2",
+      extractedWith: "extract-posting@3",
       match: { items: [{ requirement: "Strong prototyping skills in Figma", result: "covered", experienceIds: ["e2"] }] },
-      matchedWith: "match-requirements@2",
+      matchedWith: "match-requirements@4",
     });
     expect(demoProfile().experience[1].id).toBe("e2");
   });

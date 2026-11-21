@@ -32,20 +32,19 @@ afterAll(() => prisma().$disconnect());
 
 describe("settings and themes", () => {
   it("saves settings as text rows and reads them back", async () => {
-    await saveSettings({ provider: "LOCAL", strict: false, customLanguages: ["Farsi"], docLanguage: "Dutch" });
+    await saveSettings({ provider: "LOCAL", strict: false, creativity: "OPTIMIZED" });
     expect(await prisma().setting.findMany({ select: { key: true, value: true }, orderBy: { key: "asc" } })).toEqual([
-      { key: "customLanguages", value: '["Farsi"]' },
-      { key: "docLanguage", value: "Dutch" },
+      { key: "creativity", value: "OPTIMIZED" },
       { key: "provider", value: "LOCAL" },
       { key: "strict", value: "false" },
     ]);
-    expect(await loadSettings()).toMatchObject({ provider: "LOCAL", strict: false, customLanguages: ["Farsi"], docLanguage: "Dutch", paper: "A4" });
+    expect(await loadSettings()).toMatchObject({ provider: "LOCAL", strict: false, creativity: "OPTIMIZED", paper: "A4" });
   });
 
   it("removes a setting saved as null, so it reads as not set", async () => {
-    await saveSettings({ docLanguage: "Dutch", paper: "LETTER" });
-    await saveSettings({ docLanguage: null });
-    expect(await loadSettings()).toMatchObject({ docLanguage: null, paper: "LETTER" });
+    await saveSettings({ model: "example", paper: "LETTER" });
+    await saveSettings({ model: null });
+    expect(await loadSettings()).toMatchObject({ model: null, paper: "LETTER" });
     expect(await prisma().setting.count()).toBe(1);
   });
 

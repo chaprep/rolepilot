@@ -18,7 +18,7 @@ vi.mock("@/lib/prisma", async () => {
   db.client = createTestClient();
   return { prisma: db.client };
 });
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "s".repeat(40), DOSSIER_PASSWORD: "argon2id:m=19456,t=2,p=1:c2FsdA:aGFzaA" } }));
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "s".repeat(40), ROLEPILOT_PASSWORD: "argon2id:m=19456,t=2,p=1:c2FsdA:aGFzaA" } }));
 const fake = vi.hoisted(() => ({ aiUsable: false, fetched: { ok: true, text: "Fetched posting text", url: "https://jobs.example/fetched" } as Record<string, unknown> }));
 vi.mock("@/lib/ai/config", () => ({ isAiUsable: async () => fake.aiUsable }));
 vi.mock("@/lib/posting-fetch", () => ({ fetchPosting: vi.fn(async () => fake.fetched) }));
@@ -71,7 +71,7 @@ afterAll(() => prisma().$disconnect());
 /** Calls a tool; its text answer, parsed when it's JSON, and whether it's an error. */
 async function tool(name: string, args: Record<string, unknown> = {}): Promise<{ isError: boolean; text: string; json: Record<string, unknown> & unknown[] }> {
   const response = await POST(
-    new Request("https://dossier.example/api/mcp", {
+    new Request("https://rolepilot.example/api/mcp", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18", authorization: `Bearer ${token}` },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
@@ -96,14 +96,14 @@ describe("the Claude connector's tools (#221)", () => {
   it("lists the applications, newest first, by status, and reads one without notes, sender or signature", async () => {
     const all = await tool("list_applications");
     expect(all.json.length).toBeGreaterThan(3);
-    expect(all.json[0]).toMatchObject({ status: expect.any(String), link: expect.stringMatching(/^https:\/\/dossier\.example\/applications\//) });
+    expect(all.json[0]).toMatchObject({ status: expect.any(String), link: expect.stringMatching(/^https:\/\/rolepilot\.example\/applications\//) });
     const drafts = await tool("list_applications", { status: "DRAFT", limit: 2 });
     expect(drafts.json.every((row) => (row as { status: string }).status === "Draft")).toBe(true);
 
     const ledgerly = await prisma().application.findFirstOrThrow({ where: { company: "Ledgerly" }, include: { documents: true } });
     await prisma().note.create({ data: { applicationId: ledgerly.id, body: "Private: salary floor 80k" } });
     const one = await tool("get_application", { id: ledgerly.id });
-    expect(one.json).toMatchObject({ id: ledgerly.id, company: "Ledgerly", link: `https://dossier.example/applications/${ledgerly.id}` });
+    expect(one.json).toMatchObject({ id: ledgerly.id, company: "Ledgerly", link: `https://rolepilot.example/applications/${ledgerly.id}` });
     expect(one.json.resume).toContain("## Summary");
     expect(one.text).not.toContain("Private: salary floor");
     expect(one.json.cover_letter).not.toContain("## Sender");
@@ -129,7 +129,7 @@ describe("the Claude connector's tools (#221)", () => {
 
     const row = await prisma().posting.create({ data: { source: "JSEARCH", externalId: "p9", title: "UX Writer", company: "Acme", description: "The start", complete: false } });
     expect((await tool("get_posting", { posting_id: row.id })).json).toMatchObject({ title: "UX Writer", text: expect.stringContaining("The whole posting from its source") });
-    expect(await tool("get_posting", { posting_id: "gone" })).toMatchObject({ isError: true, text: "That posting is no longer in Dossier. Open it again from Find jobs." });
+    expect(await tool("get_posting", { posting_id: "gone" })).toMatchObject({ isError: true, text: "That posting is no longer in rolepilot. Open it again from Find jobs." });
 
     const chat = await handOffPastedPosting({ text: "Pasted: Senior Designer at Acme", url: "https://jobs.example/pasted" });
     const pasteId = /paste_id "([^"]+)"/.exec(new URL(chat).searchParams.get("q")!)![1];
@@ -158,7 +158,7 @@ describe("the Claude connector's tools (#221)", () => {
     expect(await prisma().application.findUniqueOrThrow({ where: { id } })).toMatchObject({ company: "Acme", status: "DRAFT", postingUrl: "https://jobs.example/p1" });
     expect((await prisma().posting.findFirstOrThrow({ where: { externalId: "p1" } })).applicationId).toBe(id);
 
-    // A link Dossier can't read doesn't stop pasted text, and the link is kept.
+    // A link rolepilot can't read doesn't stop pasted text, and the link is kept.
     fake.fetched = { ok: false, error: "That page couldn't be reached." };
     const pasted = await tool("save_application", {
       posting_url: "https://jobs.example/sign-in-only",
@@ -177,7 +177,7 @@ describe("the Claude connector's tools (#221)", () => {
     });
   });
 
-  it("has Dossier's own model draft one only when there is one, and says how it's coming along", async () => {
+  it("has rolepilot's own model draft one only when there is one, and says how it's coming along", async () => {
     expect((await tool("draft_application", { posting_text: "Designer at Acme" })).text).toContain("save_application");
     fake.aiUsable = true;
     expect((await tool("draft_application", { posting_text: "Designer at Acme", note: "Stress Figma" })).json).toMatchObject({ draft_id: "draft-job", status: "started" });
@@ -201,7 +201,7 @@ describe("the Claude connector's tools (#221)", () => {
     const row = await prisma().posting.create({ data: { source: "JSEARCH", externalId: "p7", title: "Design Lead", company: "Acme" } });
     expect((await tool("save_job_scores", { scores: [{ posting_id: row.id, score: 91, reasons: ["Led a design system"] }] })).json).toMatchObject({
       saved: [{ posting_id: row.id, score: 91 }],
-      link: "https://dossier.example/jobs?view=saved",
+      link: "https://rolepilot.example/jobs?view=saved",
     });
     expect(await tool("save_job_scores", { search_id: "gone", scores: [{ number: 1, score: 1, reasons: ["?"] }] })).toMatchObject({ isError: true });
   });

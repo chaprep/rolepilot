@@ -12,7 +12,7 @@ import { seedDemo } from "../../prisma/seed/demo";
 import { buildExport, EXPORT_SCHEMA_VERSION, exportSchema } from "./data-export";
 import { currentSummary, importExport, parseExport } from "./data-import";
 
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "s".repeat(32) } }));
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "s".repeat(32) } }));
 
 const client = createTestClient();
 const prisma = () => client;
@@ -41,6 +41,15 @@ beforeEach(async () => {
 });
 afterAll(() => prisma().$disconnect());
 
+it("excludes retired notification settings from exports and ignores them in older backups", async () => {
+  const retired = ["updateCheck", "latestVersion", "latestVersionUrl", "updateCheckDay", "updateDismissed", "announcementFeed", "announcementsDismissed"];
+  await prisma().setting.createMany({ data: retired.map((key) => ({ key, value: "legacy-local" })) });
+  const file = await asFile();
+  expect(file.settings.filter(({ key }) => retired.includes(key))).toEqual([]);
+  await importExport(prisma(), { ...file, settings: [...file.settings, ...retired.map((key) => ({ key, value: "legacy-backup" }))] });
+  expect(await prisma().setting.findMany({ where: { key: { in: retired } }, select: { value: true } })).toEqual(retired.map(() => ({ value: "legacy-local" })));
+});
+
 describe("theme margin backups", () => {
   it("preserves margins and restores older backups with preset defaults", async () => {
     await prisma().theme.update({ where: { id: "mine" }, data: { marginXmm: 0, marginYmm: 10.5 } });
@@ -59,7 +68,7 @@ it("round-trips the letter template and defaults older backups to Classic", asyn
   const letter = await prisma().document.findFirstOrThrow({ where: { kind: "COVER_LETTER" } });
   await prisma().document.update({ where: { id: letter.id }, data: { initialLetterLayout: "SIDEBAR" } });
   const file = await asFile();
-  expect(file.schemaVersion).toBe(14);
+  expect(file.schemaVersion).toBe(16);
   await importExport(prisma(), file);
   expect((await prisma().document.findUniqueOrThrow({ where: { id: letter.id } })).initialLetterLayout).toBe("SIDEBAR");
   const older = { ...file, schemaVersion: 13, applications: file.applications.map(app => ({ ...app, documents: app.documents.map(doc => ({ ...doc, initialLetterLayout: undefined })) })) };
@@ -220,7 +229,7 @@ describe("importExport (E10-6)", () => {
 
     await prisma().agentCandidate.deleteMany();
     // A score is made again from the profile, so it's neither exported nor kept by an import (#208).
-    await prisma().postingScore.create({ data: { source: "JSEARCH", externalId: "job-1", score: 80, reasons: [], redFlags: [], scoredWith: "score-posting@1" } });
+    await prisma().postingScore.create({ data: { source: "JSEARCH", externalId: "job-1", score: 80, reasons: [], redFlags: [], scoredWith: "score-posting@2" } });
     expect(JSON.stringify(file)).not.toContain("scoredWith");
     await importExport(prisma(), file);
     expect(await prisma().postingScore.count()).toBe(0);
@@ -479,11 +488,11 @@ describe("importExport (E10-6)", () => {
 describe("parseExport (E10-6)", () => {
   it("explains what's wrong with a file", async () => {
     const good = JSON.parse(JSON.stringify(await buildExport(prisma(), { now })));
-    expect(parseExport("not json")).toEqual({ ok: false, error: "That file isn't a Dossier export: it isn't JSON." });
-    expect(parseExport(JSON.stringify({ hello: "world" }))).toEqual({ ok: false, error: "That file isn't a Dossier export." });
+    expect(parseExport("not json")).toEqual({ ok: false, error: "That file isn't a rolepilot export: it isn't JSON." });
+    expect(parseExport(JSON.stringify({ hello: "world" }))).toEqual({ ok: false, error: "That file isn't a rolepilot export." });
     expect(parseExport(JSON.stringify({ ...good, schemaVersion: EXPORT_SCHEMA_VERSION + 1 }))).toEqual({
       ok: false,
-      error: `That export comes from a newer version of Dossier (schema ${EXPORT_SCHEMA_VERSION + 1}). Update this server first.`,
+      error: `That export comes from a newer version of rolepilot (schema ${EXPORT_SCHEMA_VERSION + 1}). Update this server first.`,
     });
     expect(parseExport(JSON.stringify({ ...good, schemaVersion: 0 }))).toMatchObject({ ok: false, error: expect.stringMatching(/isn't one this version/) });
     const damaged = { ...good, applications: [{ ...good.applications[0], status: "MAYBE" }] };
@@ -504,4 +513,18 @@ it("round-trips independent documents, complete versions and formatting Undo rec
   expect(readDocumentState((await prisma().document.findUniqueOrThrow({ where: { id: row.id } })).state)?.theme.marginXmm).toBe(7);
   expect(readDocumentState((await prisma().documentVersion.findUniqueOrThrow({ where: { id: version.id } })).state)?.theme.marginXmm).toBe(7);
   expect(documentChangesSchema.parse((await prisma().chatMessage.findUniqueOrThrow({ where: { id: message.id } })).documentChanges)).toHaveLength(1);
+});
+
+it("canonicalizes legacy writing modes and retires language settings without modifying historical documents", async () => {
+  await prisma().setting.upsert({ where: { key: "creativity" }, create: { key: "creativity", value: "EXPRESSIVE" }, update: { value: "EXPRESSIVE" } });
+  await prisma().setting.createMany({ data: ["docLanguage", "resumeLanguage", "customLanguages"].map(key => ({ key, value: "German" })) });
+  const file = await asFile();
+  expect(file.settings.find(setting => setting.key === "creativity")?.value).toBe("OPTIMIZED");
+  expect(file.settings.some(setting => ["docLanguage", "resumeLanguage", "customLanguages"].includes(setting.key))).toBe(false);
+  const legacy = { ...file, settings: [...file.settings.filter(setting => setting.key !== "creativity"), { key: "creativity", value: "EXPRESSIVE" }, { key: "docLanguage", value: "German" }] };
+  await importExport(prisma(), legacy);
+  expect(await prisma().setting.findUniqueOrThrow({ where: { key: "creativity" } })).toMatchObject({ value: "OPTIMIZED" });
+  expect(await prisma().setting.findUnique({ where: { key: "docLanguage" } })).toBeNull();
+  const restored = await asFile();
+  expect(restored.applications).toEqual(file.applications);
 });

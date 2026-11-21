@@ -62,7 +62,7 @@ const profile: ImportedProfile = {
   publications: [],
   references: [],
 };
-const done = { id: "job-1", type: "import-profile", status: "DONE", step: null, error: null, result: { profile, readWith: "extract-profile@1" } } as const;
+const done = { id: "job-1", type: "import-profile", status: "DONE", step: null, error: null, result: { profile, readWith: "extract-profile@6" } } as const;
 
 beforeEach(() => {
   vi.clearAllMocks();

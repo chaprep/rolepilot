@@ -1,16 +1,15 @@
+import { PRODUCT_NAME } from "@/lib/brand";
 import { LogOut, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { BrandMark } from "@/components/brand-mark";
 import { signOut } from "@/lib/auth/actions";
-import type { Release } from "@/lib/releases";
 import type { ColorScheme } from "@/lib/ui-preferences";
 
 import { NavLinks } from "./nav-links";
 import { RepositoryLink } from "./repository-link";
 import { SidebarFrame } from "./sidebar-frame";
 import { ThemeToggle } from "./theme-toggle";
-import { UpdateNotice } from "./update-notice";
 
 /** Up to two initials for the avatar, e.g. "Jane Doe" → "JD". */
 function initials(name: string): string {
@@ -19,13 +18,11 @@ function initials(name: string): string {
 }
 
 /**
- * The signed-in sidebar: brand header, "+ New application", navigation, a
- * notice while a newer release is out, the theme switch and a link to the
- * repository, and the account footer.
+ * The signed-in sidebar: brand header, "+ New application", navigation,
+ * theme switch, repository link, and account footer.
  */
 export function Sidebar({
   userName,
-  update,
   currentVersion,
   desktop,
   collapsed,
@@ -33,7 +30,6 @@ export function Sidebar({
   counts,
 }: {
   userName: string;
-  update: Release | null;
   currentVersion: string;
   /** Running inside the desktop app, on this computer: there's no password, so nothing to sign out of. */
   desktop: boolean;
@@ -51,8 +47,7 @@ export function Sidebar({
         <>
           <BrandMark />
           <div className="flex min-w-0 flex-col group-data-collapsed/sidebar:hidden">
-            <span className="font-serif text-2xl leading-none font-medium tracking-[-0.01em]">Dossier</span>
-            <span className="truncate text-xs text-muted">Your job search, on your server</span>
+            <span className="brand-wordmark text-2xl">{PRODUCT_NAME}</span>
           </div>
         </>
       }
@@ -71,12 +66,6 @@ export function Sidebar({
 
         <NavLinks counts={counts} />
       </div>
-
-      {update && (
-        <div className="px-2 pb-2 group-data-collapsed/sidebar:px-1">
-          <UpdateNotice release={update} currentVersion={currentVersion} desktop={desktop} />
-        </div>
-      )}
 
       <div className="flex flex-col gap-0.5 border-t border-line p-2 group-data-collapsed/sidebar:px-1">
         <ThemeToggle serverScheme={colorScheme} />

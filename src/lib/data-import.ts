@@ -1,11 +1,14 @@
 import "server-only";
+import { lockForTransaction } from "@/lib/db-lock";
+import { MEMORY_LOCK } from "@/lib/memory/store";
+import { validateMemoryImport } from "@/lib/memory/import";
 
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { encryptApiKey } from "@/lib/ai/api-key";
 import { agentSearchInputSchema, legacyAgentQuery, MAX_AGENT_SEARCHES } from "@/lib/agent/search";
 import { lockAgentSearches } from "@/lib/agent/searches";
 import { ActionError } from "@/lib/action";
-import { EXPORT_FORMAT, EXPORT_SCHEMA_VERSION, EXPORT_SCHEMA_VERSIONS, exportSchema, INSTALL_SETTINGS, SECRET_SETTINGS, type DossierExport } from "@/lib/data-export";
+import { EXPORT_FORMAT, EXPORT_SCHEMA_VERSION, EXPORT_SCHEMA_VERSIONS, exportSchema, INSTALL_SETTINGS, SECRET_SETTINGS, type RolepilotExport } from "@/lib/data-export";
 import { encryptSecret, JOB_SOURCE_KEY } from "@/lib/secrets";
 
 // Restoring from an export file (E10-6, SET-10): everything is replaced in
@@ -15,23 +18,23 @@ import { encryptSecret, JOB_SOURCE_KEY } from "@/lib/secrets";
 export type ImportSummary = { applications: number; roles: number; skills: number; themes: number; notes: number };
 
 /** Reads an export file, or says in plain words why it can't be used. */
-export function parseExport(text: string): { ok: true; data: DossierExport } | { ok: false; error: string } {
+export function parseExport(text: string): { ok: true; data: RolepilotExport } | { ok: false; error: string } {
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
-    return { ok: false, error: "That file isn't a Dossier export: it isn't JSON." };
+    return { ok: false, error: "That file isn't a rolepilot export: it isn't JSON." };
   }
   const header = json as { format?: unknown; schemaVersion?: unknown };
-  if (typeof json !== "object" || json === null || header.format !== EXPORT_FORMAT) {
-    return { ok: false, error: "That file isn't a Dossier export." };
+  if (typeof json !== "object" || json === null || ![EXPORT_FORMAT, "dossier-export"].includes(String(header.format))) {
+    return { ok: false, error: "That file isn't a rolepilot export." };
   }
   if (typeof header.schemaVersion !== "number") return { ok: false, error: "That export has no schema version, so it can't be read." };
   if (header.schemaVersion > EXPORT_SCHEMA_VERSION) {
-    return { ok: false, error: `That export comes from a newer version of Dossier (schema ${header.schemaVersion}). Update this server first.` };
+    return { ok: false, error: `That export comes from a newer version of rolepilot (schema ${header.schemaVersion}). Update this server first.` };
   }
   if (!EXPORT_SCHEMA_VERSIONS.includes(header.schemaVersion)) {
-    return { ok: false, error: `That export's schema version (${header.schemaVersion}) isn't one this version of Dossier can read.` };
+    return { ok: false, error: `That export's schema version (${header.schemaVersion}) isn't one this version of rolepilot can read.` };
   }
   const parsed = exportSchema.safeParse(json);
   if (!parsed.success) {
@@ -42,7 +45,7 @@ export function parseExport(text: string): { ok: true; data: DossierExport } | {
 }
 
 /** What a file holds, for "replace this with that". */
-export function summarizeExport(data: DossierExport): ImportSummary {
+export function summarizeExport(data: RolepilotExport): ImportSummary {
   return {
     applications: data.applications.length,
     roles: data.profile.experience.length,
@@ -80,8 +83,9 @@ const jsonList = (value: unknown) => (Array.isArray(value) ? value : []) as Pris
  * TypeSafe key, which exports never carry, always stays. The install's own
  * settings (the usage ping's) stay as they are.
  */
-export async function importExport(db: PrismaClient, data: DossierExport): Promise<void> {
+export async function importExport(db: PrismaClient, data: RolepilotExport): Promise<void> {
   const { profile, themes, settings, applications, postings, searches, agentCandidates, startups, startupBlocks, apiKey, jobSourceKeys } = data;
+  if (data.memory) validateMemoryImport(data);
   const fromFile: Record<string, string | null> = {
     apiKeyEnc: apiKey ? encryptApiKey(apiKey) : null,
     jsearchKeyEnc: jobSourceKeys?.jsearch ? encryptSecret(JOB_SOURCE_KEY, jobSourceKeys.jsearch) : null,
@@ -104,9 +108,14 @@ export async function importExport(db: PrismaClient, data: DossierExport): Promi
   await db.$transaction(
     async (tx) => {
       await lockAgentSearches(tx);
+      await lockForTransaction(tx, MEMORY_LOCK);
       // Out with the old. Applications take their history, documents, chat,
       // notes and jobs along; the other jobs (a resume import, postings read
       // for applications never created) hold the old data too.
+      await tx.memoryEvidence.deleteMany();
+      await tx.memoryFact.deleteMany();
+      await tx.memorySource.deleteMany();
+      await tx.memoryState.deleteMany();
       await tx.job.deleteMany();
       await tx.posting.deleteMany();
       await tx.postingSearch.deleteMany();
@@ -155,7 +164,7 @@ export async function importExport(db: PrismaClient, data: DossierExport): Promi
       await tx.reference.createMany({ data: profile.references });
       await tx.fact.createMany({ data: profile.facts });
       await tx.theme.createMany({ data: themes.map((theme) => ({ ...theme, builtIn: false })) });
-      await tx.setting.createMany({ data: settings.filter((setting) => setting.key !== "agentQuery" && !SECRET_SETTINGS.includes(setting.key) && !INSTALL_SETTINGS.includes(setting.key)) });
+      await tx.setting.createMany({ data: settings.map(setting => setting.key === "creativity" && setting.value === "EXPRESSIVE" ? { ...setting, value: "OPTIMIZED" } : setting).filter((setting) => !["docLanguage", "resumeLanguage", "customLanguages"].includes(setting.key) && setting.key !== "agentQuery" && !SECRET_SETTINGS.includes(setting.key) && !INSTALL_SETTINGS.includes(setting.key)) });
       for (const [key, value] of Object.entries(fromFile)) if (value) await tx.setting.create({ data: { key, value } });
 
       const themeIds = new Set((await tx.theme.findMany({ select: { id: true } })).map((theme) => theme.id));
@@ -163,6 +172,7 @@ export async function importExport(db: PrismaClient, data: DossierExport): Promi
         data: applications.map((application) => ({
           ...omit(application, "events", "documents", "messages", "notes", "facts", "userNote"),
           extracted: json(application.extracted),
+          companyResearch: json(application.companyResearch),
           match: json(application.match),
           sections: json(application.sections),
           frozen: json(application.frozen),
@@ -247,6 +257,14 @@ export async function importExport(db: PrismaClient, data: DossierExport): Promi
         })),
       });
       await tx.startupBlock.createMany({ data: [...new Map(startupBlocks.map((block) => [block.hash, block])).values()] });
+      if (data.memory) {
+        const memory = data.memory;
+        if (memory.state) await tx.memoryState.create({ data: { ...memory.state, backfill: json(memory.state.backfill) } });
+        await tx.memorySource.createMany({ data: memory.sources.map(source => ({ ...source, status: source.status === "PROCESSING" ? "PENDING" : source.status, context: source.context, extraction: json(source.extraction) })) });
+        await tx.memoryFact.createMany({ data: memory.facts.map(fact => ({ ...fact, supersededById: null, attribution: fact.attribution, capabilities: fact.capabilities })) });
+        for (const fact of memory.facts) if (fact.supersededById) await tx.memoryFact.update({ where: { id: fact.id }, data: { supersededById: fact.supersededById } });
+        await tx.memoryEvidence.createMany({ data: memory.evidence });
+      }
     },
     // A big export takes longer than the default five seconds.
     { timeout: 120_000, maxWait: 10_000 },

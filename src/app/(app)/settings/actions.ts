@@ -12,14 +12,12 @@ import { applyApiKeyChange } from "@/lib/ai/api-key";
 import { LUNA, SONNET, OPENROUTER_URL } from "@/lib/ai/assignments";
 import { keyStateOf, loadAiConfig, resolveAiConfig } from "@/lib/ai/config";
 import type { KeyState } from "@/lib/ai/provider-options";
-import { DOCUMENT_LANGUAGES } from "@/lib/document-language";
 import { deleteAllBackups } from "@/lib/backups";
 import { env } from "@/lib/env";
 import { JobSearchError, testSource } from "@/lib/job-search";
 import { credentialsFor, jobSearchView, loadJobSearchConfig, requestContext } from "@/lib/job-search/config";
 import { JOB_SOURCES, JSEARCH_HOSTS } from "@/lib/job-search/search";
 import { cancelJob, startJob } from "@/lib/jobs/runner";
-import { checkForUpdate } from "@/lib/update-check";
 import { redirectProblem } from "@/lib/connector/oauth";
 import { countTailoredDocuments, deleteAllDownloads, zipPdfsJob } from "@/lib/jobs/zip-pdfs";
 import { disconnectGoogle } from "@/lib/google/account";
@@ -72,7 +70,7 @@ export const saveApiKey = action(
     const current = await loadSettings();
     await saveSettings({
       apiKeyEnc: applyApiKeyChange(current.apiKeyEnc, change),
-      // Until now the provider came from DOSSIER_AI_*; the key makes it a saved choice.
+      // Until now the provider came from ROLEPILOT_AI_*; the key makes it a saved choice.
       provider: AiProvider.OPENAI, baseUrl: OPENROUTER_URL,
     });
     return { keyState: await currentKeyState() };
@@ -200,7 +198,7 @@ export const testJev = action(z.object({}), async () => {
   const started = performance.now();
   try {
     const { model } = await askJev(
-      { state: "Dossier is checking that it can reach Jev.", questions: { check: { type: "noul", instructions: "Is this text about checking a connection?" } } },
+      { state: "rolepilot is checking that it can reach Jev.", questions: { check: { type: "noul", instructions: "Is this text about checking a connection?" } } },
       { key: jev.key, timeoutMs: TEST_TIMEOUT_MS, retryDelaysMs: [] },
     );
     return { connected: true as const, model, seconds: Math.round((performance.now() - started) / 100) / 10 };
@@ -222,20 +220,11 @@ export const updateSettings = action(
     paper: z.enum(PaperSize).optional(),
     dateFormat: z.enum(DateFormat).optional(),
     defaultTone: z.enum(Tone).optional(),
-    /** A language name, or null for the posting's language. */
-    docLanguage: z.string().trim().min(1).max(60).nullable().optional(),
-    /** One of the built-in languages, or null for English. */
-    resumeLanguage: z
-      .string()
-      .refine((name) => DOCUMENT_LANGUAGES.some((language) => language.name === name), "Pick a language from the list.")
-      .nullable()
-      .optional(),
     fileNamePattern: z.string().max(200).optional(),
     includeRefs: z.boolean().optional(),
     documentsToWrite: z.enum(DOCUMENTS_TO_WRITE).optional(),
     nightlyBackup: z.boolean().optional(),
     jobRetentionHours: z.number().refine(isJobRetention).optional(),
-    updateCheck: z.boolean().optional(),
   }),
   async (changes) => {
     await saveSettings(changes);
@@ -243,20 +232,6 @@ export const updateSettings = action(
   },
 );
 
-/**
- * "Other language…" (SET-7): adds a language to the list and writes
- * documents in it. A name already in the list, in any case, is just picked.
- */
-export const addDocumentLanguage = action(
-  z.object({ name: z.string().trim().min(1, "Type a language first.").max(60) }),
-  async ({ name }) => {
-    const { customLanguages } = await loadSettings();
-    const known = [...DOCUMENT_LANGUAGES.map((language) => language.name), ...customLanguages];
-    const existing = known.find((language) => language.toLocaleLowerCase() === name.toLocaleLowerCase());
-    await saveSettings({ docLanguage: existing ?? name, ...(existing ? {} : { customLanguages: [...customLanguages, name] }) });
-    return { language: existing ?? name, added: !existing };
-  },
-);
 
 /** "Download all PDFs" (E10-5): zips every tailored document in the background. */
 export const startZippingPdfs = action(z.object({}), async () => {
@@ -274,11 +249,15 @@ export const startZippingPdfs = action(z.object({}), async () => {
 export const deleteEverything = action(z.object({ confirm: z.literal("DELETE") }), async () => {
   const unfinished = await prisma.job.findMany({ where: { status: { in: [JobStatus.QUEUED, JobStatus.RUNNING] } }, select: { id: true } });
   for (const job of unfinished) await cancelJob(job.id);
-  // Revokes Dossier's access at Google too (E15-1).
+  // Revokes rolepilot's access at Google too (E15-1).
   await disconnectGoogle().catch(() => {});
 
   await prisma.$transaction(async (tx) => {
     await lockAgentSearches(tx);
+    await tx.memoryEvidence.deleteMany();
+    await tx.memoryFact.deleteMany();
+    await tx.memorySource.deleteMany();
+    await tx.memoryState.deleteMany();
     await tx.job.deleteMany();
     // The tokens each AI request used (#290).
     await tx.aiUsage.deleteMany();
@@ -320,13 +299,6 @@ export const deleteEverything = action(z.object({ confirm: z.literal("DELETE") }
   redirect("/");
 });
 
-/** "Check for updates" (E10-9): the latest release, asked for now, and kept for the sidebar's notice. */
-export const checkUpdates = action(z.object({}), async () => {
-  const result = await checkForUpdate();
-  revalidatePath("/", "layout");
-  return result.status === "newer" ? result : { status: result.status };
-});
-
 // Settings → MCP connector (#221, #281). Every connector token carries
 // connectorEnabledAt, so a new value signs every app out.
 
@@ -340,7 +312,7 @@ export const setConnector = action(z.object({ on: z.boolean() }), async ({ on })
 export const disconnectApps = action(z.object({}), async (_input, { toast }) => {
   if (!(await loadSettings()).connectorEnabledAt) throw new ActionError("The MCP connector is off already.");
   await saveSettings({ connectorEnabledAt: new Date().toISOString() });
-  toast("Every app is disconnected. Connect again from an app to use Dossier there.");
+  toast("Every app is disconnected. Connect again from an app to use rolepilot there.");
   return null;
 });
 

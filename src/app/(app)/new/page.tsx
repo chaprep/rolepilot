@@ -25,7 +25,7 @@ export default async function NewApplicationPage({ searchParams }: PageProps<"/n
     loadSettings(),
     // "Start application" on Find jobs (E14-8).
     typeof posting === "string" ? prisma.posting.findUnique({ where: { id: posting } }) : null,
-    // "Write to them" on Startups (#222): what's known about the startup, without its addresses.
+    // "Draft outreach" on Startups (#222): what's known about the startup, without its addresses.
     typeof startupId === "string" ? getStartup(startupId) : null,
   ]);
   const options = evidenceOptions(withoutSectionsOff(await loadProfile(), settings.resumeSections));

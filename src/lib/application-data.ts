@@ -66,7 +66,7 @@ export const extractedSchema = z.object({
   requirements: z.array(requirementSchema),
   /** Whether the posting asks for references (SET-9: include them only then). */
   asksForReferences: z.boolean(),
-  /** The posting's language, e.g. "English", for "Write documents in: the posting's language". */
+  /** Legacy posting-language metadata; new extraction leaves it null. */
   language: z.string().nullable(),
 });
 export type Extracted = z.infer<typeof extractedSchema>;
@@ -111,6 +111,8 @@ export const matchResults = ["covered", "partial", "gap"] as const;
 export type MatchResult = (typeof matchResults)[number];
 
 export const matchItemSchema = z.object({
+  evidenceIds: z.array(z.string()).optional(),
+  evidenceOrigin: z.enum(["profile", "memory"]).optional(),
   requirement: z.string(),
   result: z.enum(matchResults),
   /** The profile skill or language the requirement maps to, if any. */

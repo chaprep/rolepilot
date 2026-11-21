@@ -1,3 +1,4 @@
+import { memoryState } from "@/lib/memory/store";
 import "server-only";
 
 import type { Posting, Prisma } from "@/generated/prisma/client";
@@ -132,7 +133,8 @@ export async function postingStates(found: readonly (PostingRef & { url: string 
     db.application.findMany({ where: { postingUrl: { not: "" }, awaitingReview: false }, select: { id: true, postingUrl: true }, orderBy: { createdAt: "asc" } }),
     db.postingScore.findMany({ where: { OR: refs } }),
   ]);
-  const scoreOf = new Map(scores.map((row) => [postingKey(row), { score: row.score, reasons: stringsOf(row.reasons), redFlags: stringsOf(row.redFlags) }]));
+  const revision = (await memoryState(db)).revision;
+  const scoreOf = new Map(scores.map((row) => [postingKey(row), { score: row.score, reasons: stringsOf(row.reasons), redFlags: [...stringsOf(row.redFlags), ...((row.memoryRevision ?? 0) !== revision ? ["This score predates current remembered information. Score again to refresh."] : [])] }]));
   const byKey = new Map(stored.map((posting) => [postingKey(posting), posting]));
   const byLink = new Map<string, string>();
   for (const application of applications) {

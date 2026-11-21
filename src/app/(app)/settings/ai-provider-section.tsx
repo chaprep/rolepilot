@@ -6,7 +6,7 @@ import { AiProvider } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MODEL_ASSIGNMENTS, JEV } from "@/lib/ai/assignments";
+import { MODEL_ASSIGNMENTS, JEV, modelForTask } from "@/lib/ai/assignments";
 import type { AiSettingsView } from "@/lib/ai/provider-options";
 import { saveApiKey, testOpenRouterConnection } from "./actions";
 
@@ -40,7 +40,7 @@ export function AiProviderSection({ initial }: { initial: AiSettingsView }) {
     <Card className="flex flex-col gap-4">
       <Input label="OpenRouter API key" type="password" autoComplete="off" value={key}
         onChange={(event) => setKey(event.target.value)}
-        placeholder={state === "set" ? "Saved · enter a new key to replace it" : state === "env" ? "Using DOSSIER_AI_KEY" : "Enter your OpenRouter API key"}
+        placeholder={state === "set" ? "Saved · enter a new key to replace it" : state === "env" ? "Using ROLEPILOT_AI_KEY" : "Enter your OpenRouter API key"}
         hint={state === "unreadable" ? "The saved key cannot be read. Enter it again." : "Stored encrypted on your server."} />
       <div className="flex flex-wrap gap-3">
         <Button disabled={busy || !key.trim()} onClick={() => void save()}>Save key</Button>
@@ -55,7 +55,7 @@ export function AiProviderSection({ initial }: { initial: AiSettingsView }) {
     <Card><h3 className="mb-3 font-medium">Models by task</h3>
       <dl className="divide-y divide-line">{MODEL_ASSIGNMENTS.map((item) => <div key={item.task} className="flex flex-wrap justify-between gap-2 py-3 text-sm">
         <dt>{item.label}</dt><dd className="text-muted">{item.model} · Medium</dd>
-      </div>)}<div className="flex flex-wrap justify-between gap-2 py-3 text-sm"><dt>Job and resume scoring</dt><dd className="text-muted">{JEV}</dd></div></dl>
+      </div>)}<div className="flex flex-wrap justify-between gap-2 py-3 text-sm"><dt>Company research</dt><dd className="text-muted">{modelForTask("research-company")} · Cover-letter assignment</dd></div><div className="flex flex-wrap justify-between gap-2 py-3 text-sm"><dt>Job and resume scoring</dt><dd className="text-muted">{JEV}</dd></div></dl>
     </Card>
   </div>;
 }

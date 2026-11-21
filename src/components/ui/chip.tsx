@@ -23,7 +23,7 @@ export function ToggleChip({
       className={cn(
         "rounded-full border px-3 py-1.5 text-meta disabled:cursor-not-allowed disabled:opacity-50",
         selected
-          ? "border-primary bg-selected font-medium text-primary-text"
+          ? "border-primary-text bg-selected font-medium text-primary-text"
           : "border-line-field bg-input text-ink hover:border-line-strong hover:bg-hover",
         className,
       )}

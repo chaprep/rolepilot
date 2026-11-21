@@ -98,7 +98,7 @@ export function CalendarCard({
           <Link href={links.previous} onNavigate={onNavigate(links.previous)} aria-label="Previous month" title="Previous month" className={buttonClassName("text", "sm", "px-1.5!")}>
             <ChevronLeft size={16} aria-hidden="true" />
           </Link>
-          <p className="font-serif text-lg">{monthTitle(month)}</p>
+          <p className="font-ui font-semibold text-lg">{monthTitle(month)}</p>
           <Link href={links.next} onNavigate={onNavigate(links.next)} aria-label="Next month" title="Next month" className={buttonClassName("text", "sm", "px-1.5!")}>
             <ChevronRight size={16} aria-hidden="true" />
           </Link>
@@ -131,7 +131,7 @@ export function CalendarCard({
               >
                 <span
                   className={cn(
-                    "grid size-7 place-items-center rounded-full font-serif text-[15px] tabular-nums",
+                    "grid size-7 place-items-center rounded-full font-ui font-semibold text-[15px] tabular-nums",
                     day.slice(0, 7) !== month.slice(0, 7) && "text-muted",
                     day === today ? "bg-primary text-on-primary" : isPicked && "ring-1 ring-ink",
                   )}
@@ -197,7 +197,7 @@ function SourceNotice({ source }: { source: CalendarSource }) {
     source.status === "failed"
       ? `Your Google Calendar didn't load: ${source.message}`
       : source.status === "no-permission"
-        ? "Dossier may not use your calendar yet. Allow it in Settings → Google to see your other events here."
+        ? "rolepilot may not use your calendar yet. Allow it in Settings → Google to see your other events here."
         : "Connect Google Calendar in Settings → Google to see your other events here, and keep interviews in step with it.";
   return (
     <p>

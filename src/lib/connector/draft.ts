@@ -10,7 +10,7 @@ import { writeDocumentsJob } from "@/lib/jobs/write-documents";
 import { loadSettings } from "@/lib/settings-data";
 
 // A draft application asked for from Claude chat (#221, draft_application),
-// written by Dossier's own AI model: read the posting, write the resume and
+// written by rolepilot's own AI model: read the posting, write the resume and
 // cover letter, and create a Draft application, the way New application does
 // it, in one go. Nothing is sent.
 
@@ -42,7 +42,7 @@ export const connectorDraftJob = defineJob({
     const reading = await readPostingJob.run({ posting }, context);
     const settings = await loadSettings();
     const documents = await writeDocumentsJob.run(
-      { readJobId: context.id, posting, extracted: reading.extracted, match: reading.match, tone: settings.defaultTone, note, write: "both" },
+      { readJobId: context.id, posting, postingUrl, extracted: reading.extracted, match: reading.match, tone: settings.defaultTone, note, write: "both" },
       context,
     );
     const applicationId = await createApplicationFromDocuments({

@@ -513,11 +513,11 @@ describe("sendMessage (E8-5)", () => {
     expect(await messages()).toHaveLength(1);
   });
 
-  it("needs an AI provider for a change", async () => {
+  it("keeps submitted information pending when an AI provider is unavailable", async () => {
     ai.ready = false;
     expect(await sendMessage({ id: "app-1", text: "Shorter", viewing: "RESUME", target: null })).toMatchObject({
-      ok: false,
-      error: expect.stringMatching(/needs an AI provider/),
+      ok: true,
+      data: { jobId: null },
     });
   });
 
@@ -587,28 +587,28 @@ describe("addApplicationEvidence (E8-7)", () => {
   });
 
   const evidence = { id: "f4513749-6c4f-4283-996f-12cc74711432", requirementIndex: 0, text: "Deployed Kubernetes services.", targetUnitId: null };
-  it("saves evidence only for this application and starts a resume-only job", async () => {
+  it("saves application context without generating a chat request or editing documents", async () => {
     const before = await prisma().profileField.findMany();
     const result = await addApplicationEvidence({ id: "app-1", evidence });
-    expect(result).toMatchObject({ ok: true, data: { retry: false, jobId: expect.any(String) } });
+    expect(result).toMatchObject({ ok: true, data: { notice: expect.stringContaining("Information saved") } });
     expect(await prisma().skill.count()).toBe(0);
     expect(await prisma().profileField.findMany()).toEqual(before);
     expect(await prisma().fact.findMany()).toMatchObject([{ applicationId: "app-1", text: expect.stringContaining("Deployed Kubernetes services.") }]);
-    const job = await prisma().job.findFirstOrThrow();
-    expect(job.input).toMatchObject({ evidence: { factId: expect.any(String), targetUnitId: null }, viewing: "RESUME" });
+    expect(await prisma().job.count()).toBe(0);
+    expect(await prisma().chatMessage.count()).toBe(0);
     expect(await units()).toEqual(resume);
   });
   it("does not duplicate evidence or jobs when the same submission is retried", async () => {
     const first = await addApplicationEvidence({ id: "app-1", evidence });
     const second = await addApplicationEvidence({ id: "app-1", evidence });
     expect(first).toMatchObject({ ok: true });
-    expect(second).toMatchObject({ ok: true, data: { retry: false } });
+    expect(second).toMatchObject({ ok: true, data: { notice: expect.any(String) } });
     expect(await prisma().fact.count()).toBe(1);
-    expect(await prisma().job.count()).toBe(1);
+    expect(await prisma().job.count()).toBe(0);
   });
   it("saves evidence without generating when the application has no resume", async () => {
     await prisma().document.deleteMany({ where: { applicationId: "app-1" } });
-    expect(await addApplicationEvidence({ id: "app-1", evidence })).toMatchObject({ ok: true, data: { jobId: null, retry: false } });
+    expect(await addApplicationEvidence({ id: "app-1", evidence })).toMatchObject({ ok: true, data: { notice: expect.any(String) } });
     expect(await prisma().fact.count({ where: { applicationId: "app-1" } })).toBe(1);
     expect(await prisma().job.count()).toBe(0);
     expect(await prisma().skill.count()).toBe(0);
@@ -620,7 +620,7 @@ describe("addApplicationEvidence (E8-7)", () => {
   });
   it("keeps evidence when AI is unavailable, without changing any resume", async () => {
     ai.ready = false;
-    expect(await addApplicationEvidence({ id: "app-1", evidence })).toMatchObject({ ok: true, data: { retry: true, jobId: null } });
+    expect(await addApplicationEvidence({ id: "app-1", evidence })).toMatchObject({ ok: true, data: { notice: expect.any(String) } });
     expect(await prisma().fact.count()).toBe(1);
     expect(await units()).toEqual(resume);
   });
@@ -929,4 +929,17 @@ describe("saving an application theme copy", () => {
     expect(await saveApplicationTheme({ ...fields, applicationId: "gone" })).toMatchObject({ ok: false, error: "That application no longer exists." });
     expect(await prisma().theme.count()).toBe(0);
   });
+});
+
+it("restores historical email language metadata when undoing a full rewrite", async () => {
+  const previous = [{ id: "to", label: "Recipient", text: "" }, { id: "subject", label: "Subject", text: "Sollicitatie" }, { id: "body", label: "Message", text: "Beste team," }];
+  const units = previous.map(unit => ({ ...unit, text: `English ${unit.text}` }));
+  const previousState = { ...demoDocumentState(), language: "Dutch" };
+  const state = { ...previousState, language: "English" };
+  await prisma().document.create({ data: { applicationId: "app-1", kind: "EMAIL", units, state } });
+  await prisma().job.create({ data: { id: "english-email-rewrite", key: "email:app-1", type: "write-email", status: "DONE", input: {}, result: { units, previous, previousState, state } } });
+  expect(await undoEmailRewrite({ id: "app-1", jobId: "english-email-rewrite" })).toEqual({ ok: true, data: null });
+  const document = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "EMAIL" } } });
+  expect(document.units).toEqual(previous);
+  expect(document.state).toMatchObject({ language: "Dutch" });
 });

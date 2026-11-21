@@ -32,7 +32,7 @@ export type ResumeWorkspaceProps = {
   baseThemeId: string;
   paper: PaperSize;
   includeReferences: boolean;
-  /** Settings → "Base resume language", for its headings and dates; null for English. */
+  /** Rendering metadata; the base resume now uses English. */
   language: string | null;
   /** The sections' order and which are off (#297). */
   sections: SectionLayout;
@@ -162,12 +162,12 @@ export function ResumeWorkspace({
     saveFile(new Blob([JSON.stringify(themeFile(base), null, 2)], { type: "application/json" }), themeFileName(base));
 
   const importFile = async (file: File) => {
-    if (file.size > 100_000) return toast("That file is too big to be a Dossier theme.");
+    if (file.size > 100_000) return toast("That file is too big to be a rolepilot theme.");
     let json: unknown;
     try {
       json = JSON.parse(await file.text());
     } catch {
-      return toast("That file isn't a Dossier theme.");
+      return toast("That file isn't a rolepilot theme.");
     }
     // Checked here for a quick answer, and again on the server.
     const read = parseThemeFile(json);

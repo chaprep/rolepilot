@@ -115,6 +115,7 @@ export function RefinePanel({
               </Link>
             </p>
           )}
+          <p className="text-meta text-muted">New facts you supply are remembered automatically. <Link href="/profile?section=facts" className="underline underline-offset-2">Review remembered information</Link></p>
           <div className="flex flex-col gap-2 rounded-card border border-line-input bg-input px-3 py-2.5 focus-within:border-primary">
             {target && (
               <div className="flex">

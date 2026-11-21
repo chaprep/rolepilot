@@ -7,6 +7,7 @@ import { demoLetterUnits, demoResumeUnits } from "@/lib/demo-profile";
 import { createTestClient, resetDatabase } from "@/test/db";
 
 import { refineJob } from "./refine";
+import { recordMemorySource } from "@/lib/memory/store";
 
 const db = vi.hoisted(() => ({ client: undefined as ReturnType<typeof createTestClient> | undefined }));
 vi.mock("@/lib/prisma", async () => {
@@ -16,7 +17,7 @@ vi.mock("@/lib/prisma", async () => {
 });
 const provider = vi.hoisted(() => ({ current: undefined as unknown }));
 vi.mock("@/lib/ai", () => ({ getAiProvider: async () => provider.current }));
-vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true, language: null }) }));
+vi.mock("@/lib/ai/task-options", () => ({ loadTaskOptions: async () => ({ creativity: "BALANCED", strict: true }) }));
 vi.mock("@/lib/profile-data", async () => {
   const { demoProfile } = await import("@/lib/demo-profile");
   return { loadProfile: async () => demoProfile(), loadFactTexts: async () => [] };
@@ -65,7 +66,7 @@ describe("refineJob (E8-5)", () => {
     expect(saved).toMatchObject({
       role: "AI",
       text: "Trimmed your summary.",
-      writtenWith: "refine-chat@13",
+      writtenWith: "refine-chat@16",
       previousTone: null,
       edits: [{ document: "RESUME", unitId: "summary", text: "Designer of calm tools.", previousText: resume[0].text }],
     });
@@ -185,37 +186,50 @@ describe("the letter's contact details (E8-11)", () => {
 });
 
 
-it("limits automatic evidence application to the resume and does not duplicate replies on retry", async () => {
+it("rejects a legacy evidence job before calling AI or changing documents", async () => {
   const fact = await prisma().fact.create({ data: { applicationId: "app-1", text: "Worked on delivery planning." } });
   const message = await prisma().chatMessage.create({ data: { applicationId: "app-1", role: "USER", text: "Apply evidence" } });
-  const beforeLetter = await units("COVER_LETTER");
-  provider.current = reply({ reply: "Applied evidence.", tone: "FORMAL", edits: [
-    { document: "RESUME", unitId: "summary", text: "Delivery planning specialist." },
-    { document: "RESUME", unitId: "experience:e1", text: "Do not change" },
-    { document: "COVER_LETTER", unitId: "paragraph:1", text: "Do not change" },
-  ] });
-  const input = { applicationId: "app-1", messageId: message.id, request: "Apply evidence", viewing: "RESUME" as const, target: null, evidence: { factId: fact.id, targetUnitId: null } };
-  const result = await refineJob.run(input, context);
-  expect(result.edited).toEqual([{ document: "RESUME", unitId: "summary" }]);
-  expect(await units("COVER_LETTER")).toEqual(beforeLetter);
-  expect((await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } })).tone).toBe("WARM");
-  expect(await refineJob.run(input, context)).toEqual({ messageId: result.messageId, edited: [] });
-  expect(await prisma().documentVersion.count()).toBe(1);
-});
-
-
-it("does not apply a result if its evidence was removed during generation", async () => {
-  const fact = await prisma().fact.create({ data: { applicationId: "app-1", text: "Worked on delivery planning." } });
-  const message = await prisma().chatMessage.create({ data: { applicationId: "app-1", role: "USER", text: "Apply evidence" } });
-  provider.current = new MockProvider({ reply: async () => {
-    await prisma().fact.delete({ where: { id: fact.id } });
-    return { reply: "Updated.", tone: null, declined: false, edits: [{ document: "RESUME", unitId: "summary", text: "Do not save" }] };
-  } });
-  await expect(refineJob.run({ applicationId: "app-1", messageId: message.id, request: "Apply evidence", viewing: "RESUME", target: null, evidence: { factId: fact.id, targetUnitId: null } }, context)).rejects.toThrow("evidence changed while rewriting");
+  const mock = reply({ reply: "Do not apply", edits: [{ document: "RESUME", unitId: "summary", text: "Do not save" }] });
+  provider.current = mock;
+  const legacy = refineJob.input.parse({ applicationId: "app-1", messageId: message.id, request: "Apply evidence", viewing: "RESUME", target: null, evidence: { factId: fact.id, targetUnitId: null } });
+  await expect(refineJob.run(legacy, context)).rejects.toThrow("Automatic evidence updates are no longer supported");
+  expect(mock.calls).toHaveLength(0);
   expect(await units("RESUME")).toEqual(resume);
+  expect(await units("COVER_LETTER")).toEqual(letter);
+  expect(await prisma().fact.count()).toBe(1);
   expect(await prisma().documentVersion.count()).toBe(0);
 });
 
+it("saves a requested edit without processing failed or pending memory", async () => {
+  const source = await prisma().$transaction(tx => recordMemorySource(tx, { sourceKey: "chat:pending", kind: "CHAT", text: "Add Kubernetes", applicationId: "app-1", context: { scope: "GENERAL" } }));
+  await prisma().memorySource.update({ where: { id: source.id }, data: { status: "FAILED" } });
+  const flagged = resume.map(unit => unit.id === "summary" ? { ...unit, unverified: ["2019"] } : unit);
+  await prisma().document.update({ where: { applicationId_kind: { applicationId: "app-1", kind: "RESUME" } }, data: { units: flagged } });
+  const mock = reply({ reply: "Updated.", edits: [{ document: "RESUME", unitId: "summary", text: "Kubernetes specialist with 25 years of experience." }] });
+  provider.current = mock;
+  await ask("Say I am a Kubernetes specialist with 25 years of experience");
+  expect(mock.calls).toHaveLength(1);
+  expect(mock.calls[0].system).toContain("You help a candidate refine");
+  const saved = (await units("RESUME")).find(unit => unit.id === "summary")!;
+  expect(saved.text).toBe("Kubernetes specialist with 25 years of experience.");
+  expect(saved).not.toHaveProperty("unverified");
+  const changes = documentChangesSchema.parse((await lastMessage()).documentChanges);
+  expect(changes[0].beforeUnits.find(unit => unit.id === "summary")?.unverified).toEqual(["2019"]);
+  expect(changes[0].afterUnits.find(unit => unit.id === "summary")).toEqual(saved);
+  expect((await prisma().memorySource.findUniqueOrThrow({ where: { id: source.id } })).status).toBe("FAILED");
+});
+
+it("does not repeat a completed user-directed edit on retry", async () => {
+  const message = await prisma().chatMessage.create({ data: { applicationId: "app-1", role: "USER", text: "Add Kubernetes" } });
+  const mock = reply({ reply: "Added.", edits: [{ document: "RESUME", unitId: "skills", text: "Cloud: Kubernetes" }] });
+  provider.current = mock;
+  const input = { applicationId: "app-1", messageId: message.id, request: "Add Kubernetes", viewing: "RESUME" as const, target: null };
+  const result = await refineJob.run(input, context);
+  expect(await refineJob.run(input, context)).toEqual({ messageId: result.messageId, edited: [] });
+  expect(mock.calls).toHaveLength(1);
+  expect(await prisma().documentVersion.count()).toBe(1);
+  expect((await units("RESUME")).find(unit => unit.id === "skills")).not.toHaveProperty("unverified");
+});
 
 describe("complete local document refinement", () => {
   it("saves formatting, metadata and new sections atomically with complete history", async () => {
@@ -274,4 +288,27 @@ it("preserves a theme manually selected while the first local refinement is runn
   await expect(ask("Reduce margins")).rejects.toThrow("document changed while refining");
   const row = await prisma().document.findFirstOrThrow({ where: { applicationId: "app-1", kind: "RESUME" } });
   expect(row.themeId).toBe("new-theme"); expect(row.state).toBeNull();
+});
+
+it("keeps legacy layout language for a section edit and stamps English only after rewriting all prose", async () => {
+  const legacy = { ...demoDocumentState(), language: "Arabic" };
+  await prisma().document.update({ where: { applicationId_kind: { applicationId: "app-1", kind: "RESUME" } }, data: { state: legacy } });
+  provider.current = reply({ reply: "Updated summary.", edits: [{ document: "RESUME", unitId: "summary", text: "English summary." }] });
+  await ask("Rewrite the summary");
+  let row = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "RESUME" } } });
+  expect(readDocumentState(row.state)?.language).toBe("Arabic");
+  const current = row.units as typeof resume;
+  const prose = current.filter(unit => unit.text.trim() && /^(summary|skills|languages|experience:|project:|education:)/.test(unit.id));
+  provider.current = reply({ reply: "Bold formatting applied.", edits: prose.map(unit => ({ document: "RESUME", unitId: unit.id, text: `**${unit.text}**` })) });
+  await ask("Bold all resume text");
+  row = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "RESUME" } } });
+  expect(readDocumentState(row.state)?.language).toBe("Arabic");
+  provider.current = reply({ reply: "Rewritten in English.", edits: prose.map(unit => ({ document: "RESUME", unitId: unit.id, text: `English ${unit.text}` })) });
+  await ask("Rewrite the entire resume in English");
+  row = await prisma().document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: "app-1", kind: "RESUME" } } });
+  expect(readDocumentState(row.state)?.language).toBe("English");
+  const last = await lastMessage();
+  const changes = documentChangesSchema.parse(last.documentChanges);
+  expect(changes[0].beforeState?.language).toBe("Arabic");
+  expect(changes[0].afterState?.language).toBe("English");
 });

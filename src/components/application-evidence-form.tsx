@@ -32,13 +32,13 @@ export function ApplicationEvidenceForm({ skill, index, options, initial, onSave
       finally { setSaving(false); }
     }}>
       <p className="text-sm font-medium">{skill}</p>
-      <Textarea label="Supporting experience" hint="Describe what you did and where you used this skill. Only this application changes; an existing resume updates automatically." rows={3} maxLength={800} value={text} onChange={(event) => setText(event.target.value)} autoFocus />
+      <Textarea label="Supporting experience" hint="Describe what you did and where you used this skill. Saved for this application. Ask Refine with AI to apply it to an existing resume." rows={3} maxLength={800} value={text} onChange={(event) => setText(event.target.value)} autoFocus />
       <Select label="Role or project (optional)" value={targetUnitId} onChange={(event) => setTarget(event.target.value)}>
         <option value="">General capability</option>
         {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
       </Select>
       {error && <p role="alert" className="text-sm text-warning">{error}</p>}
-      <p className="text-meta text-muted">The profile and base resume stay unchanged. Undoing a resume update keeps this evidence available.</p>
+      <p className="text-meta text-muted">Saving keeps this information available without changing your existing documents.</p>
       <div className="flex gap-2">
         <Button type="submit" variant="secondary" size="sm" disabled={saving}>{saving ? "Saving…" : "Save for this application"}</Button>
         <Button type="button" variant="text" size="sm" onClick={onCancel} disabled={saving}>Cancel</Button>

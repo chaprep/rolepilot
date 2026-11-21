@@ -24,13 +24,13 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   delete document.documentElement.dataset.theme;
-  document.cookie = "dossier_theme=; max-age=0; path=/";
-  document.cookie = "dossier_sidebar=; max-age=0; path=/";
+  document.cookie = "rolepilot_theme=; max-age=0; path=/";
+  document.cookie = "rolepilot_sidebar=; max-age=0; path=/";
 });
 
 function renderSidebar(initialCollapsed = false) {
   return render(
-    <SidebarFrame initialCollapsed={initialCollapsed} brand={<span>Dossier</span>}>
+    <SidebarFrame initialCollapsed={initialCollapsed} brand={<span>rolepilot</span>}>
       <NavLinks />
       <ThemeToggle />
     </SidebarFrame>,
@@ -45,11 +45,11 @@ describe("SidebarFrame", () => {
     expect(screen.getByRole("complementary")).toHaveAttribute("data-collapsed", "true");
     // The labels are only visually hidden, so links keep their names.
     expect(screen.getByRole("link", { name: "Applications" })).toHaveAttribute("title", "Applications");
-    expect(document.cookie).toContain("dossier_sidebar=collapsed");
+    expect(document.cookie).toContain("rolepilot_sidebar=collapsed");
 
     await userEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
     expect(screen.getByRole("complementary")).not.toHaveAttribute("data-collapsed");
-    expect(document.cookie).toContain("dossier_sidebar=expanded");
+    expect(document.cookie).toContain("rolepilot_sidebar=expanded");
   });
 
   it("starts collapsed when it was left that way", () => {
@@ -59,19 +59,23 @@ describe("SidebarFrame", () => {
 });
 
 describe("ThemeToggle", () => {
-  it("offers the other scheme to the system's, then switches and remembers", async () => {
+  it("toggles dark mode by click or keyboard and remembers the choice", async () => {
     renderSidebar();
-    await userEvent.click(screen.getByRole("button", { name: "Dark mode" }));
+    const toggle = screen.getByRole("switch", { name: "Dark mode", checked: false });
+    await userEvent.click(toggle);
 
+    expect(toggle).toBeChecked();
     expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(document.cookie).toContain("dossier_theme=dark");
-    await userEvent.click(screen.getByRole("button", { name: "Light mode" }));
+    expect(document.cookie).toContain("rolepilot_theme=dark");
+    await userEvent.keyboard(" ");
+    expect(toggle).not.toBeChecked();
     expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.cookie).toContain("rolepilot_theme=light");
   });
 
   it("follows a dark system until a choice is made", () => {
     systemDark = true;
     renderSidebar();
-    expect(screen.getByRole("button", { name: "Light mode" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Dark mode" })).toBeChecked();
   });
 });

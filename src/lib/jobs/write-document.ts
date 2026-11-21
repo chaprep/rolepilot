@@ -1,3 +1,4 @@
+import { prepareCandidateProfile, assertCandidateContext } from "@/lib/memory/context";
 import "server-only";
 
 import { z } from "zod";
@@ -7,18 +8,23 @@ import { DocumentKind, VersionCause } from "@/generated/prisma/enums";
 import { getAiProvider } from "@/lib/ai";
 import { loadTaskOptions } from "@/lib/ai/task-options";
 import { tailorResume, writeCoverLetter } from "@/lib/ai/tasks";
-import { readDocumentState } from "@/lib/document-state";
+import { documentStateSchema, readDocumentState } from "@/lib/document-state";
 import { tailoredProfile } from "@/lib/resume-fit";
 import { calendarDay } from "@/lib/application-documents";
 import { extractedOf, matchSchema, unitsSchema, type Unit } from "@/lib/application-data";
 import { documentLabels } from "@/lib/document-labels";
 import { documentLanguage } from "@/lib/document-language";
 import { saveVersion } from "@/lib/document-versions";
-import { sidebarLetterUnits } from "@/lib/cover-letter-format";
+import { letterFormatting, sidebarLetterTheme, sidebarLetterUnits } from "@/lib/cover-letter-format";
 import { newFrame, withFrame } from "@/lib/letter-frame";
 import { prisma } from "@/lib/prisma";
-import { loadFactTexts, loadProfile } from "@/lib/profile-data";
+import { profileOfApplication } from "@/lib/frozen-copy";
+import { loadFactTexts } from "@/lib/profile-data";
 import { sectionLayoutSchema, withoutSectionsOff } from "@/lib/resume-sections";
+import { loadTheme } from "@/lib/theme-data";
+import { BUILT_IN_THEMES } from "@/lib/themes";
+import { savedCompanyResearch } from "@/lib/research/schema";
+import { applicationResearchInput, researchForWriting, saveApplicationResearch } from "@/lib/research/application";
 import { loadSettings } from "@/lib/settings-data";
 
 import { defineJob } from "./runner";
@@ -38,40 +44,50 @@ export const writeDocumentJob = defineJob({
   type: "write-document",
   input: z.object({ applicationId: z.string().min(1), kind: z.enum(WRITABLE) }),
   result: z.object({ applicationId: z.string() }),
-  async run({ applicationId, kind }, { step, signal }) {
-    await step(kind === DocumentKind.RESUME ? "Tailoring your resume" : "Writing your cover letter");
-    const application = await prisma.application.findUniqueOrThrow({ where: { id: applicationId }, include: { documents: { select: { kind: true, state: true, units: true } } } });
+  async run({ applicationId, kind }, context) {
+    const { step, signal } = context;
+    if (kind === DocumentKind.RESUME) await step("Tailoring your resume");
+    const application = await prisma.application.findUniqueOrThrow({ where: { id: applicationId }, include: { startup: { select: { website: true } }, documents: { select: { kind: true, state: true, units: true } } } });
     if (application.documents.some((document) => document.kind === kind)) return { applicationId };
 
-    const [provider, options, fullProfile, settings, facts] = await Promise.all([
+    const [provider, options, fullProfile, settings] = await Promise.all([
       getAiProvider(),
       loadTaskOptions(),
-      loadProfile(),
+      profileOfApplication(application.frozen),
       loadSettings(),
-      loadFactTexts(applicationId),
     ]);
     // Its own sections when it has them, or the base resume's (#297).
     const sections = sectionLayoutSchema.safeParse(application.sections);
     const currentResume = application.documents.find(document => document.kind === "RESUME");
     const local = readDocumentState(currentResume?.state);
     const localProfile = local && currentResume ? tailoredProfile(local.profile, unitsSchema.parse(currentResume.units)) : fullProfile;
-    const profile = withoutSectionsOff(localProfile, local?.sections ?? (sections.success ? sections.data : settings.resumeSections));
+    const evidenceProfile = await prepareCandidateProfile(localProfile, application.postingText, signal, provider);
+    const profile = withoutSectionsOff(evidenceProfile, local?.sections ?? (sections.success ? sections.data : settings.resumeSections));
     const extracted = extractedOf(application);
     const parsedMatch = matchSchema.safeParse(application.match);
     const match = parsedMatch.success ? parsedMatch.data : { items: [] };
     const posting = application.postingText;
-    // In the language of the document it goes with.
-    const taskOptions = { ...options, language: application.language || options.language, signal };
+    // Newly generated prose is always English.
+    const taskOptions = { ...options, signal };
 
     let units: Unit[];
     let writtenWith: string;
     if (kind === DocumentKind.RESUME) {
-      const resume = await tailorResume(provider, { profile, extracted, match, facts, posting }, taskOptions);
+      const resume = await tailorResume(provider, { profile, evidenceProfile, extracted, match, facts: await loadFactTexts(applicationId), posting }, taskOptions);
       units = resume.data;
       writtenWith = resume.promptVersion;
     } else {
-      const letter = await writeCoverLetter(provider, { profile, extracted, match, tone: application.tone, facts, posting }, taskOptions);
-      const language = application.language || settings.docLanguage || extracted.language || "English";
+      let companyResearch = settings.companyResearchEnabled
+        ? await researchForWriting(applicationResearchInput(application), settings, provider, context, application.companyResearch)
+        : undefined;
+      if (companyResearch && companyResearch.finishedAt !== savedCompanyResearch(application.companyResearch)?.finishedAt) {
+        signal.throwIfAborted();
+        // Use research in the draft only when its source record was saved.
+        if (!await saveApplicationResearch(application, companyResearch)) companyResearch = undefined;
+      }
+      await step("Writing your cover letter");
+      const letter = await writeCoverLetter(provider, { profile, extracted, match, tone: application.tone, facts: await loadFactTexts(applicationId), posting, companyResearch }, taskOptions);
+      const language = "English";
       // The sender and signature from the profile, and today's date, as a new application's letter has (E8-11).
       units = sidebarLetterUnits(withFrame(
         letter.data,
@@ -88,9 +104,17 @@ export const writeDocumentJob = defineJob({
       writtenWith = letter.promptVersion;
     }
 
+    const theme = settings.baseThemeId ? await loadTheme(settings.baseThemeId) : null;
     try {
       await prisma.$transaction(async (tx) => {
-        const document = await tx.document.create({ data: { applicationId, kind, units, initialLetterLayout: kind === "COVER_LETTER" ? "SIDEBAR" : null, themeId: settings.baseThemeId, writtenWith } });
+        await assertCandidateContext(evidenceProfile, tx);
+        const state = documentStateSchema.parse({ version: 1, profile: evidenceProfile, role: application.role, language: "English", tone: application.tone, theme: kind === "COVER_LETTER" ? sidebarLetterTheme(theme ?? BUILT_IN_THEMES[0]) : theme ?? BUILT_IN_THEMES[0], paper: settings.paper ?? "A4", dateFormat: settings.dateFormat, sections: local?.sections ?? (sections.success ? sections.data : settings.resumeSections), showPhoto: application.showPhoto, followThemeLayout: application.followThemeLayout, includeReferences: (settings.includeRefs && extracted.asksForReferences) || (local?.sections ?? (sections.success ? sections.data : settings.resumeSections)).withReferences === true, letterDate: calendarDay().toISOString(), company: application.company, location: application.location, coverLetterLayout: kind === "COVER_LETTER" ? "SIDEBAR" : "CLASSIC", styles: kind === "COVER_LETTER" ? letterFormatting("SIDEBAR") ?? {} : {} });
+        state.profile.facts = [];
+        if (kind === "COVER_LETTER") {
+          for (const key of ["experience", "projects", "education", "certifications", "publications", "references", "skills", "languages", "customSections"] as const) state.profile[key] = [];
+          state.profile.photo = null;
+        }
+        const document = await tx.document.create({ data: { applicationId, kind, units, state: state as unknown as Prisma.InputJsonValue, initialLetterLayout: kind === "COVER_LETTER" ? "SIDEBAR" : null, themeId: settings.baseThemeId, writtenWith } });
         await saveVersion(tx, document.id, units, { cause: VersionCause.WRITTEN });
       });
     } catch (error) {

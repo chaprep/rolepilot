@@ -36,15 +36,15 @@ describe("stored settings", () => {
       baseUrl: null,
       model: null,
       apiKeyEnc: null,
+      zyteKeyEnc: null,
+      zyteVerified: false,
+      companyResearchEnabled: false,
       creativity: "BALANCED",
       strict: true,
       showDiff: true,
       paper: "A4",
       dateFormat: "DAY_MONTH_YEAR",
       defaultTone: "WARM",
-      docLanguage: null,
-      resumeLanguage: null,
-      customLanguages: [],
       fileNamePattern: "{name} – {company} – {doc}",
       includeRefs: false,
       documentsToWrite: "both",
@@ -78,13 +78,6 @@ describe("stored settings", () => {
       agentRuns: [],
       startupsViewedAt: null,
       startupsLastRefresh: null,
-      updateCheck: true,
-      latestVersion: null,
-      latestVersionUrl: null,
-      updateCheckDay: null,
-      updateDismissed: null,
-      announcementFeed: null,
-      announcementsDismissed: [],
       googleClientId: null,
       googleClientSecretEnc: null,
       gmailRead: true,
@@ -99,11 +92,6 @@ describe("stored settings", () => {
       workTimeZone: null,
       slotMinutes: 45,
       bufferMinutes: 15,
-      usagePingId: null,
-      usagePingDay: null,
-      usagePingChoice: null,
-      usagePingChoiceAt: null,
-      usagePingChoiceText: null,
       connectorEnabledAt: null,
       connectorRedirects: [],
       browserTimeZone: null,
@@ -115,14 +103,11 @@ describe("stored settings", () => {
       provider: "OPENAI",
       strict: false,
       paper: "LETTER",
-      customLanguages: ["Farsi", "Hebrew"],
-      docLanguage: "Dutch",
       quietDays: 14,
       jobRetentionHours: 168,
     } satisfies Partial<SettingsData>;
     const rows = Object.entries(saved).map(([key, value]) => ({ key, value: settingValue(value)! }));
     expect(rows).toContainEqual({ key: "strict", value: "false" });
-    expect(rows).toContainEqual({ key: "customLanguages", value: '["Farsi","Hebrew"]' });
     expect(rows).toContainEqual({ key: "quietDays", value: "14" });
     expect(settingsFromRows(rows)).toMatchObject(saved);
     expect(settingValue(null)).toBeNull();
@@ -138,7 +123,7 @@ describe("stored settings", () => {
       { key: "jobRetentionHours", value: "5" },
       { key: "theme", value: "dark" },
     ]);
-    expect(settings).toMatchObject({ provider: null, paper: "A4", strict: true, customLanguages: [], quietDays: 7, jobRetentionHours: 24 });
+    expect(settings).toMatchObject({ provider: null, paper: "A4", strict: true, quietDays: 7, jobRetentionHours: 24 });
     expect(settings).not.toHaveProperty("theme");
   });
 
@@ -163,3 +148,22 @@ describe("the job agent's settings (E16)", () => {
   });
 });
 
+
+it("ignores retired notification settings in existing databases", () => {
+  const rows = ["updateCheck", "latestVersion", "latestVersionUrl", "updateCheckDay", "updateDismissed", "announcementFeed", "announcementsDismissed"].map((key) => ({ key, value: "legacy" }));
+  expect(settingsFromRows(rows)).toEqual(settingsFromRows([]));
+});
+
+describe("writing approach compatibility", () => {
+  it.each(["FAITHFUL", "BALANCED", "OPTIMIZED"])("preserves %s", value => {
+    expect(settingsFromRows([{ key: "creativity", value }]).creativity).toBe(value);
+  });
+  it("normalizes Expressive before validation and ignores retired language choices", () => {
+    const settings = settingsFromRows([{ key: "creativity", value: "EXPRESSIVE" }, { key: "docLanguage", value: "German" }, { key: "resumeLanguage", value: "Arabic" }, { key: "customLanguages", value: '["Farsi"]' }]);
+    expect(settings.creativity).toBe("OPTIMIZED");
+    expect(settings).not.toHaveProperty("docLanguage");
+    expect(settings).not.toHaveProperty("resumeLanguage");
+    expect(settings).not.toHaveProperty("customLanguages");
+    expect(settingsFromRows([{ key: "creativity", value: "INVALID" }]).creativity).toBe("BALANCED");
+  });
+});

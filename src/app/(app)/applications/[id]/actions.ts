@@ -1,5 +1,8 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { recordMemorySource } from "@/lib/memory/store";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -21,6 +24,7 @@ import { syncInterviewToCalendar } from "@/lib/google/availability";
 import { GoogleError } from "@/lib/google/errors";
 import { isFrameUnit, withFrame, WRITTEN_FRAME_UNITS } from "@/lib/letter-frame";
 import { saveVersion } from "@/lib/document-versions";
+import { refreshResearchJob, refreshResearchJobKey } from "@/lib/jobs/refresh-research";
 import { refineJob, refineJobKey } from "@/lib/jobs/refine";
 import { regenerateUnitJob, unitJobKey } from "@/lib/jobs/regenerate-unit";
 import { findUnfinishedJobs, startJob } from "@/lib/jobs/runner";
@@ -279,7 +283,7 @@ export const saveApplicationTheme = action(
 /**
  * The next interview's date and time (E9-9), or null to remove it. It shows
  * on the dashboard's "Worth a look" while the application is in Interview,
- * and while Dossier keeps interviews in Google Calendar, the event is added,
+ * and while rolepilot keeps interviews in Google Calendar, the event is added,
  * moved or deleted to match.
  */
 export const setInterviewDate = action(
@@ -321,7 +325,7 @@ export const saveUnit = action(
       throw new ActionError("Write something first, or cancel to keep it as it was.");
     }
 
-    await updateDocuments(id, async (documents) => {
+    await updateDocuments(id, async (documents, tx) => {
       const units = documents[document];
       const unit = units?.find((entry) => entry.id === unitId);
       // A letter written before E8-11 shows its frame without storing it: the first edit stores that part.
@@ -332,6 +336,10 @@ export const saveUnit = action(
       if (!unit) throw new ActionError(PART_GONE);
       if (unit.text !== expected) {
         throw new ActionError("This part changed while you were editing it. Copy your text, cancel, and edit the new version.");
+      }
+      if (unit.text !== clean && !["to", "sender", "contacts", "signature", "date", "recipient", "greeting"].includes(unitId)) {
+        const row = await tx.document.findUniqueOrThrow({ where: { applicationId_kind: { applicationId: id, kind: document } }, select: { id: true } });
+        await recordMemorySource(tx, { sourceKey: `edit:${randomUUID()}`, kind: "MANUAL_EDIT", text: clean, previousText: unit.text, applicationId: id, documentId: row.id, context: { unitId, scope: "UNRESOLVED", label: unit.label } });
       }
       unit.text = clean;
       delete unit.unverified;
@@ -427,13 +435,18 @@ export const sendMessage = action(
   async ({ id, text, viewing, target }) => {
     if (!(await prisma.application.count({ where: { id } }))) throw new ActionError(GONE);
 
-    if (!viewing && !target) {
+    const aiConfigured = await isAiConfigured();
+    if ((!viewing && !target) || !aiConfigured) {
       const now = Date.now();
-      await prisma.chatMessage.createMany({
+      await prisma.$transaction(async tx => {
+      const messageId = randomUUID();
+      await tx.chatMessage.createMany({
         data: [
-          { applicationId: id, role: ChatRole.USER, text, createdAt: new Date(now) },
-          { applicationId: id, role: ChatRole.AI, text: POSTING_REPLY, createdAt: new Date(now + 1) },
+          { id: messageId, applicationId: id, role: ChatRole.USER, text, createdAt: new Date(now) },
+          { applicationId: id, role: ChatRole.AI, text: (!viewing && !target) ? POSTING_REPLY : "Your information was saved for automatic memory processing. Configure an AI provider to process it and edit documents.", createdAt: new Date(now + 1) },
         ],
+      });
+      await recordMemorySource(tx, { sourceKey: `message:${messageId}`, kind: "CHAT", text, applicationId: id, messageId, context: { scope: "UNRESOLVED" } });
       });
       refresh(id);
       return { jobId: null };
@@ -451,9 +464,10 @@ export const sendMessage = action(
       targetLabel = unit.label;
     }
 
-    const message = await prisma.chatMessage.create({
-      data: { applicationId: id, role: ChatRole.USER, text, targetUnit: targetLabel },
-      select: { id: true },
+    const message = await prisma.$transaction(async tx => {
+      const message = await tx.chatMessage.create({ data: { applicationId: id, role: ChatRole.USER, text, targetUnit: targetLabel }, select: { id: true } });
+      await recordMemorySource(tx, { sourceKey: `message:${message.id}`, kind: "CHAT", text, applicationId: id, messageId: message.id, context: { scope: "UNRESOLVED", unitId: target?.unitId ?? null, label: targetLabel ?? "" } });
+      return message;
     });
     const jobId = await startJob(refineJob, { applicationId: id, messageId: message.id, request: text, target, viewing }, { key: refineJobKey(id), applicationId: id });
     refresh(id);
@@ -526,10 +540,6 @@ export const addApplicationEvidence = action(z.object({ id: z.string().min(1), e
   const text = requirement?.kind === "skill" && requirement.skill ? applicationEvidenceText(requirement.skill, evidence, options) : null;
   if (!text) throw new ActionError("That evidence no longer matches this posting or role. Reload and review it.");
   const factId = `application-evidence:${id}:${evidence.id}`;
-  const jobId = `application-evidence-job:${id}:${evidence.id}`;
-  const messageId = `application-evidence-message:${id}:${evidence.id}`;
-  const previousJob = await prisma.job.findUnique({ where: { id: jobId } });
-  if (!previousJob && (await findUnfinishedJobs(refineJobKey(id))).length) throw new ActionError("Wait for the current update to finish.");
   const fact = await prisma.$transaction(async (tx) => {
     const existing = await tx.fact.findUnique({ where: { id: factId } });
     if (existing) {
@@ -537,18 +547,12 @@ export const addApplicationEvidence = action(z.object({ id: z.string().min(1), e
       return { id: existing.id, text: existing.text };
     }
     if (await tx.fact.count({ where: { applicationId: id } }) >= 50) throw new ActionError("Remove an application fact before adding another.");
-    return tx.fact.create({ data: { id: factId, applicationId: id, text, sort: await nextSort(tx.fact) }, select: { id: true, text: true } });
+    const fact = await tx.fact.create({ data: { id: factId, applicationId: id, text, sort: await nextSort(tx.fact) }, select: { id: true, text: true } });
+    await recordMemorySource(tx, { sourceKey: `fact:${fact.id}`, kind: "EVIDENCE", text: evidence.text, factId: fact.id, applicationId: id, context: { unitId: evidence.targetUnitId, scope: evidence.targetUnitId ? "UNRESOLVED" : "GENERAL", label: options.find(option => option.id === evidence.targetUnitId)?.label ?? "" } });
+    return fact;
   });
   refresh(id);
-  if (!loaded.resume) return { fact, jobId: null, retry: false, notice: "Evidence saved for this application. It will be used when you create its resume." };
-  if (!(await isAiConfigured())) return { fact, jobId: null, retry: true, notice: "Evidence saved; resume not updated. Configure AI, then try again." };
-  try {
-    await prisma.chatMessage.upsert({ where: { id: messageId }, create: { id: messageId, applicationId: id, role: ChatRole.USER, text: `Use my supporting experience for ${requirement!.skill} in this resume only.\n${text}` }, update: {} });
-    await startJob(refineJob, { applicationId: id, messageId, request: `Use the submitted evidence for ${requirement!.skill}. Update only this resume, preserving other content.`, target: null, viewing: DocumentKind.RESUME, evidence: { factId, targetUnitId: evidence.targetUnitId } }, { id: jobId, key: refineJobKey(id), applicationId: id });
-    return { fact, jobId, retry: false, notice: previousJob?.status === "DONE" ? "This evidence was already applied. Use Undo in the chat to restore the previous text." : "Evidence saved. Updating this application's resume." };
-  } catch {
-    return { fact, jobId: null, retry: true, notice: "Evidence saved; resume not updated. Your text is kept. Try again." };
-  }
+  return { fact, notice: "Information saved for this application. Ask Refine with AI to apply it to an existing document." };
 });
 
 // Private notes (E8-9, APP-14). They stay on this server and never go into
@@ -742,6 +746,14 @@ export const startWritingDocument = action(
   },
 );
 
+export const startRefreshingResearch = action(z.object({ id: z.string().min(1) }), async ({ id }) => {
+  if (!(await prisma.application.count({ where: { id } }))) throw new ActionError(GONE);
+  if (!(await loadSettings()).companyResearchEnabled) throw new ActionError("Enable company research in Settings → AI first.");
+  const key = refreshResearchJobKey(id);
+  const [running] = await findUnfinishedJobs(key);
+  return running?.id ?? startJob(refreshResearchJob, { applicationId: id }, { key, applicationId: id });
+});
+
 // ─── The resume's score (#370) ───────────────────────────────────────────────
 
 /** "Score" and "Score again" on the Resume tab: scores the tailored resume in the background and returns the job's id. */
@@ -780,13 +792,14 @@ export const undoEmailRewrite = action(z.object({ id: z.string().min(1), jobId: 
   if (!result.success || !previous) throw new ActionError("There's nothing to undo.");
 
   const same = (a: unknown, b: unknown) => JSON.stringify(unitsSchema.parse(a)) === JSON.stringify(unitsSchema.parse(b));
-  await updateDocuments(id, async (documents) => {
+  await updateDocuments(id, async (documents, _tx, states) => {
     const current = documents[DocumentKind.EMAIL];
     if (!current) throw new ActionError(PART_GONE);
-    if (!same(current, result.data.units)) {
+    if (!same(current, result.data.units) || (result.data.state && JSON.stringify(states.EMAIL) !== JSON.stringify(result.data.state))) {
       throw new ActionError("The email has changed since, so this can't be undone. Earlier versions are in its history.");
     }
     documents[DocumentKind.EMAIL] = previous;
+    if (result.data.previousState !== undefined) states.EMAIL = result.data.previousState;
   }, { version: { cause: VersionCause.UNDONE } });
   refresh(id);
   return null;

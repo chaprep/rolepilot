@@ -1,6 +1,7 @@
+name: rolepilot
 services:
   app:
-    image: dossier:openrouter-local
+    image: rolepilot:theme-switch-local
     restart: unless-stopped
     env_file: .env
     ports:
@@ -10,3 +11,6 @@ services:
     mem_limit: 1g
 volumes:
   data:
+    # Existing storage identity is retained so the rebrand cannot select an empty volume.
+    external: true
+    name: dossier_data

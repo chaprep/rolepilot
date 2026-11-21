@@ -28,8 +28,8 @@ vi.mock("./scan-lock", async (original) => {
   const { testDatabaseUrl } = await import("@/test/db");
   return { withAgentScanLock: <T>(work: (signal: AbortSignal) => Promise<T>) => withAgentScanLock(work, testDatabaseUrl()) };
 });
-// Settings → Scoring reads DOSSIER_SCORER (#274).
-vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
+// Settings → Scoring reads ROLEPILOT_SCORER (#274).
+vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
 // Drafts are their own jobs; here it's enough to see them queued.
 vi.mock("@/lib/jobs/runner", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/jobs/runner")>()),
@@ -71,7 +71,7 @@ vi.mock("@/lib/ai/config", async (original) => {
  const actual = await original<typeof import("@/lib/ai/config")>();
  return { ...actual, isAiConfigured: async () => fake.ai,
  resolveAiConfig: (saved: Parameters<typeof actual.resolveAiConfig>[0], source: Parameters<typeof actual.resolveAiConfig>[1], secret?: string) =>
- actual.resolveAiConfig(saved, {...source, DOSSIER_AI_KEY: fake.ai ? "router-test" : undefined},secret) };
+ actual.resolveAiConfig(saved, {...source, ROLEPILOT_AI_KEY: fake.ai ? "router-test" : undefined},secret) };
 });
 vi.mock("@/lib/ai", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ai")>()),

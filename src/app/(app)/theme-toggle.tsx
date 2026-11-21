@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
+import { Moon } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import { cn } from "@/lib/cn";
@@ -38,11 +38,10 @@ export function ThemeToggle({ serverScheme }: { serverScheme?: ColorScheme }) {
   // The server only knows a scheme that was chosen; for the system's it
   // guesses light, and the browser corrects it right after hydration.
   const scheme = useSyncExternalStore(subscribe, currentScheme, () => serverScheme ?? "light");
-  const next: ColorScheme = scheme === "dark" ? "light" : "dark";
-  const label = next === "dark" ? "Dark mode" : "Light mode";
-  const Icon = next === "dark" ? Moon : Sun;
+  const dark = scheme === "dark";
 
   const toggle = () => {
+    const next: ColorScheme = dark ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     rememberPreference(COLOR_SCHEME_COOKIE, next);
     listeners.forEach((listener) => listener());
@@ -51,15 +50,29 @@ export function ThemeToggle({ serverScheme }: { serverScheme?: ColorScheme }) {
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={dark}
       onClick={toggle}
-      title={collapsed ? label : undefined}
+      title={collapsed ? "Dark mode" : undefined}
       className={cn(
         "flex w-full items-center gap-1.5 rounded-control px-3 py-1.5 text-left text-sm font-medium text-muted hover:bg-hover hover:text-ink motion-safe:transition-colors",
         collapsed && "justify-center px-1.5",
       )}
     >
-      <Icon size={16} aria-hidden="true" className="shrink-0" />
-      <span className={cn(collapsed && "sr-only")}>{label}</span>
+      {!collapsed && <Moon size={16} aria-hidden="true" className="shrink-0" />}
+      <span className={cn(collapsed ? "sr-only" : "flex-1")}>Dark mode</span>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex h-4.5 w-8 shrink-0 items-center rounded-full p-0.5 motion-safe:transition-colors",
+          dark ? "bg-primary" : "bg-toggle-off",
+        )}
+      >
+        <span className={cn(
+          "size-3.5 rounded-full bg-white shadow-knob motion-safe:transition-transform",
+          dark && "translate-x-3.5",
+        )} />
+      </span>
     </button>
   );
 }

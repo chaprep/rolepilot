@@ -43,7 +43,7 @@ describe("the dashboard (E9-7)", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Good morning, Jane" })).toBeInTheDocument();
     expect(screen.getByText("You've sent 7 applications and heard back from 5. That's a solid run. Keep it going.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "+ New application" })).toHaveAttribute("href", "/new?fresh=1");
-    expect(document.cookie).toMatch(/dossier-tz=/);
+    expect(document.cookie).toMatch(/rolepilot-tz=/);
   });
 
   it("encourages before anything was sent", () => {
@@ -60,7 +60,7 @@ describe("the dashboard (E9-7)", () => {
 
   it("shows the funnel with its figures and notes, in words", () => {
     render(<Dashboard {...props} />);
-    const funnel = screen.getByRole("region", { name: "Your funnel" });
+    const funnel = screen.getByRole("region", { name: "Application pipeline" });
     expect(within(funnel).getAllByRole("definition").map((value) => value.textContent)).toEqual(["7", "71%", "3"]);
     expect(within(funnel).getAllByRole("listitem").map((step) => step.textContent)).toEqual([
       "Sent7Everything you've sent",
@@ -136,9 +136,9 @@ describe("the dashboard (E9-7)", () => {
 
   it("welcomes a new user", () => {
     render(<Dashboard {...props} empty figures={{ ...figures, sent: 0 }} />);
-    expect(screen.getByRole("heading", { name: "Welcome to Dossier" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Welcome to rolepilot" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Fill in your profile" })).toHaveAttribute("href", "/profile");
-    expect(screen.queryByRole("region", { name: "Your funnel" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Application pipeline" })).not.toBeInTheDocument();
   });
 
   it("shows the calendar after the cards, outside the time filter (E15-6)", () => {
@@ -147,7 +147,7 @@ describe("the dashboard (E9-7)", () => {
     const region = screen.getByRole("region", { name: "Calendar" });
     expect(screen.getByRole("region", { name: "Worth a look" }).compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Not among the cards, which dim while another period loads.
-    expect(screen.getByRole("region", { name: "Your funnel" }).parentElement!.contains(region)).toBe(false);
+    expect(screen.getByRole("region", { name: "Application pipeline" }).parentElement!.contains(region)).toBe(false);
     // A new user has the calendar too.
     rerender(<Dashboard {...props} empty calendar={calendar} />);
     expect(screen.getByRole("region", { name: "Calendar" })).toBeInTheDocument();

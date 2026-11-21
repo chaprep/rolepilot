@@ -19,10 +19,10 @@ describe("the setup guide's AI choices (E21-2)", () => {
     }
   });
 
-  it("link only to https pages, and say what each costs and where the data goes", () => {
+  it("link to local help or https pages, and say what each costs and where the data goes", () => {
     for (const choice of AI_CHOICES) {
       expect(choice.steps.length, choice.id).toBeGreaterThan(1);
-      expect(choice.help).toMatch(/^https:\/\//);
+      expect(choice.help).toMatch(/^(?:https:\/\/|\/help\/)/);
       for (const step of choice.steps) if (step.link) expect(step.link.href, choice.id).toMatch(/^https:\/\//);
       expect(choice.data).not.toBe("");
       if (choice.key) expect(choice.baseUrl, choice.id).toMatch(/^https:\/\//);

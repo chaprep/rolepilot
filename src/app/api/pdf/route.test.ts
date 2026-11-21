@@ -103,7 +103,7 @@ describe("GET /api/pdf", () => {
     expect(renderPdf).toHaveBeenLastCalledWith("/print/letter/app1");
     expect(letter.headers.get("content-disposition")).toContain("Ledgerly%20%E2%80%93%20Cover%20letter.pdf");
     expect(prisma.application.findUnique).toHaveBeenLastCalledWith(
-      expect.objectContaining({ where: { id: "app1" }, select: expect.objectContaining({ documents: { where: { kind: "COVER_LETTER" }, select: { id: true } } }) }),
+      expect.objectContaining({ where: { id: "app1" }, select: expect.objectContaining({ documents: { where: { kind: "COVER_LETTER" }, select: { id: true, state: true } } }) }),
     );
   });
 

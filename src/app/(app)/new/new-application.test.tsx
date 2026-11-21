@@ -121,12 +121,12 @@ describe("the paste step (E7-1)", () => {
     expect(screen.getByRole("link", { name: "Choose one in Settings → AI provider" })).toHaveAttribute("href", "/settings?section=ai");
   });
 
-  it("hands the posting to a Claude chat when the connector is on and Dossier has no model (#221)", async () => {
+  it("hands the posting to a Claude chat when the connector is on and rolepilot has no model (#221)", async () => {
     const tab = { closed: false, opener: {}, location: { href: "about:blank" }, close: vi.fn() };
     const open = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
     vi.mocked(handOffToClaude).mockResolvedValue({ ok: true, data: { url: "https://claude.ai/new?q=write" } });
     render(<NewApplication {...props} aiReady={false} writeInClaude />);
-    expect(screen.getByRole("note")).toHaveTextContent(/Dossier has no AI model of its own, so Claude writes this one/);
+    expect(screen.getByRole("note")).toHaveTextContent(/rolepilot has no AI model of its own, so Claude writes this one/);
     await userEvent.type(screen.getByLabelText("Job posting"), "Ledgerly is hiring.");
     await userEvent.type(screen.getByLabelText(/^Link to the posting/), "https://jobs.example/1");
     await userEvent.click(screen.getByRole("button", { name: "Write it with Claude →" }));
@@ -173,9 +173,9 @@ describe("the reading step (E7-2)", () => {
       step: "Comparing it with your profile",
       result: {
         extracted: { title: "Designer · Ledgerly", company: "Ledgerly", role: "Designer", location: null, mode: null, salary: null, deadline: null, requirements: [], asksForReferences: false, language: "English" },
-        extractedWith: "extract-posting@1",
+        extractedWith: "extract-posting@3",
         match: { items: [] },
-        matchedWith: "match-requirements@1",
+        matchedWith: "match-requirements@4",
       },
     });
     expect(screen.getByText("Check the details").closest("li")).toHaveAttribute("aria-current", "step");
@@ -191,9 +191,9 @@ describe("the details (E7-3)", () => {
       status: "DONE",
       result: {
         extracted: { title: "Designer · Ledgerly", company: "Ledgerly", role: "Designer", location: "Amsterdam", mode: null, salary: null, deadline: "2026-10-15", requirements: [], asksForReferences: false, language: "English" },
-        extractedWith: "extract-posting@1",
+        extractedWith: "extract-posting@3",
         match: { items: [] },
-        matchedWith: "match-requirements@1",
+        matchedWith: "match-requirements@4",
       },
     });
     expect(screen.getByRole("heading", { name: "The application" })).toBeInTheDocument();
@@ -222,7 +222,7 @@ describe("how you match (E7-4)", () => {
       ],
       asksForReferences: false, language: "English",
     },
-    extractedWith: "extract-posting@1",
+    extractedWith: "extract-posting@3",
     match: {
       items: [
         { requirement: "5+ years of product design", result: "covered", skill: null, experienceIds: [], note: "3 roles in your profile, since Sep 2015" },
@@ -231,7 +231,7 @@ describe("how you match (E7-4)", () => {
         { requirement: "Experience with payments", result: "gap", skill: null, experienceIds: [], note: "Nothing in your profile, so I'll address it honestly in the letter" },
       ],
     },
-    matchedWith: "match-requirements@1",
+    matchedWith: "match-requirements@4",
   };
 
   async function review() {
@@ -283,7 +283,7 @@ describe("how you match (E7-4)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save for this application" }));
     expect(addSkill).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Edit application evidence" })).toBeInTheDocument();
-    expect(JSON.parse(sessionStorage.getItem("dossier:new-application")!).draft.evidence[0]).toMatchObject({ requirementIndex: 1, text: "Tested accessibility with screen readers." });
+    expect(JSON.parse(sessionStorage.getItem("rolepilot:new-application")!).draft.evidence[0]).toMatchObject({ requirementIndex: 1, text: "Tested accessibility with screen readers." });
   });
 
 });
@@ -297,9 +297,9 @@ describe("tailoring (E7-5)", () => {
       status: "DONE",
       result: {
         extracted: { title: null, company: "Ledgerly", role: null, location: null, mode: null, salary: null, deadline: null, requirements: [], asksForReferences: false, language: "English" },
-        extractedWith: "extract-posting@1",
+        extractedWith: "extract-posting@3",
         match: { items: [] },
-        matchedWith: "match-requirements@1",
+        matchedWith: "match-requirements@4",
       },
     });
   }
@@ -325,9 +325,9 @@ describe("tailoring (E7-5)", () => {
 describe("creating the application (E7-6)", () => {
   const read = {
     extracted: { title: "Designer · Ledgerly", company: "Ledgerly", role: "Designer", location: null, mode: null, salary: null, deadline: null, requirements: [], asksForReferences: false, language: "English" },
-    extractedWith: "extract-posting@1",
+    extractedWith: "extract-posting@3",
     match: { items: [] },
-    matchedWith: "match-requirements@1",
+    matchedWith: "match-requirements@4",
   };
 
   async function create() {
@@ -451,9 +451,9 @@ describe("keeping the draft (E7-7)", () => {
       status: "DONE",
       result: {
         extracted: { title: "Designer · Ledgerly", company: "Ledgerly", role: "Designer", location: null, mode: null, salary: null, deadline: null, requirements: [], asksForReferences: false, language: "English" },
-        extractedWith: "extract-posting@1",
+        extractedWith: "extract-posting@3",
         match: { items: [] },
-        matchedWith: "match-requirements@1",
+        matchedWith: "match-requirements@4",
       },
     });
     await userEvent.clear(screen.getByLabelText("Company"));
