@@ -5,6 +5,9 @@ export const LUNA = "openai/gpt-6-luna";
 export const SONNET = "anthropic/claude-sonnet-5.5";
 export const JEV = "typesafe/jev-1.14";
 export const MODEL_ASSIGNMENTS = [
+  { task: "plan-cover-letter-research", label: "Plan cover letter research", model: SONNET },
+  { task: "research-company", label: "Research companies", model: LUNA },
+  { task: "find-hiring-contacts", label: "Find hiring contacts", model: LUNA },
   { task: "extract-memory", label: "Remember candidate facts", model: LUNA },
   { task: "select-memory", label: "Select remembered facts", model: LUNA },
   { task: "extract-profile", label: "Import profile", model: LUNA },
@@ -15,12 +18,12 @@ export const MODEL_ASSIGNMENTS = [
   { task: "draft-reply", label: "Draft employer replies", model: LUNA },
   { task: "tailor-resume", label: "Tailor resume", model: SONNET },
   { task: "write-cover-letter", label: "Write cover letter", model: SONNET },
-  { task: "refine-chat", label: "Edit through chat", model: SONNET },
+  { task: "refine-chat", label: "Edit resume and cover letter through chat", model: LUNA },
+  { task: "refine-email-chat", label: "Edit application email through chat", model: SONNET },
   { task: "regenerate-unit", label: "Rewrite sections", model: SONNET },
 ] as const satisfies readonly { task: UsageTask; label: string; model: string }[];
 
 export function modelForTask(task: UsageTask): string {
-  if (task === "research-company") return modelForTask("write-cover-letter");
   const assignment = MODEL_ASSIGNMENTS.find((entry) => entry.task === task);
   if (!assignment) throw new Error(`No generation model assigned to ${task}`);
   return assignment.model;

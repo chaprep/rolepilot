@@ -24,7 +24,6 @@ import { syncInterviewToCalendar } from "@/lib/google/availability";
 import { GoogleError } from "@/lib/google/errors";
 import { isFrameUnit, withFrame, WRITTEN_FRAME_UNITS } from "@/lib/letter-frame";
 import { saveVersion } from "@/lib/document-versions";
-import { refreshResearchJob, refreshResearchJobKey } from "@/lib/jobs/refresh-research";
 import { refineJob, refineJobKey } from "@/lib/jobs/refine";
 import { regenerateUnitJob, unitJobKey } from "@/lib/jobs/regenerate-unit";
 import { findUnfinishedJobs, startJob } from "@/lib/jobs/runner";
@@ -745,14 +744,6 @@ export const startWritingDocument = action(
     return running?.id ?? startJob(writeDocumentJob, { applicationId: id, kind }, { key, applicationId: id });
   },
 );
-
-export const startRefreshingResearch = action(z.object({ id: z.string().min(1) }), async ({ id }) => {
-  if (!(await prisma.application.count({ where: { id } }))) throw new ActionError(GONE);
-  if (!(await loadSettings()).companyResearchEnabled) throw new ActionError("Enable company research in Settings → AI first.");
-  const key = refreshResearchJobKey(id);
-  const [running] = await findUnfinishedJobs(key);
-  return running?.id ?? startJob(refreshResearchJob, { applicationId: id }, { key, applicationId: id });
-});
 
 // ─── The resume's score (#370) ───────────────────────────────────────────────
 

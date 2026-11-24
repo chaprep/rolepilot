@@ -106,7 +106,7 @@ describe("fetchPosting (E7-8)", () => {
     expect(await fetchPosting(`${base}/loop`, { lookup })).toEqual({ ok: false, error: FETCH_MESSAGES.unreachable });
     expect(await fetchPosting(`${base}/pdf`, { lookup })).toEqual({ ok: false, error: FETCH_MESSAGES.notPage });
     expect(await fetchPosting(`${base}/huge`, { lookup })).toEqual({ ok: false, error: FETCH_MESSAGES.tooBig });
-    expect(await fetchPosting(`${base}/slow`, { lookup, timeoutMs: 300 })).toEqual({ ok: false, error: FETCH_MESSAGES.unreachable });
+    expect(await fetchPosting(`${base}/slow`, { lookup, timeoutMs: 300 })).toEqual({ ok: false, error: FETCH_MESSAGES.unreachable, tryExa: true });
   });
 
   it("never goes to the server's own network, however the address is written", async () => {

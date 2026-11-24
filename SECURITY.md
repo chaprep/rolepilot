@@ -1,48 +1,23 @@
-# Security
+# Rolepilot security
 
-rolepilot is a single-user app you run on your own server. It holds your career history, your job applications and, if you use a hosted model, an AI provider's API key. This page covers what protects that data, what it expects from your setup, and how to report a problem. What rolepilot keeps, for how long and who receives what is in [PRIVACY.md](PRIVACY.md).
+Rolepilot is a single-user application. Protect its database, app configuration and data directory as you would your resume and correspondence. The [privacy guide](PRIVACY.md) describes what the app stores and sends.
 
-## Reporting a vulnerability
+## Report a vulnerability
 
-Please report it privately through GitHub: on the repository's **Security** tab, choose **Report a vulnerability**. Don't open a public issue for it.
+Open a private vulnerability report in the repository’s GitHub Security tab. Include the affected version, impact and reproduction steps with synthetic data. Keep credentials, personal data and private job application material out of public reports.
 
-## What rolepilot does
+## Application controls
 
-- **Sign-in.** One password, kept only as an argon2id hash in `ROLEPILOT_PASSWORD`, so the environment doesn't reveal it; the server won't start with the password itself there. The session is an encrypted, HttpOnly, SameSite=Lax cookie, marked Secure over HTTPS. Failed sign-ins are rate-limited per IP and overall. See [Sign-in](DEVELOPMENT.md#sign-in).
-- **Every request checks the session.** The proxy only does a quick check before a page renders, so each page, Server Action and route handler checks the session again next to the data. Server Actions go through `action()`, route handlers through `route()`, and a test (`src/lib/session-audit.test.ts`) fails when one doesn't. The only exceptions are signing in and signing out.
-- **Cross-site requests.** Next.js refuses Server Actions from another origin, and `route()` does the same for route handlers.
-- **Content-Security-Policy.** Every page gets a policy with a fresh nonce: scripts run only when they carry it, nothing loads from other hosts, and no other site may frame rolepilot. `next.config.ts` adds `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy` and `Permissions-Policy` to every response.
-- **API keys.** Stored encrypted with a key derived from `ROLEPILOT_SECRET`, never sent to the browser, never logged. The AI provider's key and the job sources' keys each have their own derived key, and each job source's key only goes to that source. The AI server's address is yours to set, so when a request carries a key, rolepilot doesn't follow a redirect to another host.
-- **Job sources.** Find jobs is off until a source is chosen. Searches go from the server to that source's fixed address only, with a time and size limit; the browser never talks to a job source. A link in a result is kept only when it's `http(s)`, and postings sent back from the browser are checked the same way. Fetching the rest of a posting goes through the same guarded fetcher as Fetch, so it never reaches the server's own network.
-- **Google.** Gmail and Calendar are off until you enter your own OAuth client and connect. Signing in is OAuth's authorization code flow with a `state` signed by a key derived from `ROLEPILOT_SECRET`, valid for 10 minutes, and the callback needs your session too. The refresh token and the client's secret are stored encrypted, each with its own derived key, and never sent to the browser or logged; access tokens stay in the server's memory. rolepilot asks only for the permissions of the features you choose (sending, reading, free/busy and events), and every send needs your confirmation.
-- **Errors.** Unexpected errors are logged on the server without the data involved; the browser only gets a generic message.
+- **Sign-in.** The server reads an Argon2id hash from `ROLEPILOT_PASSWORD`. It rate-limits failed attempts and uses an encrypted, HttpOnly, SameSite=Lax session cookie, with the Secure flag over HTTPS.
+- **Request checks.** Private pages and data handlers verify sessions. Standard route handlers and Server Actions validate requests and enforce origin checks. OAuth callbacks, sign-in and public health checks have their own validation.
+- **Secrets.** Rolepilot encrypts saved credentials using keys derived from `ROLEPILOT_SECRET`. Keep that secret with the matching database backup to recover encrypted settings.
+- **Public posting URLs.** The server validates URLs and guards direct fetching against access to private networks. Eligible failing public URLs can go to the Exa fallback. URLs with common credential parameters are excluded from that fallback.
+- **One Connect.** The server permits a set of actions for each workflow. Requests and responses have validation and bounds. One authorizes each configured provider connection. See the [integration guide](docs/INTEGRATIONS.md) for the expected permissions.
+- **Untrusted content.** Job postings, public research pages and employer replies are external input. Rolepilot checks structured model output and applies factual and source validation where appropriate. Review model-generated claims, suggested contacts and recipient details before using them.
+- **Sending.** Draft generation and People research do not submit applications. Gmail sends require confirmation, and the MCP connector provides a limited set of tools for authorized clients.
 
-## AI and untrusted text
+## Deploy securely
 
-A job posting, or a reply from Gmail, is text someone else wrote, and it goes into prompts. It could try to steer the model ("ignore your instructions and…"). What limits the damage:
+Keep the application listener on loopback when running locally. For remote access, use an HTTPS reverse proxy, set the public origin, and protect the app port from direct internet access. Configure forwarded headers at the proxy and use its HSTS controls. Protect environment files and backups, and give integrations only the permissions required for the features you use.
 
-- The model has no tools: it can't read your other data, browse or change anything. It only returns text.
-- What it returns is shown as plain text, never as HTML, and checked against a schema before it's saved.
-- The fact guard flags claims in a draft that your profile doesn't back up.
-- You read every document before you send it, and a drafted answer to a mail only goes out when you confirm it.
-- Reading a mail only suggests a status for its application, which you take up or not.
-
-So the worst a hostile posting or mail can do is get odd wording into its own draft, or suggest the wrong status.
-
-## Running it safely
-
-- **Use HTTPS.** Put rolepilot behind a reverse proxy that ends TLS (Caddy, Traefik, nginx). Set `Strict-Transport-Security` there. rolepilot adds `upgrade-insecure-requests` to its policy when the proxy says the request came over HTTPS (`X-Forwarded-Proto`).
-- **Don't expose port 3000 directly.** Rate limiting trusts the last `X-Forwarded-For` entry, which is only the real client behind a proxy.
-- **Pick a long `ROLEPILOT_SECRET`** and keep it with your backups: without it, saved API keys can't be read. Changing it or the password signs out every session.
-- **Keep it updated.** Settings → About tells you when a new version is out.
-
-## Dependencies
-
-Dependabot proposes updates once a week, for the npm packages, GitHub Actions and Docker images. Advisories that `yarn npm audit --all --recursive` still reports, checked on 28 September 2026:
-
-| Package | Advisory | Why it's accepted |
-|---|---|---|
-| `deepmerge-ts` 7.1.5, from `@prisma/config` | Stack exhaustion on recursive objects ([GHSA-ggr8-5vv4-36mx](https://github.com/advisories/GHSA-ggr8-5vv4-36mx)) | Only merges Prisma's own config when its CLI starts; no user input reaches it. The fix is in 8.x, which Prisma doesn't support yet. |
-| `eslint` 9 | Version no longer supported | Development only. Waits for `eslint-config-next` to support ESLint 10. |
-
-`mysql2`, which Prisma's CLI ships but rolepilot never loads (it uses PostgreSQL), is pinned to a patched release in `package.json` `resolutions`. Remove the pin once Prisma updates it.
+Changing the password hash invalidates existing sessions. Rotating `ROLEPILOT_SECRET` also affects encrypted settings and may require reconnecting services. Follow the [deployment guide](docs/DEPLOYMENT.md) to back up and restore the matching configuration and data.

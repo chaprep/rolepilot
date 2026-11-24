@@ -1,8 +1,11 @@
 import "server-only";
 
+import { createHmac } from "node:crypto";
+
 import { LUNA, OPENROUTER_URL } from "./assignments";
 import { AiProvider } from "@/generated/prisma/enums";
 import { env, type Env } from "@/lib/env";
+import { deriveKey } from "@/lib/keys";
 import { loadSettings } from "@/lib/settings-data";
 
 import { API_KEY_UNREADABLE, ApiKeyUnreadable, decryptApiKey } from "./api-key";
@@ -74,7 +77,11 @@ export async function loadAiConfig(): Promise<AiConfig> {
  * The AI settings as the settings screen shows them: what's in effect,
  * whether it comes from Settings or ROLEPILOT_AI_*, and never the key.
  */
-export async function loadAiSettingsView(): Promise<AiSettingsView> {
+export function openRouterKeyFingerprint(key: string): string {
+  return createHmac("sha256", deriveKey("openrouter-verification")).update(key).digest("base64url");
+}
+
+export async function loadAiSettingsView(): Promise<AiSettingsView & { verified: boolean }> {
   const saved = await loadSettings();
   const config = resolveAiConfig(saved, env);
   return {
@@ -82,6 +89,7 @@ export async function loadAiSettingsView(): Promise<AiSettingsView> {
     baseUrl: config.baseUrl,
     model: config.model ?? "",
     keyState: keyStateOf(saved, config),
+    verified: Boolean(config.apiKey && saved.openRouterVerifiedKey === openRouterKeyFingerprint(config.apiKey)),
   };
 }
 

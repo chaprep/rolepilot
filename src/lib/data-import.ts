@@ -173,6 +173,8 @@ export async function importExport(db: PrismaClient, data: RolepilotExport): Pro
           ...omit(application, "events", "documents", "messages", "notes", "facts", "userNote"),
           extracted: json(application.extracted),
           companyResearch: json(application.companyResearch),
+          peopleResearch: json(application.peopleResearch),
+          coverLetterResearch: json(application.coverLetterResearch),
           match: json(application.match),
           sections: json(application.sections),
           frozen: json(application.frozen),

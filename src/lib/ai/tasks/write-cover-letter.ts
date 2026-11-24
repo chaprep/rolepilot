@@ -1,18 +1,16 @@
 import { z } from "zod";
 
-import type { CompanyResearch } from "@/lib/research/schema";
-
 import type { Tone } from "@/generated/prisma/enums";
 import { SIGN_OFF_UNIT, unitsSchema, type Extracted, type Match, type Unit } from "@/lib/application-data";
+import { companyClaimsSchema, keepCandidateWarnings, RESEARCH_CLAIMS_RULE, RESEARCH_WRITING_RULES, researchForPrompt, validCompanyClaims, type CoverLetterResearch } from "@/lib/cover-letter-research";
 import type { ProfileData } from "@/lib/profile";
 import { FRAME_LABELS, isFrameUnit } from "@/lib/letter-frame";
 import { TONES } from "@/lib/tones";
 
-import { guardCoverLetter, guardSources } from "../fact-guard";
+import { guardSources, guardUnits } from "../fact-guard";
 
 import {
   applicationFacts,
-  companyResearchForPrompt,
   candidateFacts,
   COVER_LETTER_APPROACH,
   CREATIVITY,
@@ -20,27 +18,32 @@ import {
   ENGLISH_WRITING,
   NO_EM_DASHES,
   profileForPrompt,
+  postingForPrompt,
   system,
   truthfulness,
   UNTRUSTED_POSTING,
   type Task,
 } from "./prompt-parts";
 
-export const WRITE_COVER_LETTER_VERSION = "write-cover-letter@8";
+export const WRITE_COVER_LETTER_VERSION = "write-cover-letter@10";
 
 const answerSchema = z.object({
   recipient: z.string(),
   greeting: z.string(),
-  paragraphs: z.array(z.object({ label: z.string(), text: z.string() })),
+  paragraphs: z.array(z.object({ label: z.string(), text: z.string(), companyClaims: companyClaimsSchema.nullable().optional() })),
   signOff: z.string(),
 });
 
 const INSTRUCTIONS = `You write a candidate's cover letter for one job, as JSON.
 
-- recipient: the address block, one line per line: who it's for (the company's hiring team, or the contact person the posting names, at the company), then the place if the job has one. Usual for a letter in its language, e.g. "Ledgerly · Hiring team\\nAmsterdam".
-- greeting: the salutation before the first paragraph, usual for a letter in its language, with its punctuation: the contact person by name when the posting names one, else the hiring team, e.g. "Dear Ledgerly team,".
-- paragraphs: 3–4 paragraphs, about 200–300 words together. Open with why this role and this company, then the problem the job is there to solve and where the candidate has solved it before, and close by inviting a conversation, with where the candidate is based if it matters for the job. No greeting, sign-off or name in them: those are separate.
-- label: a short English name for each paragraph's purpose, e.g. "Why this role", "The challenge", "Where I've solved it", "Closing".
+- recipient: the address block, one line per line: who it's for (the company's hiring team), then the place if the job has one. Usual for a letter in its language, e.g. "Ledgerly · Hiring team\\nAmsterdam".
+- greeting: the salutation before the first paragraph, usual for a letter in its language, with its punctuation: address the hiring team, e.g. "Dear Ledgerly team,".
+- paragraphs: four short paragraphs, about 200–300 words total. Keep the greeting and sign-off separate from the body.
+  1. Hook: a specific reason the company and role are relevant. If the opening could work with a competitor's name substituted, make it more specific using the evidence.
+  2. Proof: show one or two achievements. Explain the action, outcome and why it matters here. Use a concrete outcome when there is no verified metric.
+  3. Future contribution: show how you could apply that experience to the role's priorities. Keep projections and inferred needs tentative.
+  4. Close: express genuine interest and invite a conversation.
+- label: a short English name for each paragraph's purpose.
 - signOff: the closing line before the name, matching the tone, with its punctuation (e.g. "Warm regards,").
 - The sender's name, contact details and the date are added from the profile; don't write them.`;
 
@@ -53,7 +56,7 @@ export type CoverLetterInput = {
   facts: string[];
   /** The posting as pasted, for the fact guard. */
   posting: string;
-  companyResearch?: CompanyResearch;
+  research?: CoverLetterResearch | null;
 };
 
 /**
@@ -62,12 +65,14 @@ export type CoverLetterInput = {
  * "sign-off"), which matches the tone. The sender, date and signature come
  * from the profile when the application is created (src/lib/letter-frame.ts).
  */
-export const writeCoverLetter: Task<CoverLetterInput, Unit[]> = async (provider, { profile, extracted, match, tone, facts, posting, companyResearch }, options) => {
-  const answer = await provider.complete({
+export const writeCoverLetter: Task<CoverLetterInput, Unit[]> = async (provider, { profile, extracted, match, tone, facts, posting, research }, options) => {
+  const draft = (brief?: CoverLetterResearch | null) => provider.complete({
     task: "write-cover-letter",
     system: system(
       INSTRUCTIONS,
       COVER_LETTER_APPROACH,
+      RESEARCH_WRITING_RULES,
+      Boolean(brief?.findings.length) && `Use at least one relevant finding in the hook or future contribution when the evidence supports a credible angle. ${RESEARCH_CLAIMS_RULE}`,
       `Tone: ${TONES[tone].label}. ${TONES[tone].description}`,
       truthfulness(options.strict, options.creativity),
       candidateFacts(profile, facts),
@@ -82,8 +87,9 @@ export const writeCoverLetter: Task<CoverLetterInput, Unit[]> = async (provider,
         content: [
           `The candidate's profile:\n${profileForPrompt(profile)}`,
           `The job:\n${jobForPrompt(extracted, match)}`,
+          `Job posting (source material):\n${postingForPrompt(posting)}`,
+          researchForPrompt(brief),
           applicationFacts(facts),
-          companyResearchForPrompt(companyResearch),
         ]
           .filter(Boolean)
           .join("\n\n"),
@@ -95,19 +101,33 @@ export const writeCoverLetter: Task<CoverLetterInput, Unit[]> = async (provider,
     signal: options.signal,
   });
 
+  let brief = research;
+  let answer = await draft(brief);
+  if (research?.findings.length && (
+    !answer.paragraphs.some(({ companyClaims }) => companyClaims?.length) ||
+    !answer.paragraphs.every(({ text, companyClaims }) => validCompanyClaims(text, companyClaims, research))
+  )) {
+    brief = null;
+    answer = await draft();
+  }
   const signOff = TONES[tone].signOff;
+  const paragraphs = withoutFrame(answer.paragraphs, signOff).filter(paragraph => paragraph.text.trim());
   const units = unitsSchema.parse([
     // Left out when empty: the English ones fill in (src/lib/letter-frame.ts).
     ...(answer.recipient.trim() ? [{ id: "recipient", label: FRAME_LABELS.recipient, text: recipientFromJob(answer.recipient, extracted, posting) }] : []),
     ...(answer.greeting.trim() ? [{ id: "greeting", label: FRAME_LABELS.greeting, text: answer.greeting.trim() }] : []),
-    ...withoutFrame(answer.paragraphs, signOff)
-      .filter((paragraph) => paragraph.text.trim())
-      .map((paragraph, index) => ({ id: `paragraph:${index + 1}`, label: paragraph.label.trim() || `Paragraph ${index + 1}`, text: paragraph.text.trim() })),
+    ...paragraphs.map((paragraph, index) => ({ id: `paragraph:${index + 1}`, label: paragraph.label.trim() || `Paragraph ${index + 1}`, text: paragraph.text.trim() })),
     { id: SIGN_OFF_UNIT, label: "Sign-off", text: signOff },
   ]);
   return {
     // The recipient and greeting aren't claims about the candidate: only the paragraphs are checked.
-    data: options.strict ? guardCoverLetter(units, guardSources(profile, extracted, posting, facts), profile.basics.name, companyResearch).map((unit) => (isFrameUnit(unit.id) ? units.find((entry) => entry.id === unit.id)! : unit)) : units,
+    data: options.strict ? guardUnits(units, guardSources(profile, extracted, posting, facts)).map(unit => {
+      if (isFrameUnit(unit.id)) return units.find(entry => entry.id === unit.id)!;
+      if (!unit.unverified || !brief) return unit;
+      const paragraph = paragraphs[Number(unit.id.split(":")[1]) - 1];
+      const unverified = keepCandidateWarnings(unit.text, unit.unverified, paragraph?.companyClaims, brief);
+      return unverified ? { ...unit, unverified } : { id: unit.id, label: unit.label, text: unit.text };
+    }) : units,
     promptVersion: WRITE_COVER_LETTER_VERSION,
   };
 };

@@ -13,7 +13,7 @@ const group = (task: string, figures: Partial<Omit<UsageGroup, "task">> = {}): U
 });
 
 describe("usageFigures (#290)", () => {
-  it("lists every task, those that used the most tokens first and the rest in their usual order", () => {
+  it("lists active tasks, those that used the most tokens first and the rest in their usual order", () => {
     const { rows } = usageFigures([
       group("extract-posting", { requests: 2, inputRequests: 2, input: 3_000, outputRequests: 2, output: 500 }),
       group("tailor-resume", { input: 6_000, output: 2_000 }),
@@ -21,7 +21,7 @@ describe("usageFigures (#290)", () => {
     expect(rows.map((row) => row.task)).toEqual([
       "tailor-resume",
       "extract-posting",
-      ...USAGE_TASKS.map(({ task }) => task).filter((task) => task !== "tailor-resume" && task !== "extract-posting"),
+      ...USAGE_TASKS.map(({ task }) => task).filter((task) => !["tailor-resume", "extract-posting"].includes(task)),
     ]);
     expect(rows[1]).toEqual({
       task: "extract-posting",

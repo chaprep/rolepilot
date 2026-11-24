@@ -17,12 +17,12 @@ import { env } from "@/lib/env";
 import { redirectUri } from "@/lib/google/oauth";
 import { googleClientView, googleView, requestOrigin, whenRan } from "@/lib/settings-views";
 import { lastKnownTimeZone, userTimeZone } from "@/lib/time-zone";
+import { loadOneView } from "@/lib/one/config";
 import { appVersion } from "@/lib/version";
 import { prisma } from "@/lib/prisma";
 import { loadProfileName } from "@/lib/profile-data";
 import { scoringProblem } from "@/lib/scoring";
-import { loadScoringConfig, scoringView } from "@/lib/scoring/config";
-import { secretState, ZYTE_KEY } from "@/lib/secrets";
+import { loadScoringConfig } from "@/lib/scoring/config";
 import { loadSettings } from "@/lib/settings-data";
 
 import { AgentSection } from "./agent-section";
@@ -33,8 +33,7 @@ import { DocumentsSection } from "./documents-section";
 import { GoogleSection } from "./google-section";
 import { GoogleNotice } from "./google-notice";
 import { JobSearchSection } from "./job-search-section";
-import { ResearchSection } from "./research-section";
-import { ScoringSection } from "./scoring-section";
+import { OneSection } from "./one-section";
 import { AboutSection, type AboutFacts } from "./about-section";
 import { ConnectorSection } from "./connector-section";
 import { settingsSectionFromParam } from "./sections";
@@ -53,13 +52,11 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       {section === "ai" ? (
         <>
           <AiProviderSection initial={await loadAiSettingsView()} />
-          <ResearchSection initial={{ keyState: secretState(ZYTE_KEY, settings.zyteKeyEnc), enabled: settings.companyResearchEnabled, verified: settings.zyteVerified }} />
+          <OneSection initial={await loadOneView()} outcome={params.one_connect} />
           <AiBehaviour initial={{ creativity: settings.creativity, strict: settings.strict, showDiff: settings.showDiff }} />
         </>
       ) : section === "jobs" ? (
         <JobSearchSection initial={jobSearchView(await loadJobSearchConfig())} />
-      ) : section === "scoring" ? (
-        <ScoringSection initial={scoringView(await loadScoringConfig())} />
       ) : section === "agent" ? (
         <AgentSection
           initial={{

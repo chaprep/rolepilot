@@ -112,17 +112,11 @@ test("scores a posting against the profile, and keeps the score (#208)", async (
   await sql(`DELETE FROM "PostingScore"`);
 });
 
-test("scores with Jev once it's chosen in Settings → Scoring (#274)", async ({ page }) => {
+test("scores with the shared OpenRouter setup", async ({ page }) => {
   await resetData();
   await page.goto("/settings?section=scoring");
-  await page.getByRole("radio", { name: "Jev by TypeSafe" }).click();
-  await expect(page.getByRole("note")).toContainText("Each posting you score goes to TypeSafe");
-  const key = page.getByLabel("TypeSafe key");
-  await key.fill("e2e-typesafe-key");
-  await key.press("Enter");
-  await expect(key).toHaveAttribute("placeholder", "Saved · type a new key to replace it");
-  await page.getByRole("button", { name: "Test connection" }).click();
-  await expect(page.getByText(/^Connected · jev-1\.14\.0 answered in/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "OpenRouter" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Scoring", exact: true })).toHaveCount(0);
 
   await page.goto("/jobs");
   await page.getByRole("search", { name: "Search postings" }).getByRole("button", { name: "Search" }).click();
@@ -134,7 +128,6 @@ test("scores with Jev once it's chosen in Settings → Scoring (#274)", async ({
   expect((await sql<{ scoredWith: string }>(`SELECT "scoredWith" FROM "PostingScore"`))[0]?.scoredWith).toBe("score-posting-jev@1 (jev-1.14.0)");
 
   await sql(`DELETE FROM "PostingScore"`);
-  await sql(`DELETE FROM "Setting" WHERE key IN ('scorer', 'typesafeKeyEnc')`);
 });
 
 test("searches FreeHire, which needs no key and has no radius", async ({ page }) => {

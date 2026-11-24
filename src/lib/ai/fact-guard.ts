@@ -1,5 +1,4 @@
 import type { Extracted, Unit } from "@/lib/application-data";
-import type { CompanyResearch } from "@/lib/research/schema";
 import { citationText } from "@/lib/citation";
 import { experienceMonths, formatDateRange, formatMonthYear, languageLevelLabel, type ProfileData } from "@/lib/profile";
 
@@ -177,23 +176,4 @@ export function guardSources(
 /** Resume claims must be backed by the candidate, not by requirements in a posting. */
 export function resumeFactSources(profile: ProfileData, facts: string[] = []): FactSources {
   return guardSources(profile, null, "", facts);
-}
-
-const sentenceSegments = new Intl.Segmenter("en", { granularity: "sentence" });
-const companySentence = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?]$/, "");
-
-export function guardCoverLetter(units: Unit[], sources: FactSources, candidateName: string, research?: CompanyResearch): Unit[] {
-  if (!research?.identity) return guardUnits(units, sources);
-  const company = companySentence(research.identity.name);
-  const candidate = companySentence(candidateName);
-  const allowed = new Set(research.findings.map(({ text }) => companySentence(text)).filter((text) =>
-    (text.startsWith(`${company} `) || text.startsWith(`${company}’s `) || text.startsWith(`${company}'s `))
-    && !/\b(i|me|my|mine|we|us|our|candidate|applicant)\b/i.test(text)
-    && (!candidate || !text.includes(candidate)),
-  ));
-  const checked = units.map((unit) => ({
-    ...unit,
-    text: [...sentenceSegments.segment(unit.text)].filter(({ segment }) => !allowed.has(companySentence(segment))).map(({ segment }) => segment).join(""),
-  }));
-  return guardUnits(checked, sources).map((unit, index) => ({ ...unit, text: units[index].text }));
 }

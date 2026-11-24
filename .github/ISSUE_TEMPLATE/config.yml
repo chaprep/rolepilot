@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Help installing rolepilot
-    url: https://github.com/chaprep/job-finder/blob/main/README.md
-    about: Step-by-step guides for Docker, Docker Compose, Node.js, an Ubuntu server, CapRover, Coolify and Dokploy.
+  - name: Help installing Rolepilot
+    url: https://github.com/chaprep/rolepilot/blob/main/README.md
+    about: Install Rolepilot locally with Docker and connect the services you need.
   - name: Troubleshooting
-    url: https://github.com/chaprep/job-finder/blob/main/README.md
-    about: What to do about the problems people run into most.
+    url: https://github.com/chaprep/rolepilot/blob/main/docs/DEPLOYMENT.md#troubleshooting
+    about: Diagnose startup, storage, posting imports and connection problems.
   - name: Report a security problem
-    url: https://github.com/chaprep/job-finder/security/advisories/new
+    url: https://github.com/chaprep/rolepilot/security/advisories/new
     about: Report it privately, never in a public issue. SECURITY.md says how.

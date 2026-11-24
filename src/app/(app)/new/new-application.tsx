@@ -17,7 +17,7 @@ import type { DocumentsToWrite } from "@/lib/settings";
 import { type ApplicationEvidence, type EvidenceOption, type Extracted } from "@/lib/application-data";
 import type { PostingFit } from "@/lib/fit";
 import { cancel, retry } from "@/lib/jobs/actions";
-import { READ_POSTING_STEPS, RESEARCH_STEP, WRITE_DOCUMENTS_STEPS } from "@/lib/jobs/application-steps";
+import { READ_POSTING_STEPS, writeDocumentSteps } from "@/lib/jobs/application-steps";
 import type { ReadPostingResult } from "@/lib/jobs/read-posting";
 import type { WriteDocumentsResult } from "@/lib/jobs/write-documents";
 
@@ -289,12 +289,14 @@ export function NewApplication({ evidenceOptions = [],
     const result = toastResult(await fetchPostingText({ link: draft.postingUrl }));
     setFetching(false);
     if (!result.ok) return;
+    const current = draftStore?.get() ?? initial;
+    if (current.step !== "paste" || current.postingUrl !== draft.postingUrl || current.posting !== draft.posting) return;
     const previous = draft.posting;
     update({ posting: result.data.text });
     const site = new URL(result.data.url).hostname.replace(/^www\./, "");
     toast(
-      `Fetched the posting from ${site}. Check it before reading it.`,
-      previous.trim() ? { action: { label: "Undo", onClick: () => update({ posting: previous }) } } : {},
+      result.data.via === "exa" ? "Fetched the posting via Exa. Check it before reading it." : `Fetched the posting from ${site}. Check it before reading it.`,
+      previous.trim() ? { action: { label: "Undo", onClick: () => setDraft((current) => current.postingUrl === draft.postingUrl && current.posting === result.data.text ? { ...current, posting: previous } : current) } } : {},
     );
   };
 
@@ -306,7 +308,6 @@ export function NewApplication({ evidenceOptions = [],
 
   // E7-6: write the documents, then create the application from them.
   const [writeRevision, setWriteRevision] = useState(0);
-  const [researchedJob, setResearchedJob] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const saving = useRef(false);
 
@@ -331,20 +332,16 @@ export function NewApplication({ evidenceOptions = [],
     router.push(`/applications/${result.data}`);
   };
 
+  const writeSteps = writeDocumentSteps(draft.write ?? "both");
   const writeJob = useJob<WriteDocumentsResult>(draft.writeJobId, writeRevision, (job) => {
-    if (job.step === RESEARCH_STEP) setResearchedJob(job.id);
     if (job.status === "DONE" && job.id === draft.writeJobId) void save(job.id);
   });
-
-  const writeSteps = draft.writeJobId && (writeJob?.step === RESEARCH_STEP || researchedJob === draft.writeJobId)
-    ? [WRITE_DOCUMENTS_STEPS[0], RESEARCH_STEP, ...WRITE_DOCUMENTS_STEPS.slice(1)]
-    : WRITE_DOCUMENTS_STEPS;
 
   const create = async () => {
     if (!draft.read || !draft.readJobId || starting) return;
     setStarting(true);
     const result = toastResult(
-      await startWritingDocuments({ readJobId: draft.readJobId, ...(draft.postingUrl ? { postingUrl: draft.postingUrl } : {}), ...(draft.startupId ? { startupId: draft.startupId } : {}), details: draft.details, match: draft.read.match, tone: draft.tone, note: draft.note, evidence: draft.evidence ?? [], write: draft.write ?? "both" }),
+      await startWritingDocuments({ readJobId: draft.readJobId, details: draft.details, match: draft.read.match, tone: draft.tone, note: draft.note, postingUrl: draft.postingUrl, evidence: draft.evidence ?? [], write: draft.write ?? "both" }),
     );
     setStarting(false);
     if (!result.ok) return;
@@ -439,7 +436,7 @@ export function NewApplication({ evidenceOptions = [],
                     </Button>
                   </div>
                   <p className="text-meta text-muted">
-                    Fetch asks the job site for the page from your server, so it needs internet access. Check what it brings before reading it.
+                    Fetch tries the job site first. If that fails and One is connected, it can send the public link to Exa. Check the text before reading it.
                   </p>
                 </div>
               </Card>

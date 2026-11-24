@@ -54,7 +54,7 @@ export const SERVERS: readonly Server[] = [
     domain: "opencode.ai",
     path: (path) => path.replace(/\/openai(\/v1)?$/, "/v1"),
     headers: () => ({
-      "User-Agent": `rolepilot/${appVersion} (+https://github.com/chaprep/job-finder)`,
+      "User-Agent": `rolepilot/${appVersion} (+https://github.com/chaprep/rolepilot)`,
       "x-opencode-session": `ses_${randomUUID()}`,
     }),
   },

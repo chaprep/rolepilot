@@ -1,17 +1,17 @@
 import { prepareCandidateProfile, assertCandidateContext } from "@/lib/memory/context";
 import "server-only";
 
-import { researchForEdits } from "@/lib/research/application";
-
 import { z } from "zod";
 
 import { DocumentKind, VersionCause } from "@/generated/prisma/enums";
 import { getAiProvider } from "@/lib/ai";
 import { loadTaskOptions } from "@/lib/ai/task-options";
+import { letterCandidateEvidence } from "@/lib/ai/tasks/research-cover-letter";
+import { coverLetterFingerprint, coverLetterResearchSchema } from "@/lib/cover-letter-research";
 import { regenerateUnit } from "@/lib/ai/tasks";
 import { extractedOf, unitSchema, unitsSchema } from "@/lib/application-data";
 import { updateDocuments } from "@/lib/document-units";
-import { withoutPrivateParts } from "@/lib/letter-frame";
+import { isParagraph, withoutPrivateParts } from "@/lib/letter-frame";
 import { prisma } from "@/lib/prisma";
 import { readDocumentState } from "@/lib/document-state";
 import { profileOfApplication } from "@/lib/frozen-copy";
@@ -55,6 +55,13 @@ export const regenerateUnitJob = defineJob({
     const [provider, options, profile] = await Promise.all([getAiProvider(), loadTaskOptions(), profileOfApplication(application.frozen)]);
     const state = readDocumentState(application.documents[0].state);
     const candidate = await prepareCandidateProfile(state?.profile ?? profile, application.postingText, signal, provider);
+    const facts = await loadFactTexts(applicationId);
+    const saved = document === DocumentKind.COVER_LETTER && isParagraph(unit) ? coverLetterResearchSchema.safeParse(application.coverLetterResearch) : null;
+    const research = saved?.success && saved.data.fingerprint === coverLetterFingerprint(application) ? saved.data : null;
+    if (research?.findings.length) {
+      const evidence = letterCandidateEvidence({ profile: candidate, facts });
+      for (const finding of research.findings) finding.candidateIds = finding.candidateIds.filter(id => Object.hasOwn(evidence, id));
+    }
     const { data } = await regenerateUnit(
       provider,
       {
@@ -65,16 +72,23 @@ export const regenerateUnitJob = defineJob({
         profile: candidate,
         extracted: extractedOf(application),
         tone: state?.tone ?? application.tone,
-        facts: await loadFactTexts(applicationId),
+        facts,
+        research,
         posting: application.postingText,
-        companyResearch: document === "COVER_LETTER" ? researchForEdits(application) : undefined,
       },
       // Only the requested part is rewritten in English; retain historical layout metadata.
       { ...options, signal },
     );
 
     return updateDocuments(applicationId, async (documents, tx) => {
+      signal.throwIfAborted();
       await assertCandidateContext(candidate, tx);
+      if (research) {
+        const currentApplication = await tx.application.findUniqueOrThrow({
+          where: { id: applicationId }, select: { company: true, role: true, location: true, postingUrl: true, postingText: true },
+        });
+        if (coverLetterFingerprint(currentApplication) !== research.fingerprint) return { outcome: "changed" as const };
+      }
       const current = documents[document]?.find((entry) => entry.id === unitId);
       if (!current || current.text !== from) return { outcome: "changed" as const };
       const previous = { ...current };

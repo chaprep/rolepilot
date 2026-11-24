@@ -8,6 +8,7 @@ import { loadAiConfig } from "@/lib/ai/config";
 import { AiError } from "@/lib/ai/errors";
 import { providerOption } from "@/lib/ai/provider-options";
 import { logServerError } from "@/lib/log";
+import { lockForTransaction } from "@/lib/db-lock";
 import { prisma } from "@/lib/prisma";
 
 // Long AI tasks run as background jobs (E6-7): the request that starts one
@@ -34,6 +35,8 @@ export type JobDefinition<I, R> = {
    * write its data idempotently (upsert, or replace in one transaction).
    */
   run: (input: I, context: JobContext) => Promise<R>;
+  /** Keeps a durable result in the same transaction that finishes its job. */
+  commit?: (input: I, result: R, tx: Prisma.TransactionClient, jobId: string) => Promise<void>;
 };
 
 /** What a page learns about a job. */
@@ -113,10 +116,10 @@ export function isFinished(job: Pick<JobView, "status">): boolean {
 export async function startJob<I, R>(
   definition: JobDefinition<I, R>,
   input: NoInfer<I>,
-  options: { key?: string; applicationId?: string; id?: string } = {},
+  options: { key?: string; applicationId?: string; id?: string; dedupeLock?: number } = {},
 ): Promise<string> {
   defineJob(definition);
-  const job = await prisma.job.create({
+  const create = (db: Prisma.TransactionClient) => db.job.create({
     data: {
       ...(options.id ? { id: options.id } : {}),
       type: definition.type,
@@ -125,12 +128,22 @@ export async function startJob<I, R>(
       input: definition.input.parse(input) as Prisma.InputJsonValue,
     },
     select: { id: true },
-  }).catch((error: unknown) => {
+  });
+  const job = await (options.dedupeLock !== undefined && options.key
+    ? prisma.$transaction(async (tx) => {
+      await lockForTransaction(tx, options.dedupeLock!);
+      const existing = await tx.job.findFirst({
+        where: { key: options.key, status: { in: [JobStatus.QUEUED, JobStatus.RUNNING] } },
+        select: { id: true },
+      });
+      return existing ? { ...existing, existing: true } : { ...await create(tx), existing: false };
+    })
+    : create(prisma).then((row) => ({ ...row, existing: false }))).catch((error: unknown) => {
     if (options.id && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return null;
     throw error;
   });
   if (!job) return options.id!;
-  enqueue(job.id);
+  if (!job.existing) enqueue(job.id);
   return job.id;
 }
 
@@ -238,7 +251,8 @@ async function execute(id: string, controller: AbortController): Promise<void> {
     const definition = state.definitions.get(job.type);
     if (!definition) throw new Error(`No job type "${job.type}" is defined.`);
 
-    const result = await definition.run(definition.input.parse(job.input), {
+    const input = definition.input.parse(job.input);
+    const result = await definition.run(input, {
       id,
       signal: controller.signal,
       step: async (name) => {
@@ -248,7 +262,17 @@ async function execute(id: string, controller: AbortController): Promise<void> {
         else await notify(id);
       },
     });
-    await finish(id, { status: JobStatus.DONE, result: definition.result.parse(result) as Prisma.InputJsonValue });
+    const data = { status: JobStatus.DONE, result: definition.result.parse(result) as Prisma.InputJsonValue };
+    if (definition.commit) {
+      const commit = definition.commit;
+      await prisma.$transaction(async (tx) => {
+        controller.signal.throwIfAborted();
+        await tx.job.update({ where: { id, status: JobStatus.RUNNING }, data: { ...data, finishedAt: new Date() } });
+        await commit(input, result, tx, id);
+        controller.signal.throwIfAborted();
+      });
+      await notify(id);
+    } else await finish(id, data);
   } catch (error) {
     // AI failures already say what to do; anything else is logged and kept vague.
     const message = controller.signal.aborted

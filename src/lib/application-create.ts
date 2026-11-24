@@ -5,6 +5,7 @@ import { assertMemoryRevision } from "@/lib/memory/context";
 import { AgentCandidateStatus, ApplicationOrigin, type Tone } from "@/generated/prisma/enums";
 import { ActionError } from "@/lib/action";
 import { summaryText, tailoringSummary } from "@/lib/ai/tailoring-summary";
+import { coverLetterFingerprint } from "@/lib/cover-letter-research";
 import { calendarDay } from "@/lib/application-documents";
 import type { Extracted, Match } from "@/lib/application-data";
 import { documentLabels } from "@/lib/document-labels";
@@ -88,6 +89,10 @@ export async function createApplicationFromDocuments({ reading, documents, match
       labels: documentLabels(language),
     }),
   ), details.role.trim() || profile.basics.headline);
+  const research = documents.letterWith ? documents.coverLetterResearch : undefined;
+  if (research && research.fingerprint !== coverLetterFingerprint({ ...details, postingUrl, postingText: reading.posting })) {
+    throw new ActionError("The job details changed while writing. Generate the cover letter again for the updated details.");
+  }
   const summary = tailoringSummary({
     profile,
     company: details.company,
@@ -134,7 +139,7 @@ export async function createApplicationFromDocuments({ reading, documents, match
         deadline: details.deadline ? new Date(`${details.deadline}T00:00:00Z`) : null,
         postingUrl,
         postingText: reading.posting,
-        companyResearch: documents.companyResearch,
+        ...(research ? { coverLetterResearch: research } : {}),
         extracted,
         extractedWith,
         match,

@@ -14,7 +14,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/desktop", () => ({ isDesktopApp: () => false }));
 vi.mock("@/lib/settings-data", () => ({ loadSettings: async () => ({
   setupGuide: {}, updateCheck: true, latestVersion: "99.0.0",
-  latestVersionUrl: "https://github.com/chaprep/job-finder/releases/tag/v99.0.0",
+  latestVersionUrl: "https://github.com/chaprep/rolepilot/releases/tag/v99.0.0",
   announcementFeed: { items: [{ id: "old", title: "Legacy announcement", body: "Old notice" }] },
   announcementsDismissed: [],
 }) }));

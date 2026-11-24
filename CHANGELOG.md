@@ -1,3 +1,210 @@
+# Rolepilot changelog
+
+## 2026-11-24 — Prepare the update for the Rolepilot repository
+
+- Updated the GitHub destination in the public guides, issue templates, application source links, desktop metadata and request identification. The application snapshot includes OpenRouter onboarding, the One integration, People search, cover letter research and the posting import fallback.
+- Published documentation comprises the README, project guides and changelog. Kept implementation plans, audit records and the writing brief in the local checkout and removed public links to those files.
+- Verified 46 staged documentation links, TypeScript, 43 focused application tests and staged whitespace. Checked the staged changes for local credentials and verified that private documents are excluded. No running deployment or saved data changed.
+
+## 2026-11-24 — Stop the local onboarding server
+
+- Stopped the Next.js development server on port 3001 on request. Verified that port 3001 no longer accepts connections, the onboarding database file is present, and the Docker app on port 3000 reports healthy.
+
+## 2026-11-24 — Rewrite the Rolepilot documentation
+
+- Inventoried the Markdown guides, planning records, font notes and in-app help. Rewrote the README, development, contributing, privacy, security and source attribution documents. Added a documentation index and guides for deployment and recovery, integrations and application workflows under `docs/`.
+- Replaced the rollout audit with `docs/BRANDING_AND_COMPATIBILITY.md` and removed retired branding and local storage identifiers from changelog prose while retaining its dated records. Preserved upstream attribution in `PROVENANCE.md` and the existing compatibility identifiers in code and configuration. Updated the font notes, Help page and issue-template links for the current product.
+- Verified repository-local documentation links, Git whitespace, ESLint and TypeScript. An isolated production image instance started from a fresh SQLite data mount and passed health and login-page checks. Verified the PostgreSQL Compose configuration renders. The running application and its saved data were left in place. The Help copy is in source and awaits the next deployment.
+
+## 2026-11-24 — Deploy the onboarding updates in Docker
+
+- Rebuilt `rolepilot:settings-no-scoring-local` from the current checkout and recreated the local service with the existing data volume. Verified the deployed bundle contains the new OpenRouter key verification prompt and One dashboard link.
+- Docker and HTTP health checks passed. SQLite integrity was `ok` and all six applications were present.
+
+## 2026-11-24 — Include the onboarding callback in One Connect config
+
+- Added `http://127.0.0.1:3001/api/one/callback` to `one.connect.ts` alongside the port 3000 callback. The running onboarding server sends that exact port 3001 URI in its One authorization redirect. Validated the config loads and both callbacks are present.
+- The existing One Connect app still needs the callback added in its dashboard before One can accept authorization on port 3001. The repository config does not update a registered app on its own.
+
+## 2026-11-24 — Fix onboarding for OpenRouter and One
+
+- Updated the welcome guide and OpenRouter settings card to prompt for a connection test after saving the key. The footer switches to Continue as soon as a key is available. A successful check shows a green confirmation. Settings store a server-bound fingerprint of the tested key so confirmation survives a reload and resets when the key is replaced, removed, or fails a later check.
+- Added the optional One settings card to the first step with a link to One’s dashboard and the callback URL to register. Updated the One authorization route and SDK configuration to return users to the page that started consent. The completion screen lists One’s connection.
+- Type checking, scoped ESLint, 1,656 Node and UI tests, and 241 focused tests including isolated SQLite passed. Chromium confirmed the save prompt and the change from Skip to Continue on a fresh local instance. Fixture tests covered OpenRouter verification and the One SDK callback. Live service checks were outside this pass. Changes are available on the hot-reloading server on port 3001.
+
+## 2026-11-24 — Start a local onboarding server
+
+- Started a hot-reloading Next.js server at `http://127.0.0.1:3001/welcome` for first-run onboarding work. Applied all 12 migrations to a fresh SQLite database at `data/onboarding-3001/rolepilot.db`. The data and server log are local and Git-ignored. The Docker app on port 3000 continued using its own database.
+- Both health endpoints reported a healthy database. In Chromium, sign-in reached the welcome screen and “Let’s start” opened the AI setup step. Later setup steps and provider connections were outside this check.
+
+## 2026-11-24 — Rebuild the local Docker app
+
+- Rebuilt the production app in `rolepilot:settings-no-scoring-local` from the current checkout and recreated the service through `compose.local.yml`. The container uses the rebuilt image and the existing data volume.
+- Docker and HTTP health checks passed. SQLite integrity was `ok`, with all six existing applications present.
+
+## 2026-11-24 — Remove the Scoring entry from Settings
+
+- Removed the standalone Scoring panel and navigation entry. Old Scoring URLs open AI provider, which manages the OpenRouter key used for job and resume scoring. Updated job-agent links, the New Application score card, setup guidance, and the development guide. The scoring workflows and saved settings use their existing backend behavior.
+- Updated Settings and agent tests and the Find Jobs browser fixture for the shared OpenRouter connection. Type checking, scoped ESLint, Git whitespace, both production builds, and 70 focused tests passed. A Chromium test signed in, opened the old Settings URL, confirmed the Scoring entry was gone, and scored a fixture job through Find Jobs.
+- Updated `compose.local.yml` to deploy `rolepilot:settings-no-scoring-local` on port 3000.
+
+## 2026-11-24 — Align the AI Settings connection cards
+
+- Moved the OpenRouter heading and description into the card with its API key controls in `ai-provider-section.tsx`. It uses the same card spacing and heading placement as One. The Settings tests check that the OpenRouter heading and key field share a card.
+- Type checking, focused ESLint, Git whitespace, four Settings UI tests, and the production Docker build passed. Updated `compose.local.yml` and deployed `rolepilot:ai-settings-cards-local` on port 3000. Verified HTTP and Docker health.
+
+## 2026-11-24 — Remove backend model names from AI Settings
+
+- Removed the Models by task section and its component from Settings → AI provider. OpenRouter connection checks now report one status and avoid sending per-model details to that screen. The checks still cover writing and scoring access, and the runtime assignments are unchanged.
+- Updated the provider form, Settings page, server action, and focused tests. Type checking, scoped ESLint, Git whitespace, the production Docker build, and 27 focused UI, routing, and isolated SQLite tests passed.
+- Updated `compose.local.yml` and deployed `rolepilot:ai-settings-clean-local` on port 3000. Verified dashboard health and that the deployed bundle contains the generic connection status without the model table.
+
+## 2026-11-24 — Update the AI Settings model table
+
+- Added `ai-models-section.tsx` and moved the model information to the bottom of Settings → AI provider, after OpenRouter, One, and the writing controls. The table lists 20 processes, including the current GPT-6 Luna assignment for resume and cover letter chat edits, the separate email chat and section rewrite assignments, and the tools used for URL import and greetings. AI rows use the same model assignments as the runtime.
+- Updated `ai-provider-section.tsx`, the Settings page, and the focused UI tests. Type checking, scoped ESLint, Git whitespace, nine focused tests, and the production Docker build passed. A signed-in Playwright check confirmed the section order, the Luna row, and that the table fits at 390 pixels with the sidebar collapsed.
+- Updated `compose.local.yml` and deployed `rolepilot:ai-settings-models-local` on port 3000.
+
+## 2026-11-24 — Use GPT-6 Luna for resume and cover letter chat edits
+
+- Changed OpenRouter routing in `src/lib/ai/assignments.ts` and the refine job and task. Chat uses the selected document, or the open tab when no unit is selected, to route resume and cover letter edits to GPT-6 Luna and email-tab edits to Claude Sonnet 5.5. Updated Settings' model list through the shared assignments and added a separate Usage category for email chat in `src/lib/usage.ts`. Standalone section rewrites keep their existing model.
+- Updated task, routing, and Usage tests. Type checking, focused ESLint, Git whitespace checks, the production Docker build, and 1,654 Node and UI tests passed with 31 skipped. Two synthetic requests through the live OpenRouter provider applied the requested resume summary and cover letter opening edits and recorded GPT-6 Luna. The live check used sample documents.
+- Updated `compose.local.yml` and deployed `rolepilot:luna-chat-local` on port 3000.
+
+## 2026-11-24 — Recover job URL imports with Exa
+
+- New Application's **Fetch** tries the direct site first, then makes one Exa Get Contents request through the existing One grant on eligible failures. Added `job-posting-import.ts`, updated the direct fetcher and One client, and wired the result into the editable posting form and its Undo action. Invalid or private links and explicitly removed postings skip Exa. URLs with common credential parameters are kept out of the fallback. If both attempts fail, the form keeps the pasted text and URL. A late response also leaves newer edits intact.
+- Added targeted tests and updated `DEVELOPMENT.md`, `PRIVACY.md`, and the local One Connect consent description. The job import uses the existing Exa permission set. Exa is limited to one 12-second attempt, with up to 40,000 characters of text. Some sites still require manual paste, and Exa results must match the requested listing URL after common normalization.
+- Passed type checking, focused ESLint, Git whitespace checks, the production Docker build, and 1,653 Node and UI tests with 31 skips. A signed-in isolated dashboard imported an ŌURA job directly and recovered a public Indeed listing for Manthorpe Building Products through Exa. The recovered responsibilities and qualifications matched the source, and **Read the posting** extracted the correct company and role. An Apple Careers link and a Workable link still needed manual paste, and the form preserved existing text.
+- Updated `compose.local.yml` and deployed `rolepilot:job-import-exa-local` on port 3000. The running dashboard passed HTTP and Docker health checks, with SQLite integrity intact and all six existing applications present.
+
+## 2026-11-24 — Generate cover letters with company research
+
+- Added `generate-cover-letter.ts`, `research-cover-letter.ts`, and `cover-letter-research.ts`. Sonnet frames the question, Luna searches and reads public pages through the existing One Exa grant, and Sonnet writes the four-paragraph letter. Rolepilot limits the research stage to 45 seconds and five tool calls. Exa requests use public job details and approved research topics. Missing or unusable research falls back to the posting. The People tab still applies a selected first-name greeting independently.
+- Wired the workflow into `write-document.ts` and `write-documents.ts`, including new-application, agent, and connector drafts. Updated the writer, shared prompt parts, paragraph rewrite task, progress steps, model routing, and Usage. Paragraph rewrites reuse matching saved excerpts. Source-backed company warnings are handled separately from candidate claims. Added paired Prisma migrations, portable backup schema 18, and older-backup compatibility. Updated the implementation plan, One Connect description, privacy documentation, and development guide.
+- Passed type checking, focused ESLint, Git whitespace, the production Docker build, and 1,642 Node and DOM tests with 31 skipped. Live synthetic pilots used both Exa actions and produced sourced four-paragraph drafts from a public URL and a pasted description. A signed-in isolated dashboard generated a sourced letter after its candidate memory settled and downloaded a one-page A4 PDF. Research quality and run time depend on the public evidence and provider availability. The page count can vary with content and layout.
+- Passed full SQLite and PostgreSQL test suites in UTC, with 623 and 625 passes respectively. Updated two backup-version assertions to follow the current format. A forced research outage in a separate pilot still produced a four-paragraph draft from the live Sonnet writer.
+- Verified a pre-migration SQLite copy in the app backup directory and rehearsed the additive migration on a copy. Updated `compose.local.yml` and deployed `rolepilot:cover-letter-research-local` on port 3000. Verified HTTP and Docker health, SQLite integrity, all six applications, and both saved People research results. The signed-in generation used the isolated instance with synthetic data.
+
+## 2026-11-24 — Plan research-backed cover letter generation
+
+- Added `docs/COVER_LETTER_IMPLEMENTATION_PLAN.md`. It specifies Sonnet's research planning and drafting, Luna's company research through the existing One and Exa connection, and how the brief will be saved and reused for paragraph rewrites. The plan covers both generation paths, the posting-only fallback, backup compatibility, and rollout checks. Hiring contacts stay in People.
+- Reviewed the current generation jobs, shared prompts, One action configuration, editing, and backup code. Verified all 16 plan links, the matching writing-guide copies, and Git whitespace. This is a proposal. Application code, data, and deployment were untouched. Live provider access and generation quality will be checked during implementation.
+
+## 2026-11-24 — Consolidate project plans and notes
+
+- Moved four implementation plans, three audits, and `Cover Letter Writing Process.md` from the repository root to `docs/`. Linked the folder from `README.md` and updated the resume optimization plan reference in `DEVELOPMENT.md`. The changelog and repository guidance remain at the root.
+- Verified that all eight moved files match their original contents, the updated links resolve, and Git whitespace checks pass. Documentation only. No deployment was needed.
+
+## 2026-11-24 — Rename the local repository folder to rolepilot
+
+- Moved the checkout from the previous checkout directory to `rolepilot`. Verified the same Git HEAD and identical working-tree status before and after the move. Recreated the running container from the new path with the same `compose.local.yml`, image, and Docker data volume.
+- Verified `yarn typecheck`, Git whitespace, Docker and HTTP health checks, and SQLite integrity. All six applications and both saved People results are present. External shortcuts and tools configured with the old absolute path need the new path.
+
+## 2026-11-24 — Deploy first-name greetings locally
+
+- Built `rolepilot:people-first-name-local` from the current source and updated `compose.local.yml` to restart the dashboard with it. The build also includes the existing Rolepilot favicon update described below.
+- Confirmed Docker health, `/api/health`, SQLite integrity, all six application records, the compiled first-name greeting action in the running container, and the branded favicon URL. Both greeting actions previously passed the focused SQLite tests. Existing drafts pick up the new greeting when the user reapplies the contact.
+
+## 2026-11-24 — Use first names in People greetings
+
+- Updated `src/app/(app)/applications/[id]/people-actions.ts` to use the first word of the saved contact name when applying a greeting to a cover letter or email. People still displays the full name. The change applies when the contact is selected, so existing drafts require reapplying the contact.
+- Updated `src/app/(app)/applications/[id]/people-actions.db.test.ts` to assert first-name greetings for both drafts and preserve the existing Undo and draft-content checks. All five People action tests passed on isolated SQLite, along with type checking, focused ESLint, and Git whitespace checks. The running Docker dashboard still uses its previous build.
+
+## 2026-11-24 — Keep Rolepilot favicons consistent across navigation
+
+- Declared shared favicon/PNG/Apple icon metadata explicitly in `src/app/layout.tsx`, using new `/brand/rolepilot-*` URLs to avoid browser caches associated with the previous icon paths. Moved the existing, unchanged artwork from `src/app/favicon.ico`, `icon.png`, and `apple-icon.png` to matching names under `public/brand/`; kept a correct conventional fallback at `public/favicon.ico`. Removing file-convention icon declarations prevents competing automatic metadata during navigation.
+- Investigation: the running app on port 3000 already served favicon and PNG bytes identical to the current Rolepilot source, and Settings declared no icon override. Stale browser favicon caching is the likely explanation; the user's existing browser-cache state was not reproduced.
+- Validation: `yarn typecheck`, targeted ESLint, `yarn build`, and `git diff --check` passed. Verified rendered login HTML declares exactly the three new branded URLs and HTTP image bytes match their source files; conventional fallback also matches. Playwright sign-in and client navigation from dashboard to Settings and About, then full reload, retained the same Rolepilot icon links. No new dependency or image regeneration was needed.
+- Local data operations: created/migrated/seeded only `/tmp/rolepilot_favicon_20261124_test.db` and used temporary app data `/tmp/rolepilot-favicon-smoke` with a test password on port 3119. No live user data or credentials were changed. Temporary server/browser stopped after validation.
+- Deployment: source implementation and isolated production-build validation only. Existing Docker app on port 3000 was not rebuilt/restarted; it must be rebuilt to serve the new metadata/assets. Existing unrelated workspace changes were preserved. Safari and the user's existing browser profile were not tested.
+
+## 2026-11-24 — Enable People search on the regular dashboard
+
+- After the requested restart, detected the replacement OpenRouter key and reran both isolated pilots through the People tab. A posted URL and a pasted description each produced one sourced Figma contact. Some Muapi searches were unavailable, and Rolepilot displayed the partial-results message. Verified the pasted-description result after reload and applied its contact to a pilot cover letter. The earlier isolated fixture also verified both greeting actions and Undo.
+- Took a consistent SQLite backup and verified its integrity before rollout. Updated `compose.local.yml` to use `rolepilot:people-live-local`, applied the People migration to the existing Docker volume, and verified the health endpoint, Docker health, SQLite integrity, and all six application records on port 3000. Saved the previously tested Exa and Muapi connection references after confirming that the live One credentials and authorization exactly matched the tested grant. Updated the People implementation plan. The final signed-in smoke test on the regular dashboard awaits a user-started search.
+
+## 2026-11-24 — Restart the local dashboard
+
+- Restarted the running `rolepilot:one-local` container using `compose.local.yml`. The health endpoint and Docker health check passed on port 3000. The existing SQLite volume reported six applications. The People rollout is still pending a successful pilot search.
+
+## 2026-11-24 — Prepare the People workflow for local rollout
+
+- Updated `src/lib/one/client.ts` to read Muapi’s live `full_name` and `company_name` fields while accepting previously supported fields. Poll the original receipt with a 15-second people-search deadline and a 50-second company-lookup deadline. The company lookup took about 37 seconds in the live provider check. Provider timeouts and caller cancellation keep distinct error codes. Updated `src/lib/one/client.test.ts` and the People implementation plan.
+- Passed type checking, focused ESLint, Git whitespace checks, 1,636 Node and DOM tests with 31 skipped, and 13 focused tests on each of SQLite and PostgreSQL. Built `rolepilot:people-live-local`. Rehearsed the migration against a verified backup of the live SQLite database and confirmed that all six applications remained present. On an isolated instance, verified the Exa and Muapi permissions, saved People results across reload using a fixture, and confirmed both draft greeting actions and Undo.
+- The two isolated searches, one with a posting URL and one with pasted job text, reached the OpenRouter step and failed because the saved key was rejected. A separate read-only authentication check returned HTTP 401. Port 3000 remains on `rolepilot:one-local` pending successful pilot searches with an accepted key.
+
+## 2026-11-22 — LinkedIn company lookup for People
+
+- Added Muapi’s LinkedIn company profile lookup as the fifth permission in `one.connect.ts` and opened a fresh registration review. The People agent can verify an ambiguous employer once per research run using a public LinkedIn company URL or official domain. It shares Muapi’s existing prediction polling and uses company data for employer context only. Existing grants with the two people-search permissions can still run People research.
+- Updated the shared One client, People research task, their tests, the Settings permission hint, `DEVELOPMENT.md`, and the implementation plan. Type checks, focused ESLint, Git whitespace checks, and 18 focused tests passed. The regular app remains on its previous build. Live Muapi response verification awaits authorization and a provider connection.
+
+## 2026-11-22 — Register Rolepilot with One Connect
+
+- Added `one.connect.ts` with the local callback and four custom actions for Exa and Muapi. One’s current catalog uses new IDs for Exa Search and Get Contents. Updated the shared One client, its tests, the Settings hint, and the setup docs to match. The two Muapi action IDs were unchanged.
+- Verified the selected actions against One’s catalog and opened the app registration approval page. One writes registration metadata to the ignored `.env.one-connect` file after approval. Type checks, focused ESLint, Git whitespace checks, and 16 focused tests passed. The running local app remains on its previous build. Provider connections and live People searches have yet to be verified.
+
+## 2026-11-22 — Implement the hiring contact agent
+
+- Wired **Find hiring contacts** to a cancellable, application-scoped background job. The OpenRouter agent chooses queries and actions from Exa search, Exa page reading, and Muapi LinkedIn people search through the shared One client. It accepts saved posting text or a URL, limits time and requests, validates cited evidence, and returns up to three ranked contacts. Settings → AI → One checks the Muapi grant separately from Exa. Muapi submission and bounded polling stay inside the One module.
+- Added People results, source links, refresh and retry states, and optional greeting edits with Undo for existing cover letters and emails. Persisted results with the application in both databases and added backup format 17. One connection references remain installation settings. Earlier exports continue to import.
+- Affected files include `src/lib/one/`, `src/lib/ai/tasks/find-hiring-contacts.ts`, `src/lib/jobs/find-hiring-contacts.ts`, `src/lib/jobs/runner.ts`, `src/lib/people/`, the Application and Settings screens, usage and backup modules, and the paired Prisma migrations. Updated `DEVELOPMENT.md` and the implementation plan.
+- Type checks, focused ESLint, and Git whitespace checks passed. Node and UI suites recorded 1,629 passes and 31 skips. A focused rerun added two passing scenarios for a dead posting URL and the search budget. The focused SQLite and PostgreSQL suites passed 57 tests each. Built the local production image `rolepilot:people-agent-local` and used an isolated SQLite instance to verify sign-in, the People search button, the missing-grant state, and the link to Settings → AI. The regular local app and its database were left on the previous build. Live OpenRouter and One/Muapi searches require an authorized One grant and live provider verification before rollout.
+
+## 2026-11-22 — Hiring contact agent implementation plan
+
+- Added `PEOPLE_RESEARCH_IMPLEMENTATION_PLAN.md` with URL and pasted-description flows, the system prompt, approved One actions, evidence checks, execution limits, persistence, the People tab, and draft greeting updates. The plan identifies the existing OpenRouter tool-call adapter, One client, and job runner for reuse.
+- Reviewed the current source paths and One’s documented Muapi submission and result actions. Git whitespace checks passed. This is a proposal. No application code, database, or deployment changed. Live One and Muapi behavior remains to be verified during implementation.
+
+## 2026-11-22 — People research workflow design (proposal)
+
+- Agreed that **Find hiring contacts** will start a dedicated research agent on demand. It will accept either a job URL or a pasted description. The agent will use the application’s company, title, and team clues to identify the opening and ask for the employer only if it remains ambiguous.
+- People and future cover-letter research will share the One connection. The People agent will select from approved actions at runtime. The proposed first version uses Exa for public web search and page reading and Muapi for LinkedIn people search without a personal LinkedIn login. LinkedIn job-poster lookup is a possible follow-up.
+- The agent will prioritize people named on the posting or tied to it through a public hiring announcement, then consider relevant team leads and recruiters. Results will include the reason and source links. The user can choose a contact for either draft’s greeting. People search will run independently of draft creation.
+- Checked the changelog against the Rolepilot commits and current working tree. Clarification to the One entry below: the shared client implements the two Exa actions, and no company-research or People job calls it yet. The People button is still disabled. Only `CHANGELOG.md` changed in this review. Git’s whitespace check passed, and Docker reported the existing `rolepilot:one-local` deployment healthy. No app tests or live provider requests were run for this documentation update.
+
+## 2026-11-21 — Shared One MCP connection
+
+- Added a One section immediately below the OpenRouter credentials in Settings → AI. It stores the One Connect credentials encrypted, supports the signed-in OAuth consent flow, and checks the two explicit Exa permissions without running a search. The installation’s credentials, grant reference, and selected connection stay out of portable backups.
+- Added the server-only `callOneAction()` for Exa Search the Web and Get Contents. It uses One’s hosted MCP with a short-lived Connect token, bounds responses, validates inputs and output, and honors cancellation. The installed Connect SDK handles consent, and the documented token endpoint handles minting. The current allowlist enables the company research caller. Research and People workflows are separate follow-up work.
+- Affected files include `src/lib/one/`, `src/app/api/one/[action]/`, the Settings AI and credential-storage modules, export and session audit tests, dependencies, `DEVELOPMENT.md`, and `compose.local.yml`. The existing settings table handles storage without a schema change.
+- Passed type checking, focused ESLint, whitespace checks, 1,619 Node and UI tests, and 42 focused SQLite tests. The production Docker build passed and `rolepilot:one-local` is deployed on the regular local app. Verified the signed-in settings placement, disconnected state, and protection of the authorization route. Consent and Exa actions were tested with mocked responses. Live One and Exa checks need a configured grant.
+
+## 2026-11-21 — Cover letter introduction
+
+- Matched the empty Cover letter tab to the Application email card. Added a description of what the draft uses and kept the existing write action, progress, and AI settings guidance. Updated `write-missing-document.tsx` and the application view test.
+- Passed 85 focused tests, ESLint, whitespace checks, and the production Docker build. Deployed to the regular local app and verified the new card and button on a signed-in application without a cover letter. Draft creation was exercised in the component test.
+
+## 2026-11-21 — People tab button
+
+- Added a disabled Find hiring contacts button below the description, matching the placement of the Application email action. Updated `people-tab.tsx` and the application view test. Contact search remains pending.
+- Passed 84 focused tests, ESLint, whitespace checks, and the production Docker build. Deployed to the regular local app and verified the disabled button on a signed-in application.
+
+## 2026-11-21 — People tab introduction
+
+- Matched the People card to the Application email layout and added a short explanation of the hiring-contact lookup. The card says contact search is coming soon. Updated `people-tab.tsx` and the application view test.
+- Passed 84 focused tests, ESLint, whitespace checks, and the production Docker build. Deployed to the regular local app on port 3000 and verified the copy on a signed-in application.
+
+## 2026-11-21 — People tab deployed and Zyte retired
+
+- Deployed the frontend People tab to the regular local app. It shows the real empty hiring contacts panel for each application. Contact search, storage, and cover-letter integration remain outside this frontend change.
+- Removed Zyte tools, settings, refresh jobs and controls, and the company-research step and prompt context from new letters, missing letters, and letter edits. Kept historical research data in exports and imports and recorded historical usage where present. Files changed under `src/app/(app)/applications/`, `new/`, `settings/` and `usage/`, and under `src/lib/` for jobs, drafting, prompts, usage, settings and exports.
+- Built and deployed `rolepilot:people-local` through `compose.local.yml` on the existing volume. The previously published migration added an unused nullable compatibility column. Backed up the database before deployment and verified integrity, all 6 applications and 11 documents, the signed-in People tab, AI settings, and live health. The running bundles contain no Zyte endpoint. The build also includes the previously prepared flexible application-email brief.
+- Production Docker build, type checking, ESLint on changed frontend and library files, and whitespace checks passed. Node and UI suites recorded 1,612 passes and 31 skips. Four focused SQLite suites recorded 59 passes.
+
+## 2026-11-21 — People tab empty state
+
+- Removed the sample contacts, simulated search, and simulated confirmation from the People tab. The tab now shows the empty hiring contacts panel. Updated `people-tab.tsx`, `application-view.tsx`, and the application view test.
+- All 84 focused tests, type checking, ESLint on the files changed in this follow-up, and whitespace checks passed.
+- Stopped the separate demo server. The regular local instance is healthy. Deploying the current source would also apply the pending company research migration, so the frontend change has not been deployed there.
+
+## 2026-11-21 — People tab frontend preview
+
+- Added a People tab to each application. Its Find hiring contact button reveals sample results with roles and sources, a possible match, and a reversible confirmation. Preview state stays in the current application view while switching tabs. People uses the full pane and hides document editing and PDF controls.
+- Updated the application view, tab routing, and sidebar under `src/app/(app)/applications/[id]/`. Added `people-tab.tsx` and extended the application-view and routing tests.
+- Validation passed for 84 focused tests, type checking, and ESLint on all changed frontend files. Checked the empty state, sample results, and confirmation in Chromium against an isolated demo instance. Checked the narrow layout with the main navigation collapsed.
+- Available in the local demo preview. Search, persistence, and cover-letter integration are outside this frontend preview. The regular local deployment was not updated.
+
 ## 2026-11-21 — Current Rolepilot source snapshot
 
 - Prepared the current Rolepilot app for GitHub, including the rebrand, candidate memory, resume optimization, writing updates, and sourced company research. This snapshot includes app and desktop source, documentation, test fixtures, branding assets, and database migrations.
@@ -16,7 +223,7 @@
 
 - Replaced the literal email prose template with the agreed writing brief, giving the AI freedom over wording, sentence structure, paragraph lengths and emphasis while preserving the three-paragraph progression: interest/background, strengths/concrete work, and interest in joining. Retained the factual boundaries, natural omission of missing details, fixed “Hi,”/“Best,” framing and candidate name, with no attachment paragraph or portfolio/LinkedIn signature.
 - Shared `EMAIL_WRITING_BRIEF` between full email writing and email-body regeneration. Preserved recipient/subject handling, structured output and existing fact guard. Prompt versions are now `write-email@5` and `regenerate-unit@10`. Updated prompt assertions and saved-version expectations. Affected files: `src/lib/ai/tasks/write-email.ts`, `src/lib/ai/tasks/regenerate-unit.ts`, `src/lib/ai/tasks/tasks.test.ts`, `src/lib/jobs/write-email.db.test.ts`, and this changelog.
-- Validation: all 61 AI task tests and 4 email-job database tests passed; focused ESLint, `yarn typecheck`, and whitespace checks passed. Database tests applied migrations to isolated SQLite fixture `/tmp/dossier_email_brief_20261119_test.db`; no live application data was modified.
+- Validation: all 61 AI task tests and 4 email-job database tests passed; focused ESLint, `yarn typecheck`, and whitespace checks passed. Database tests applied migrations to an isolated SQLite fixture for the email writing brief; no live application data was modified.
 - Deployment: source changes only; no production build or running service/container deployment. Existing drafts are not automatically rewritten. Mock-provider tests verify prompt delivery and application behavior; live-model wording quality and adherence have not been evaluated.
 
 ## 2026-11-19 — Application email template
@@ -24,7 +231,7 @@
 - Replaced the short attachment-note prompt with the requested conversational three-paragraph template: company/role interest and relevant background, strengths and concrete projects, then interest in joining and shaping the team. Corrected “strongest suites” to “strongest suits” and smoothed grammar. Full email generation now adds “Hi,” and “Best,” plus the saved candidate name directly, regardless of model-provided framing or tone. No portfolio/LinkedIn signature is added.
 - Added explicit instructions to use supported details, omit unknown years/team clauses naturally, avoid padding employer lists to four, and adapt project claims to available evidence. Shared the template with email-body regeneration so it no longer requests the old 80–150-word attachment note. Existing recipient validation and fact guard remain. Prompt versions are `write-email@4` and `regenerate-unit@9`.
 - Affected files: `src/lib/ai/tasks/write-email.ts`, `src/lib/ai/tasks/regenerate-unit.ts`, `src/lib/ai/tasks/tasks.test.ts`, `src/lib/jobs/write-email.db.test.ts`, and this changelog. Preserved unrelated existing workspace changes.
-- Validation: 61 AI task tests and 4 email-job database tests passed; focused ESLint, `yarn typecheck`, and whitespace checks passed. Database tests used isolated SQLite fixture `/tmp/dossier_email_template_20261119_test.db`, with migrations applied there; no live saved data was changed.
+- Validation: 61 AI task tests and 4 email-job database tests passed; focused ESLint, `yarn typecheck`, and whitespace checks passed. Database tests used an isolated SQLite fixture for the email template, with migrations applied there; no live saved data was changed.
 - Deployment: source changes only; no running service/container replacement, production build, or deployment. Existing emails are not rewritten automatically. Tests used a mock AI provider; live-model adherence to the prose template and factual accuracy were not evaluated. Three-paragraph content is instructed through the prompt; greeting and closing are enforced during full email assembly.
 
 ## 2026-11-19 — Sliding dark mode switch
@@ -86,16 +293,16 @@
 
 ## 2026-11-19 — rolepilot rebrand and upstream communications removal
 
-- Executed `DOSSIER_REMOVAL_AUDIT.md` with the selected lowercase name rolepilot. Replaced web/desktop names, R-mark/icon assets, metadata, errors, download names, user agents, MCP/OAuth/desktop/print identities, package locks, configuration examples, CI wording and active docs. Added shared `src/lib/brand.ts`, local help and `PROVENANCE.md`; preserved LICENSE, font attribution, migration/checksum identities and earlier changelog entries.
+- Applied the branding audit and adopted the Rolepilot name. Replaced web/desktop names, R-mark/icon assets, metadata, errors, download names, user agents, MCP/OAuth/desktop/print identities, package locks, configuration examples, CI wording and active docs. Added shared `src/lib/brand.ts`, local help and `PROVENANCE.md`; preserved LICENSE, font attribution, migration/checksum identities and earlier changelog entries.
 - Deleted usage telemetry sender/consent/actions/startup hooks/config and dedicated tests/fake endpoints; removed upstream promotions/contact/funding and stale update/usage copy. Remote announcements/releases were already removed from source and are now absent from the deployed build. Functional saves/errors/progress/integration notifications remain.
 - Added v2 credential encryption and transactional legacy rewrapping (`keys.ts`, `secrets.ts`, `rebrand-secrets.ts`, instrumentation); retained recovery for unreadable secrets and old env/exports/themes/backups/browser drafts/preferences/Calendar/desktop storage. Existing secret/password unchanged; browser sessions and MCP tokens require fresh authorization. No rebranding SQL migration needed.
 - Checks: production build, typecheck/lint, desktop build, diff whitespace; Node/DOM 1,607 passed/31 skipped plus final focused crypto/compatibility 18 passed; SQLite 612 passed/3 skipped; Postgres 614 passed/1 skipped. Sign-in, MCP, Google mail, optimization/history, theme file and PDF-font browser checks passed. One existing cover-letter theme UI/database synchronization discrepancy remains documented in the audit; its browser assertion is not suppressed.
 - Deployed local Docker `rolepilot-app-1` / `rolepilot:rebrand-local` on port 3000 with the original external volume; migrated local `.env` names without exposing values. Applied the previously authorized pending memory/optimization migrations after an offline copy upgrade preserved 36 existing table counts. Live routes/export/PDF/health passed; integrity `ok`, foreign-key errors zero; only Job/AiUsage counts increased due to normal newly deployed memory backfill (which makes configured provider calls). Live saved settings credentials are v2.
-- Preserved old container/image and consistent data/secret recovery files under `~/.local/share/rolepilot/backups/pre-rebrand-20261119T042611Z/`. Rollback needs the matching data/config restore, not just the older image. Deployed compiled scan found zero old notification/telemetry endpoints/control strings; offline fetch tracing found no upstream project hosts. Native installers were not packaged/published or installed. Exact scope, remaining legal/history/compatibility matches, checks and limitations: `DOSSIER_REMOVAL_AUDIT.md` execution record.
+- Preserved old container/image and consistent data/secret recovery files under `~/.local/share/rolepilot/backups/pre-rebrand-20261119T042611Z/`. Rollback needs the matching data/config restore, not just the older image. Deployed compiled scan found zero old notification/telemetry endpoints/control strings; offline fetch tracing found no upstream project hosts. Native installers were not packaged/published or installed. See the deployment guide for storage and recovery details.
 
 ## 2026-11-18 — Branding and upstream-connection removal audit
 
-- Added `DOSSIER_REMOVAL_AUDIT.md`: scoped inventory of 271 matching files, remaining telemetry/promotional links, web/desktop assets, external request identity, MCP/OAuth, cookies, encryption, exports/themes/backups, calendar ownership, packaging/deployment and legal/provenance boundaries. Documents compatibility risks, removal sequence and verification criteria; no removal implementation claimed.
+- Added the branding audit, covering an inventory of 271 matching files, remaining telemetry/promotional links, web/desktop assets, external request identity, MCP/OAuth, cookies, encryption, exports/themes/backups, calendar ownership, packaging/deployment and legal/provenance boundaries. Documents compatibility risks, removal sequence and verification criteria; no removal implementation claimed.
 - Validation: read-only static source/config/history inspection; Docker identity and compiled-string inspection confirmed the older running image still contains release/announcement functionality already removed from source. Documentation whitespace check passed. No live data/config edits, provider calls, network capture, tests or deployment; replacement product identity remains unspecified.
 
 ## 2026-11-18 — Frontend writing settings clarification
@@ -112,7 +319,7 @@
 - Added paired `20261118130000_resume_optimization` migrations: PostgreSQL renames its existing Creativity enum value; both backends convert raw key/value EXPRESSIVE settings and remove retired language keys. Settings parsing and backup imports normalize the old mode before validation; exports canonicalize it. Backup format stays 15 because generic setting and historical document shapes are unchanged; previously supported import versions remain accepted. No new tables or application-language column removal.
 - Affected files: both Prisma schemas/new migrations; `src/lib/ai/provider.ts`, task options and writing/extraction/matching tasks; settings/data import/export; writing/refinement jobs, document-state and application creation/Undo; connector tools/write; settings UI, base-resume rendering inputs, gallery and affected fixtures. Added `src/lib/ai/tasks/optimization.test.ts`, `src/lib/optimization-migration.db.test.ts`, `e2e/optimization.spec.ts` and regression coverage in settings/import/jobs/actions tests. Updated `DEVELOPMENT.md`, `PRIVACY.md` and the implementation plan's status/compatibility notes.
 - Validation: regenerated both Prisma clients; TypeScript/production build, changed-file plus new-file ESLint, and `git diff --check` passed. Final Node/DOM suite: **1,611 passed, 31 skipped**. Final isolated SQLite suite: **627 passed, 3 skipped**; PostgreSQL: **629 passed, 1 skipped**. Suites ran with `TZ=UTC` for existing timezone-dependent assertions. Seven Chromium tests passed (including setup), covering Optimized persistence, generation from a German posting, section regeneration/history restoration, email rewriting/editing/chat and Undo. Mock prompt matrix covers all three approaches, strict on/off, and all six writing paths. Populated backend migration tests and legacy backup round trips passed. Actual desktop SQLite runner passed a populated pre-feature upgrade, preservation of unrelated settings, its pre-update backup's old values, and repeat-startup no-op using a temporary fixture.
-- Local test data only: `/tmp/dossier-optimization_test.db`, PostgreSQL `dossier_memory_test`, and browser database `dossier_memory_e2e`; desktop migration smoke fixture was temporary and removed. Browser AI/job services were fake; no paid-provider semantic comparisons, live historical extraction or mass regeneration ran. Exact citations validate provenance, not semantic entailment; real-model writing quality still needs the separately scoped evaluation. Complete English metadata conversion is conservative and requires explicit rewrite intent plus replacement of every existing generated prose unit; partial/mixed documents retain legacy layout metadata.
+- Local test data only: isolated SQLite, PostgreSQL and browser test databases; desktop migration smoke fixture was temporary and removed. Browser AI/job services were fake; no paid-provider semantic comparisons, live historical extraction or mass regeneration ran. Exact citations validate provenance, not semantic entailment; real-model writing quality still needs the separately scoped evaluation. Complete English metadata conversion is conservative and requires explicit rewrite intent plus replacement of every existing generated prose unit; partial/mixed documents retain legacy layout metadata.
 - Deployment: source implementation and local validation only. No live application database migration, running-app/container replacement, commit/push, installer publication or production deployment. Deploy matching code/clients/migrations together after a live-data backup; rollback to older code requires mapping OPTIMIZED back to EXPRESSIVE and compatible database handling. Existing drafts and sent snapshots were not rewritten.
 
 ## 2026-11-18 — Remove the standalone marketing website
@@ -129,10 +336,8 @@
 - Retired notification keys, including `updateCheck`, remain excluded by `INSTALL_SETTINGS` in `src/lib/data-export.ts` so existing database rows are inert and older backups cannot reintroduce active settings. No schema migration or live-data deletion. Updated `DEVELOPMENT.md` and `PRIVACY.md` to reflect the removed requests.
 - Validation: 62 focused tests passed across settings/environment parsing, desktop recovery, signed-in layout (no update requests or cached notices), About controls, and SQLite export/import compatibility. Root TypeScript check, targeted ESLint, production build, desktop TypeScript check/build, and whitespace checks passed. Desktop dependencies were installed with `yarn install --immutable`; no lockfile changes. Initial test/check attempts caught test setup/type issues and an SQLite/PostgreSQL environment mismatch; corrected before the passing runs.
 - Browser validation: Playwright smoke check against the built app on temporary port 3118 passed sign-in, dashboard/navigation, Settings → About, and a saved application page. Populated legacy notification settings produced no notices; retained About controls and version information were present. The mocked layout regression verifies no notification fetches; no server-side network capture was performed.
-- Local data operations: migrated/reset/seeded only `/tmp/dossier_updates_20261118_test.db` for automated tests and smoke checks, with temporary app data under `/tmp/dossier-updates-smoke`. Stopped the temporary server/browser afterward. Existing application data and unrelated working-tree changes were preserved.
+- Local data operations: migrated/reset/seeded only an isolated SQLite fixture for automated tests and smoke checks, with temporary app data under a temporary directory. Stopped the temporary server/browser afterward. Existing application data and unrelated working-tree changes were preserved.
 - Deployment: source implementation and local build validation only; no production app/container rebuilt or restarted and no desktop installer published. Installed copies require a rebuilt release/reinstallation. Native Electron window interaction, packaged Windows/Linux installers, and PostgreSQL-specific E2E tests were not run; desktop recovery behavior was exercised through its actual HTML/JavaScript in JSDOM.
-
-# Dossier change log
 
 ## 2026-11-18 — User-directed Refine with AI implemented
 
@@ -144,7 +349,7 @@
 - Implementation files: `src/lib/ai/tasks/refine-chat.ts`, `src/lib/jobs/refine.ts`, `src/lib/memory/context.ts`, `src/app/(app)/applications/[id]/actions.ts`, `src/app/(app)/applications/[id]/application-view.tsx`, and `src/components/application-evidence-form.tsx`. Updated `REFINE_CHAT_IMPLEMENTATION_PLAN.md` with implementation status.
 - Test files: `src/lib/ai/tasks/tasks.test.ts`, `src/lib/jobs/refine.db.test.ts`, `src/app/(app)/applications/[id]/actions.db.test.ts`, `src/app/(app)/applications/[id]/application-view.test.tsx`, and `src/components/application-evidence-form.test.tsx`.
 - Validation: 61 AI task tests, 83 UI tests, and 128 SQLite database tests passed (272 total). Database suites included refinement, application actions, initial-generation actions, and candidate memory. `yarn typecheck`, `yarn lint`, and `git diff --check` passed. The initial combined test invocation lacked database configuration and failed during startup; explicit project runs with an isolated SQLite test URL succeeded. Two new test assertions were corrected before the final passing runs.
-- Local data operations: the test harness created/migrated and reset only `/tmp/dossier_refine_20261118_test.db`. No application database, Docker data volume, or existing saved history was modified. Existing unrelated workspace changes were preserved.
+- Local data operations: the test harness created/migrated and reset only an isolated SQLite fixture. No application database, Docker data volume, or existing saved history was modified. Existing unrelated workspace changes were preserved.
 - Deployment: source implementation only; the running Docker app was not rebuilt or restarted. Known limitations: no real-model request or manual browser walkthrough was performed; existing context-window limits and supported editor operations remain. Structural validation and concurrency checks can still reject invalid or stale edits.
 
 ## 2026-11-18 — Refine with AI rewrite plan (proposal only)
@@ -190,7 +395,7 @@ The initial history below was reconstructed on 2026-11-15 from this conversation
 
 ## 2026-11-15 — Requested local data reset and restart
 
-- At the user's explicit request, stopped the local Docker app, removed the `dossier_data` volume, and restarted the application with empty saved data.
+- At the user's explicit request, stopped the local Docker app, removed the application data volume, and restarted the application with empty saved data.
 - This was a one-time destructive reset. Subsequent deployments preserved the database and volume.
 - Preserved `.env` configuration and credentials; no secrets are recorded here.
 
@@ -270,7 +475,7 @@ The initial history below was reconstructed on 2026-11-15 from this conversation
 
 - Confirmed the regression test failed against the old build with 603 px of unexpected outer-page overflow.
 - After the fix: 20 workspace tests and all 6 browser tests passed; lint, production build/type checking, and `git diff --check` passed.
-- Rebuilt the production Docker image and recreated `dossier-app-1` using `compose.local.yml`, preserving the existing data volume.
+- Rebuilt the production Docker image and recreated the local app container using `compose.local.yml`, preserving the existing data volume.
 - Confirmed `/api/health` returned healthy app and database status.
 - Verified the deployed app with the real profile at 1400 × 900: Themes, Customize, and Sections each had a document height of 900 px and no outer scrolling, including an explicit scroll-to-bottom attempt.
 - Data counts remained 12 themes, 4 experience entries, 1 project, and 0 applications.
@@ -437,7 +642,7 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 
 - Node baseline: **156 tests passed across 11 files** covering AI tasks, fact guards, tailoring summaries, score input, skill groups, resume content, OpenRouter routing, structured output, document generation, frozen-copy handling, and section behavior (as matched by the selected test filters).
 - DOM baseline: **164 tests passed across 2 files** covering resume rendering and application view behavior.
-- SQLite integration baseline: **21 tests passed across 5 files** covering missing-document generation, refinement, regeneration, resume scoring, and connector writes. Used the isolated `/tmp/dossier-tailoring-audit-20261115_test.db`; did not reset or mutate the running app database.
+- SQLite integration baseline: **21 tests passed across 5 files** covering missing-document generation, refinement, regeneration, resume scoring, and connector writes. Used an isolated SQLite fixture for the tailoring audit; did not reset or mutate the running app database.
 - Total: **341 passing tests**. `yarn typecheck` passed. `git diff --check` passed after documenting the audit.
 - Did not run live paid AI requests, browser/PDF end-to-end exports, production build/deployment, or tests of the unimplemented new behavior during this audit. Only this change log was edited; the user's prompt edit was preserved.
 
@@ -526,7 +731,7 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 
 ### Deployment and live smoke check
 
-- Built and deployed `dossier:openrouter-local` using `docker compose -f compose.local.yml up -d --force-recreate`; retained the existing data volume and `.env`. Deployed image config: `879e59ea5ba7ceec469a7d47759cf44bd7e7c3370b43c2ce3a09f52bff247c57`. No schema migration was needed for this feature.
+- Built and deployed the local OpenRouter image using `docker compose -f compose.local.yml up -d --force-recreate`; retained the existing data volume and `.env`. Deployed image config: `879e59ea5ba7ceec469a7d47759cf44bd7e7c3370b43c2ce3a09f52bff247c57`. No schema migration was needed for this feature.
 - Health returned app/database OK. Post-deployment counts matched the backup: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 2.
 - Read-only Chromium smoke check on the deployed app: new application screen loaded; the existing application's Job posting tab exposed 8 application-only evidence actions; the supporting-experience form and save control opened successfully and were cancelled without saving. The base resume rendered with zero outer-page overflow at 1400 × 900.
 - Removed temporary browser authentication state and closed the smoke browser. Removed the temporary PostgreSQL test container after testing. No paid AI request was made against the user's live configuration.
@@ -539,7 +744,7 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 - Changed files: `src/lib/ai/tasks/refine-chat.ts`, `src/lib/ai/tasks/tasks.test.ts`, `src/lib/jobs/refine.db.test.ts`, `e2e/fake-ai.mts`, `e2e/refine.spec.ts`, and this log. Prompt version is `refine-chat@11`; no schema/API changes or new dependencies.
 - Validation: 59 task tests passed; SQLite integration 14 passed with one PostgreSQL-only skip; PostgreSQL integration 15 passed, including concurrency. Chromium 10 passed, including requested profile-absent content, reload/Undo and the application-evidence flow with PDF/Undo/isolation checks. Production build, typecheck, changed-file lint and diff whitespace checks passed.
 - Before deployment, backed up live SQLite to `/data/backups/pre-free-refinement-1794722518619.db`. Counts: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 1. The document count reflects the live state before this deployment; no documents were removed by this task.
-- Deployment: rebuilt `dossier:openrouter-local` and recreated the app container using `compose.local.yml`, retaining the data volume and `.env`. Image manifest: `d2d3efe315d784f1225545456c54832ecf9d46bfd15e13185fe005330d102f9f`. Live health returned app/database OK and the saved-data counts matched the pre-deployment counts. Removed the temporary PostgreSQL test container and its test volume.
+- Deployment: rebuilt the local OpenRouter image and recreated the app container using `compose.local.yml`, retaining the data volume and `.env`. Image manifest: `d2d3efe315d784f1225545456c54832ecf9d46bfd15e13185fe005330d102f9f`. Live health returned app/database OK and the saved-data counts matched the pre-deployment counts. Removed the temporary PostgreSQL test container and its test volume.
 - Limits: no paid live AI calls were tested. Refinement still operates on existing text units; adding/reordering sections, changing layout and private contact fields remain outside this change. Model responses may still fail or decline; failures are reported rather than presented as successful edits.
 
 ## 2026-11-15 — Remove Refine with AI suggested actions
@@ -549,7 +754,7 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 - Files: `src/app/(app)/applications/[id]/refine-panel.tsx`, `application-view.tsx`, `page.tsx`, `application-view.test.tsx` (all in that directory), deleted `src/lib/refine-suggestions.ts` and `src/lib/refine-suggestions.test.ts`, and this log. No AI prompts, database schema or dependencies changed.
 - Validation: all 74 application-view DOM tests passed; all 6 refinement Chromium tests passed, including sending, reload and Undo. Type checking, production build, changed-file lint and diff whitespace checks passed. Search found no remaining generator imports/types or suggestion props. An email test's old suggestion click was replaced with a typed request, and its textbox lookup corrected after the first check exposed a test-local helper scope issue.
 - Backed up live SQLite to `/data/backups/pre-remove-suggestions-1794723449765.db`. Counts before deployment: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 1.
-- Deployment: rebuilt `dossier:openrouter-local` (manifest `9a17bb3f5d40ff9393a933fb4f22dd0dcbae69599b00920c9141c67527061971`) and recreated the container with the existing data volume and `.env`. Live app/database health was OK and counts matched the backup.
+- Deployment: rebuilt the local OpenRouter image (manifest `9a17bb3f5d40ff9393a933fb4f22dd0dcbae69599b00920c9141c67527061971`) and recreated the container with the existing data volume and `.env`. Live app/database health was OK and counts matched the backup.
 - Read-only deployed Chromium checks at 1400×900 and 390×844: the panel exposed only Send, input access worked, and the conversation retained an independently scrollable area. The narrow-width check also found overall page horizontal overflow (704px page width at 390px viewport, involving the surrounding main/resume canvas). No surrounding layout styles were changed for this removal; that separate layout issue was left outside this task.
 - Closed the smoke browser and removed its temporary authentication file. No paid AI calls were performed; Safari/Firefox were not tested.
 - Removed the temporary PostgreSQL browser-test container and its test volume after validation.
@@ -561,7 +766,7 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 - Files: `src/app/(app)/applications/[id]/refine-panel.tsx`, `src/app/(app)/applications/[id]/application-view.test.tsx`, and this log. Added a DOM assertion that the heading/subtitle belong to the conversation while the input and Send control do not.
 - Validation so far: 75 application-view tests passed; changed-file lint and production build/type checking passed. No prompts, database schema or AI behavior changed. Deployment/browser scrolling verification is recorded below.
 - Backed up SQLite before deployment to `/data/backups/pre-scroll-heading-1794723863822.db`; live counts: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 1.
-- Deployment: rebuilt `dossier:openrouter-local` (manifest `500ea447b0dc04d55e0a7df59c33b6b19018f56191f34d1de984fbf2fefebc8b`) and recreated the app container, retaining the existing data volume and `.env`. Health returned app/database OK and saved counts matched the backup.
+- Deployment: rebuilt the local OpenRouter image (manifest `500ea447b0dc04d55e0a7df59c33b6b19018f56191f34d1de984fbf2fefebc8b`) and recreated the app container, retaining the existing data volume and `.env`. Health returned app/database OK and saved counts matched the backup.
 - Deployed Chromium checks at 1400×900 and 390×844 used temporary browser-only content to exercise long-conversation scrolling without saving messages or calling AI. The heading was hidden at the newest messages, visible at the conversation beginning, and hidden again on return; the input's position remained identical throughout each check. Temporary content was removed, the browser closed and its temporary authentication file deleted.
 - Limits: Safari/Firefox and paid live AI were not tested. The previously recorded narrow-page horizontal overflow is outside this heading change.
 
@@ -631,7 +836,7 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 - Final Node/AI/helper selection: 307 passed; 24 paid live-provider cases skipped. UI/rendering: 178 passed, including unchanged base-resume snapshots. SQLite integration: 179 passed, with one PostgreSQL-only concurrency test skipped. PostgreSQL integration: 154 passed, including concurrency, local-state Undo, theme changes during refinement, frozen-copy independence, backup round trips and mocked Google sending.
 - Chromium: all 16 selected scenarios passed across refinement, email, initial application evidence and version history. A final 7-case refinement rerun passed after the concurrent-theme guard. The new scenario verifies role metadata, a local awards section, inline marks, persisted typography/margins, US Letter PDF dimensions (612×792 points), text extraction, Undo/history restoration and unchanged global profile/themes/other documents.
 - Production build/type checking, lint over changed/new TypeScript files and diff whitespace checks passed. No real paid AI request or external email was sent. Firefox/Safari were not tested.
-- Captured live SQLite backup `/data/backups/pre-document-state-1794762160702.db`; preserved the previous image as `dossier:pre-document-state`. Live counts before deployment: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 1. Docker deployment is pending the build below.
+- Captured live SQLite backup `/data/backups/pre-document-state-1794762160702.db`; preserved the previous image under a pre-document-state rollback tag. Live counts before deployment: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 1. Docker deployment is pending the build below.
 - Limits: existing registered fonts and layout structures only; no arbitrary HTML/CSS, new image uploads or HTML email. Snapshotting photos and full state can increase backup size. Legacy text-only history restores text without fabricating historical formatting. Undo refuses to overwrite subsequent document edits. Model interpretation is not guaranteed by fixture tests.
 - Final compatibility additions: shared document saving synchronizes manually edited local text/skills for subsequent AI work while retaining omitted entries for Put back. Added regression coverage. Local resumes can set exact per-entry displayed date labels; explicit letter date changes update an existing date unit. Cover letters retain the existing single-column frame; resume-only layout fields are rejected rather than silently ignored.
 - Final follow-up checks: 93 targeted Node tests and 4 local-rendering tests passed; production build/type checking passed. Targeted save/refinement/action database checks passed on SQLite (93 passed, one PostgreSQL-only skip). Final PostgreSQL and browser follow-up results are recorded after completion below.
@@ -639,10 +844,10 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 ### Completed deployment and smoke check
 
 - Final follow-up PostgreSQL save/refinement/action tests: 94 passed. The final targeted Chromium full-state/PDF/Undo/history scenario and its setup both passed after the shared text synchronization change. Final targeted lint and diff checks passed.
-- Deployed the final `dossier:openrouter-local` image (manifest `488a42718b969ed222e87cdfb0f60e9b400bc3e3e0b7359d0848c1fce039a969`) with `docker compose -f compose.local.yml up -d --force-recreate`. The additive SQLite migration `20261115180000_local_document_state` completed successfully. Retained the existing data volume and `.env`.
+- Deployed the final the local OpenRouter image image (manifest `488a42718b969ed222e87cdfb0f60e9b400bc3e3e0b7359d0848c1fce039a969`) with `docker compose -f compose.local.yml up -d --force-recreate`. The additive SQLite migration `20261115180000_local_document_state` completed successfully. Retained the existing data volume and `.env`.
 - App/database health returned OK and the container is healthy. Post-deployment counts match the pre-deployment backup: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 1. Existing live documents still have null local state; deployment did not rewrite them.
 - Read-only deployed Chromium smoke check: existing resume and chat input loaded, new formatting guidance appeared, and PDF download returned HTTP 200 with a valid PDF content type and a non-empty body. No paid AI request was sent against the live configuration.
-- Closed the smoke browser, deleted its temporary authentication state, and removed the temporary PostgreSQL test container and its test volume. The previous image remains tagged `dossier:pre-document-state` and the pre-migration SQLite backup remains in `/data/backups`.
+- Closed the smoke browser, deleted its temporary authentication state, and removed the temporary PostgreSQL test container and its test volume. The previous image remains available under a pre-document-state rollback tag and the pre-migration SQLite backup remains in `/data/backups`.
 
 ## 2026-11-16 — Navy Sidebar cover-letter format
 
@@ -672,8 +877,8 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 
 ### Local rollout
 
-- Captured live SQLite backup `/data/backups/pre-letter-layout-1794778059368.db` and tagged the previous image `dossier:pre-letter-layout`. Live counts at backup: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 2. The live app gained a second document since the previous feature's rollout; this task did not create it.
-- Deployed `dossier:openrouter-local` manifest `a686b98bc595461f435541c90d2e0411ef034fd10242281469e802d3a53f6057` with `docker compose -f compose.local.yml up -d --force-recreate`. Additive migration `20261116090000_cover_letter_layout` completed. Retained the existing volume and environment. Existing letters remain Classic until explicitly switched.
+- Captured live SQLite backup `/data/backups/pre-letter-layout-1794778059368.db` and tagged the previous image for rollback. Live counts at backup: Theme 13, Experience 4, Project 1, Application 1, Skill 51, Fact 0, Document 2. The live app gained a second document since the previous feature's rollout; this task did not create it.
+- Deployed the local OpenRouter image manifest `a686b98bc595461f435541c90d2e0411ef034fd10242281469e802d3a53f6057` with `docker compose -f compose.local.yml up -d --force-recreate`. Additive migration `20261116090000_cover_letter_layout` completed. Retained the existing volume and environment. Existing letters remain Classic until explicitly switched.
 - Live app/database health OK; container healthy. Counts match the backup. Compared saved document IDs, application IDs, kinds, text units, local state, themes, writer tags, trimmed parts and update timestamps against the backup: all unchanged. Initial-format tags remain null on existing rows.
 - Read-only deployed Chromium smoke: existing resume loads; PDF response HTTP 200, valid content type, 46,058 bytes. The missing cover-letter tab loads without an inappropriate format selector. No live letter was generated and no paid AI call was made.
 - Removed the temporary PostgreSQL test container/volume, closed the smoke browser and deleted its temporary authentication file. Retained the database backup and previous-image tag for rollback.
@@ -691,15 +896,15 @@ Reviewed the proposed whole-resume job-description wording and evidence-supporte
 
 ## 2026-11-16 — Restart with application resume sidebar changes
 
-- At the user’s request, rebuilt the production Docker image `dossier:openrouter-local` from the current workspace and recreated `dossier-app-1` using `docker compose -f compose.local.yml up -d --force-recreate`, so the implemented resume sidebar controls are available locally.
-- Retained the existing `dossier_data` volume and Compose environment. Preserved the previous image as `dossier:pre-resume-sidebar`. New running image ID: `sha256:3338d26cbb46abfd70df205451ba84dc9ad1a1ac401e9c26b126cb0a3eab2e53`.
+- At the user’s request, rebuilt the production Docker image the local OpenRouter image from the current workspace and recreated the local app container using `docker compose -f compose.local.yml up -d --force-recreate`, so the implemented resume sidebar controls are available locally.
+- Retained the existing data volume and Compose environment. Preserved the previous image as a pre-sidebar rollback tag. New running image ID: `sha256:3338d26cbb46abfd70df205451ba84dc9ad1a1ac401e9c26b126cb0a3eab2e53`.
 - Validation: Docker production build succeeded; startup reported no pending migrations; `http://localhost:3000/api/health` returned `status: ok` and `db: ok`. No new schema migration or application data editing was performed. This operation changed the local deployment and this changelog; no additional source changes were needed.
 
 ## 2026-11-16 — Space below the resume sidebar switch
 
 - Added 16px of bottom margin beneath the Refine with AI / Resume controls switch, separating the navigation from the content below while retaining the content’s existing padding. Applies to both sidebar views.
 - Affected files: `src/app/(app)/applications/[id]/resume-sidebar.tsx` and this changelog.
-- Validation: targeted ESLint and whitespace checks passed; Docker production build including TypeScript checking passed. Rebuilt `dossier:openrouter-local` and recreated the local application container with the existing volume/environment. Health endpoint returned `status: ok` and `db: ok` after restart.
+- Validation: targeted ESLint and whitespace checks passed; Docker production build including TypeScript checking passed. Rebuilt the local OpenRouter image and recreated the local application container with the existing volume/environment. Health endpoint returned `status: ok` and `db: ok` after restart.
 - No new tests or browser visual inspection for this spacing-only adjustment; no data or schema changes.
 
 ## 2026-11-16 — Publish the current application source to GitHub

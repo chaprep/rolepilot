@@ -16,13 +16,13 @@ export type SecretKind = { purpose: KeyPurpose; associatedData: string };
 export const AI_API_KEY: SecretKind = { purpose: "api-key-encryption", associatedData: "rolepilot api key v2" };
 /** A job source's API key (E14-4). */
 export const JOB_SOURCE_KEY: SecretKind = { purpose: "job-source-key-encryption", associatedData: "rolepilot job source key v2" };
-export const ZYTE_KEY: SecretKind = { purpose: "zyte-key-encryption", associatedData: "rolepilot zyte key v2" };
 /** The TypeSafe key Jev scores postings with (#274). */
 export const TYPESAFE_KEY: SecretKind = { purpose: "typesafe-key-encryption", associatedData: "rolepilot typesafe key v2" };
 /** The Google account's refresh token (E15-1). */
 export const GOOGLE_TOKEN: SecretKind = { purpose: "google-token-encryption", associatedData: "rolepilot google token v2" };
 /** The Google OAuth client's secret, entered in Settings → Google. */
 export const GOOGLE_CLIENT_SECRET: SecretKind = { purpose: "google-client-secret-encryption", associatedData: "rolepilot google client secret v2" };
+export const ONE_CONFIG: SecretKind = { purpose: "one-config-encryption", associatedData: "rolepilot one configuration v2" };
 
 const VERSION = "v2";
 const IV_BYTES = 12;

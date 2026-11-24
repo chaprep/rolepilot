@@ -112,9 +112,11 @@ export const settingsSchema = z.object({
   model: z.string().nullable().catch(null),
   /** Encrypted with a key derived from ROLEPILOT_SECRET (E6-2); never sent to the client. */
   apiKeyEnc: z.string().nullable().catch(null),
-  zyteKeyEnc: z.string().nullable().catch(null),
-  zyteVerified: flag(false),
-  companyResearchEnabled: flag(false),
+  openRouterVerifiedKey: z.string().nullable().catch(null),
+  oneConfigEnc: z.string().nullable().catch(null),
+  oneUserReference: z.string().nullable().catch(null),
+  oneMuapiConnectionKey: z.string().nullable().catch(null),
+  oneExaConnectionKey: z.string().nullable().catch(null),
   creativity: z.preprocess(value => value === "EXPRESSIVE" ? "OPTIMIZED" : value, z.enum(Creativity).catch(Creativity.BALANCED)),
   /** "Never invent experience" (SET-4). */
   strict: flag(true),

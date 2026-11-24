@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { decryptApiKey } from "@/lib/ai/api-key";
+import { loadAiSettingsView } from "@/lib/ai/config";
 import { MockProvider } from "@/lib/ai/providers/mock";
 import { loadSettings } from "@/lib/settings-data";
 import { createTestClient, resetDatabase } from "@/test/db";
@@ -28,6 +29,7 @@ import {
   testAiConnection,
   testJev,
   testJobSource,
+  testOpenRouterConnection,
   updateSettings,
 } from "./actions";
 
@@ -42,6 +44,7 @@ vi.mock("@/lib/auth/session", () => ({
   getSession: async () => ({ persistent: false, issuedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) }),
 }));
 vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "a".repeat(32) } }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 // The real config and key handling, with a mock model behind them.
 const provider = vi.hoisted(() => ({ current: undefined as unknown }));
 vi.mock("@/lib/ai", async (importOriginal) => ({
@@ -64,6 +67,37 @@ describe("fixed AI settings", () => {
   const before=await settings();
   expect(await saveAiProvider({provider:"LOCAL",baseUrl:"http://localhost",model:"other"})).toMatchObject({ok:false});
   expect(await settings()).toEqual(before);
+ });
+
+ it("returns one connection status and keeps inference checks for writing and scoring", async () => {
+  expect(await testOpenRouterConnection({})).toEqual({
+    ok: true, data: { connected: false, message: "Enter your OpenRouter API key first." },
+  });
+  await saveApiKey({ provider: "OPENAI", change: { action: "set", value: "test-key" } });
+  expect(await loadAiSettingsView()).toMatchObject({ keyState: "set", verified: false });
+  const generation = new MockProvider({ reply: () => ({ ok: true }) });
+  provider.current = generation;
+  const requests = stubFetch(() => json({ model: "jev-1.14.0", answers: { check: { type: "noul", noul: 0.98 } } }));
+  try {
+    expect(await testOpenRouterConnection({})).toEqual({
+      ok: true, data: { connected: true, message: "OpenRouter connection verified." },
+    });
+    expect(generation.calls).toHaveLength(2);
+    expect(await loadAiSettingsView()).toMatchObject({ verified: true });
+    expect(requests.map(request => request.url.pathname)).toEqual(["/api/v1/systemone"]);
+    stubFetch(() => json({}, { status: 404 }));
+    expect(await testOpenRouterConnection({})).toEqual({
+      ok: true,
+      data: { connected: false, message: "OpenRouter did not pass all connection checks. Check your OpenRouter credits and access, then try again." },
+    });
+    expect(await loadAiSettingsView()).toMatchObject({ verified: false });
+    stubFetch(() => json({ model: "jev-1.14.0", answers: { check: { type: "noul", noul: 0.98 } } }));
+    await testOpenRouterConnection({});
+    await saveApiKey({ provider: "OPENAI", change: { action: "set", value: "replacement-key" } });
+    expect(await loadAiSettingsView()).toMatchObject({ keyState: "set", verified: false });
+  } finally {
+    vi.unstubAllGlobals();
+  }
  });
 });
 

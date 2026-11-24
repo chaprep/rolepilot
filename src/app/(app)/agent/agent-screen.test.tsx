@@ -199,9 +199,9 @@ describe("AgentScreen (E16-6)", () => {
     expect(screen.getByRole("note")).toHaveTextContent("The whole batch needs more source requests than are available.");
   });
 
-  it("links missing Jev credentials to the scoring settings", () => {
-    open({ setupProblem: "Enter your TypeSafe key in Settings → Scoring first.", setupSection: "scoring" });
-    expect(screen.getByRole("link", { name: "Go to Settings → Scoring" })).toHaveAttribute("href", "/settings?section=scoring");
+  it("links missing scoring credentials to AI provider settings", () => {
+    open({ setupProblem: "Enter your OpenRouter key in Settings → AI provider first.", setupSection: "ai" });
+    expect(screen.getByRole("link", { name: "Go to Settings → AI provider" })).toHaveAttribute("href", "/settings?section=ai");
   });
 
   it("says when there's nothing yet", () => {

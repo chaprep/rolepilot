@@ -48,6 +48,26 @@ export function WriteMissingDocument({
       setJobId(result.data);
     });
 
+  if (kind === "COVER_LETTER") {
+    return (
+      <div className="flex flex-1 flex-col items-center overflow-auto bg-canvas px-4 py-8 sm:px-10 sm:pt-11 sm:pb-16">
+        <section className="flex w-full max-w-[560px] flex-col items-start gap-3 rounded-panel border border-line-card bg-card px-7 py-7">
+          <h2 className="product-heading text-section">Cover letter</h2>
+          <p className="text-sm text-muted">
+            I’ll draft a cover letter tailored to this role using your experience, the job posting, and relevant company research when available. You can review and edit it before sending.
+          </p>
+          {aiReady ? (
+            <Button className="mt-1" disabled={busy} onClick={write}>
+              {busy ? `${job?.step ?? "Writing the cover letter"}…` : "Write the cover letter"}
+            </Button>
+          ) : (
+            <p className="text-sm text-muted">Choose an AI provider in Settings → AI provider to write your cover letter.</p>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 justify-center overflow-auto bg-canvas px-10 pt-16 pb-16">
       <div className="flex max-w-[420px] flex-col items-center gap-4 text-center">

@@ -2,60 +2,67 @@
 
 import { useState } from "react";
 import { useTrackSave } from "@/components/save-tracker";
+import { CheckCircle2 } from "lucide-react";
 import { AiProvider } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MODEL_ASSIGNMENTS, JEV, modelForTask } from "@/lib/ai/assignments";
 import type { AiSettingsView } from "@/lib/ai/provider-options";
 import { saveApiKey, testOpenRouterConnection } from "./actions";
 
-export function AiProviderSection({ initial }: { initial: AiSettingsView }) {
+export function AiProviderSection({ initial }: { initial: AiSettingsView & { verified?: boolean } }) {
   const track = useTrackSave();
   const [key, setKey] = useState("");
   const [state, setState] = useState(initial.keyState);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [results, setResults] = useState<{ model: string; connected: boolean; message: string }[]>([]);
+  const [verified, setVerified] = useState(initial.verified ?? false);
+  const hasKey = state === "set" || state === "env";
+  const showVerification = verified && !message;
   async function save(clear = false) {
     setBusy(true);
     try {
       const result = await track(saveApiKey({ provider: AiProvider.OPENAI,
         change: clear ? { action: "clear" } : { action: "set", value: key } }));
-      if (result.ok) { setState(result.data.keyState); setKey(""); setResults([]); setMessage("API key updated."); }
-      else setMessage(result.error);
+      if (result.ok) {
+        setState(result.data.keyState);
+        setKey("");
+        setVerified(false);
+        setMessage(clear ? "Saved key removed." : "API key saved. Select Test connection to verify OpenRouter.");
+      } else setMessage(result.error);
     } finally { setBusy(false); }
   }
   async function test() {
-    setBusy(true); setResults([]); setMessage("Checking Luna, Sonnet, and Jev…");
+    setBusy(true);
+    setVerified(false);
+    setMessage("Checking your OpenRouter connection…");
     try {
       const result = await testOpenRouterConnection({});
-      if (result.ok) { setResults(result.data.results); setMessage("Connection checks finished."); }
-      else setMessage(result.error);
+      setVerified(result.ok && result.data.connected);
+      setMessage(result.ok ? (result.data.connected ? "" : result.data.message) : result.error);
     } finally { setBusy(false); }
   }
-  return <div className="flex flex-col gap-5">
-    <div><h2 className="text-lg font-medium">OpenRouter</h2>
-      <p className="text-sm text-muted">One API key connects the models assigned to each task. Your profile and task content go to OpenRouter and the model provider.</p></div>
+  return (
     <Card className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-lg font-medium">OpenRouter</h2>
+        <p className="text-sm text-muted">Your profile and task content go to OpenRouter and the provider processing your request.</p>
+      </div>
       <Input label="OpenRouter API key" type="password" autoComplete="off" value={key}
         onChange={(event) => setKey(event.target.value)}
         placeholder={state === "set" ? "Saved · enter a new key to replace it" : state === "env" ? "Using ROLEPILOT_AI_KEY" : "Enter your OpenRouter API key"}
         hint={state === "unreadable" ? "The saved key cannot be read. Enter it again." : "Stored encrypted on your server."} />
       <div className="flex flex-wrap gap-3">
-        <Button disabled={busy || !key.trim()} onClick={() => void save()}>Save key</Button>
+        <Button variant={hasKey && !key.trim() ? "secondary" : "primary"} disabled={busy || !key.trim()} onClick={() => void save()}>Save key</Button>
         {(state === "set" || state === "unreadable") && <Button variant="secondary" disabled={busy} onClick={() => void save(true)}>Remove saved key</Button>}
-        <Button variant="secondary" disabled={busy || Boolean(key.trim())} onClick={() => void test()}>Test connection</Button>
+        <Button variant={hasKey && !verified && !key.trim() ? "primary" : "secondary"} disabled={busy || !hasKey || Boolean(key.trim())} onClick={() => void test()}>Test connection</Button>
       </div>
-      <p className="text-sm text-muted">Save changes before testing. Connection tests make small requests to all three models and use API credits.</p>
-      <p role="status" className="text-sm">{message}</p>
-      {results.map((result) => <p key={result.model} className="text-sm">{result.model}: {result.connected ? "Connected" : result.message}</p>)}
+      <p role="status" className={showVerification ? "flex items-center gap-2 text-sm font-medium text-success" : "text-sm"}>
+        {showVerification && <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" />}
+        {message || (verified ? "OpenRouter connection verified." : hasKey ? "Select Test connection to verify your saved key." : "")}
+      </p>
+      <p className="text-sm text-muted">Connection tests make small requests that use API credits.</p>
       <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-sm underline">Manage OpenRouter API keys</a>
     </Card>
-    <Card><h3 className="mb-3 font-medium">Models by task</h3>
-      <dl className="divide-y divide-line">{MODEL_ASSIGNMENTS.map((item) => <div key={item.task} className="flex flex-wrap justify-between gap-2 py-3 text-sm">
-        <dt>{item.label}</dt><dd className="text-muted">{item.model} · Medium</dd>
-      </div>)}<div className="flex flex-wrap justify-between gap-2 py-3 text-sm"><dt>Company research</dt><dd className="text-muted">{modelForTask("research-company")} · Cover-letter assignment</dd></div><div className="flex flex-wrap justify-between gap-2 py-3 text-sm"><dt>Job and resume scoring</dt><dd className="text-muted">{JEV}</dd></div></dl>
-    </Card>
-  </div>;
+  );
 }

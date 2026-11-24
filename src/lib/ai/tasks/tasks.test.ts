@@ -1,6 +1,6 @@
 import { zodResponseFormat } from "openai/helpers/zod";
 import { demoDocumentState } from "@/test/document-state";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { inEditorOrder, skillNamesIn } from "@/lib/skill-groups";
 
@@ -405,7 +405,7 @@ describe("writeCoverLetter", () => {
   it("returns the recipient, greeting, paragraphs and the tone's sign-off for an English letter (APP-10, E8-11)", async () => {
     const provider = model(answer);
     const { data, promptVersion } = await writeCoverLetter(provider, { profile, extracted, match, tone: "FORMAL", facts: [], posting }, options);
-    expect(promptVersion).toBe("write-cover-letter@8");
+    expect(promptVersion).toBe("write-cover-letter@10");
     expect(data).toEqual([
       { id: "recipient", label: "Recipient", text: "Ledgerly · Hiring team\nAmsterdam" },
       { id: "greeting", label: "Greeting", text: "Dear Ledgerly team," },
@@ -525,7 +525,7 @@ describe("regenerateUnit", () => {
     const unit = resume.find((entry) => entry.id === "experience:e1")!;
     const provider = model({ text: "- Rebuilt the carrier portal\n• Grew the design system\n" });
     const { data, promptVersion } = await regenerateUnit(provider, { kind: "RESUME", unit, document: resume, profile, extracted, tone: "WARM", facts: [], posting }, options);
-    expect(promptVersion).toBe("regenerate-unit@11");
+    expect(promptVersion).toBe("regenerate-unit@13");
     expect(data).toMatchObject({ id: "experience:e1", text: "Rebuilt the carrier portal\nGrew the design system" });
     expect(prompt(provider)).toContain(`Write a new version of "${unit.label}" (experience:e1)`);
     expect(sent(provider).system).not.toContain(COVER_LETTER_APPROACH);
@@ -580,7 +580,7 @@ describe("refineChat", () => {
       declined: false,
     };
     const { data, promptVersion } = await refineChat(model(answer), input, options);
-    expect(promptVersion).toBe("refine-chat@16");
+    expect(promptVersion).toBe("refine-chat@17");
     expect(data).toEqual({
       reply: "I made the letter more formal.",
       tone: "FORMAL",
@@ -685,6 +685,13 @@ describe("refineChat", () => {
     ]);
   });
 
+  it("uses the explicitly selected document before the open tab for model routing", async () => {
+    const provider = model({ reply: "Done.", edits: [], tone: null, declined: false });
+    const complete = vi.spyOn(provider, "complete");
+    await refineChat(provider, { ...input, viewing: "EMAIL", targetDocument: "COVER_LETTER", target: "Opening" }, options);
+    expect(complete).toHaveBeenCalledWith(expect.objectContaining({ task: "refine-chat" }));
+  });
+
   it("edits the email, which it sees when there is one", async () => {
     const email = [
       { id: "to", label: "Recipient", text: "john@example.com" },
@@ -693,7 +700,9 @@ describe("refineChat", () => {
     ];
     const answer = { reply: "Shorter now.", edits: [{ document: "EMAIL", unitId: "body", text: "Dear John,\n\nHi." }], tone: null, declined: false };
     const provider = model(answer);
+    const complete = vi.spyOn(provider, "complete");
     const { data } = await refineChat(provider, { ...input, email, viewing: "EMAIL", request: "Shorter" }, options);
+    expect(complete).toHaveBeenCalledWith(expect.objectContaining({ task: "refine-email-chat" }));
     expect(data.edits).toEqual([{ document: "EMAIL", unitId: "body", text: "Dear John,\n\nHi.", previousText: "Dear John,\n\nHello." }]);
     expect(prompt(provider)).toContain("The email's units:");
     expect(sent(provider).messages.at(-1)).toEqual({ role: "user", content: "(I'm looking at the email.) Shorter" });

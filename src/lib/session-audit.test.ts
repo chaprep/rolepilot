@@ -15,6 +15,9 @@ const OPEN_ROUTES = new Set([
   // Google's redirect comes from Google's site, so route()'s same-origin check
   // would refuse it; it checks the session and its signed state itself (E15-1).
   "src/app/api/google/callback/route.ts",
+  // One's callback also returns cross-site. Both legs check the session, and
+  // the callback verifies the SDK's PKCE state and our configuration cookie.
+  "src/app/api/one/[action]/route.ts",
   // The Claude connector (#221) is called by Claude, not the browser: it
   // checks its OAuth token instead, and answers 404 while it's off.
   "src/app/api/mcp/route.ts",

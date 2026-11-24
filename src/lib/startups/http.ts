@@ -12,7 +12,7 @@ import { appVersion } from "@/lib/version";
 // end-to-end tests every request goes to the fake server instead
 // (ROLEPILOT_JOBS_TEST_BASE_URL/startups/<host>/<path>).
 
-export const STARTUPS_INFO_URL = "https://github.com/chaprep/job-finder/blob/main/PRIVACY.md#startups";
+export const STARTUPS_INFO_URL = "https://github.com/chaprep/rolepilot/blob/main/PRIVACY.md#startups";
 export const STARTUPS_USER_AGENT = `Mozilla/5.0 (compatible; rolepilot/${appVersion}; +${STARTUPS_INFO_URL})`;
 /** The product token robots.txt rules name. */
 export const ROBOTS_TOKEN = "rolepilot";

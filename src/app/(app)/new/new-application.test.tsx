@@ -93,9 +93,9 @@ describe("the paste step (E7-1)", () => {
 
   it("fetches the posting from its link, with a way back to what was there (E7-8)", async () => {
     const user = userEvent.setup();
-    vi.mocked(fetchPostingText).mockResolvedValueOnce({ ok: true, data: { text: "Ledgerly: Senior Designer\n\nWhat you'll do…", url: "https://www.jobs.ledgerly.example/123" } });
+    vi.mocked(fetchPostingText).mockResolvedValueOnce({ ok: true, data: { text: "Ledgerly: Senior Designer\n\nWhat you'll do…", url: "https://www.jobs.ledgerly.example/123", via: "direct" } });
     render(<NewApplication {...props} />);
-    expect(screen.getByText(/^Fetch asks the job site for the page from your server/)).toBeInTheDocument();
+    expect(screen.getByText(/^Fetch tries the job site first/)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Job posting"), "My own notes");
     await user.type(screen.getByLabelText(/^Link to the posting/), "jobs.ledgerly.example/123");
     await user.click(screen.getByRole("button", { name: "Fetch" }));
@@ -106,6 +106,35 @@ describe("the paste step (E7-1)", () => {
     });
     act(() => vi.mocked(toast).mock.calls.at(-1)![1]!.action!.onClick());
     expect(screen.getByLabelText("Job posting")).toHaveValue("My own notes");
+  });
+
+  it("shows an Exa import in the posting box and keeps it on a later fetch failure", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchPostingText)
+      .mockResolvedValueOnce({ ok: true, data: { text: "Posting from Exa", url: "https://jobs.example/1", via: "exa" } })
+      .mockResolvedValueOnce({ ok: false, error: "Paste the posting instead." });
+    render(<NewApplication {...props} />);
+    await user.type(screen.getByLabelText(/^Link to the posting/), "https://jobs.example/1");
+    await user.click(screen.getByRole("button", { name: "Fetch" }));
+    expect(screen.getByLabelText("Job posting")).toHaveValue("Posting from Exa");
+    expect(toast).toHaveBeenCalledWith("Fetched the posting via Exa. Check it before reading it.", {});
+    await user.click(screen.getByRole("button", { name: "Fetch" }));
+    expect(screen.getByLabelText("Job posting")).toHaveValue("Posting from Exa");
+    expect(screen.getByLabelText(/^Link to the posting/)).toHaveValue("https://jobs.example/1");
+  });
+
+  it("keeps text pasted while the Exa fallback is waiting", async () => {
+    const user = userEvent.setup();
+    const response = Promise.withResolvers<Awaited<ReturnType<typeof fetchPostingText>>>();
+    vi.mocked(fetchPostingText).mockReturnValueOnce(response.promise);
+    render(<NewApplication {...props} />);
+    await user.type(screen.getByLabelText(/^Link to the posting/), "https://jobs.example/1");
+    await user.click(screen.getByRole("button", { name: "Fetch" }));
+    await user.type(screen.getByLabelText("Job posting"), "I found the description myself.");
+    await act(async () => response.resolve({
+      ok: true, data: { text: "Posting from Exa", url: "https://jobs.example/1", via: "exa" },
+    }));
+    expect(screen.getByLabelText("Job posting")).toHaveValue("I found the description myself.");
   });
 
   it("explains why a link can't be fetched, and asks for one first", async () => {
@@ -349,6 +378,7 @@ describe("creating the application (E7-6)", () => {
       match: { items: [] },
       tone: "WARM",
       note: "Lean on research.",
+      postingUrl: "",
       evidence: [],
       write: "both",
     });

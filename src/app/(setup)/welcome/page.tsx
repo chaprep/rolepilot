@@ -7,7 +7,6 @@ import { isAiConfigured, isAiUsable, loadAiConfig, loadAiSettingsView } from "@/
 import { jobSearchView, loadJobSearchConfig } from "@/lib/job-search/config";
 import { SOURCE_INFO } from "@/lib/job-search/sources";
 import { loadProfileName } from "@/lib/profile-data";
-import { SCORER_INFO } from "@/lib/scoring/scorers";
 import { jobRetentionLabel } from "@/lib/settings";
 import { loadScoringConfig, scoringView } from "@/lib/scoring/config";
 import { providerOption } from "@/lib/ai/provider-options";
@@ -17,9 +16,11 @@ import { googleClientView, googleView, requestOrigin } from "@/lib/settings-view
 import { aiChoice, choiceOf } from "@/lib/setup/ai-choices";
 import { googleAddressProblem } from "@/lib/setup/google";
 import { setupHref, setupStepFromParam } from "@/lib/setup-guide";
+import { loadOneView } from "@/lib/one/config";
 
 import { ProfileImport } from "../../(app)/profile/import/profile-import";
 import { AiProviderSection } from "../../(app)/settings/ai-provider-section";
+import { OneSection } from "../../(app)/settings/one-section";
 import { GoogleStep } from "./google-step";
 import { JobsStep } from "./jobs-step";
 import { ScoringStep } from "./scoring-step";
@@ -31,7 +32,7 @@ export const metadata: Metadata = { title: "Set up rolepilot" };
 export default async function WelcomePage({ searchParams }: PageProps<"/welcome">) {
   // The layout checks too; this is the check next to the data (E11-5).
   await verifySession();
-  const [{ step: param, google, job }, settings] = await Promise.all([searchParams, loadSettings()]);
+  const [{ step: param, google, job, one_connect: oneConnect }, settings] = await Promise.all([searchParams, loadSettings()]);
   const step = setupStepFromParam(param, settings.setupGuide);
 
   if (step === "start") {
@@ -43,8 +44,7 @@ export default async function WelcomePage({ searchParams }: PageProps<"/welcome"
         lead={
           <>
             <p>
-              A few steps get it ready: an AI to write your resumes and letters, where to look for jobs, how to judge them, your Gmail and
-              calendar, and your profile.
+              Set up OpenRouter for writing and scoring, One for web research, your job search, Gmail and Calendar, and your profile.
             </p>
             <p className="mt-3">
               Each step says where to go, what to click and what to copy back here. You can skip any of them and come back later from Settings.
@@ -62,19 +62,19 @@ export default async function WelcomePage({ searchParams }: PageProps<"/welcome"
   }
 
   if (step === "done") {
-    const [usable, view, jobs, scoring, connection, name] = await Promise.all([
+    const [usable, view, jobs, connection, name, one] = await Promise.all([
       isAiUsable(),
       loadAiSettingsView(),
       loadJobSearchConfig(),
-      loadScoringConfig(),
       googleView(),
       loadProfileName(),
+      loadOneView(),
     ]);
     const choice = choiceOf(view.provider, view.baseUrl);
     const rows = [
       { label: "AI", value: usable ? (choice ? aiChoice(choice).name : providerOption(view.provider).name) : null, href: "/settings?section=ai" },
+      { label: "One", value: one.connected ? "Connected" : null, href: "/settings?section=ai" },
       { label: "Job search", value: jobs.source ? SOURCE_INFO[jobs.source].name : null, href: "/settings?section=jobs" },
-      { label: "Scoring", value: SCORER_INFO[scoring.scorer].name, href: "/settings?section=scoring" },
       { label: "Gmail and Calendar", value: connection.status === "connected" ? connection.email : null, href: "/settings?section=google" },
       { label: "Profile", value: name.trim() || null, href: "/profile" },
     ];
@@ -112,15 +112,16 @@ export default async function WelcomePage({ searchParams }: PageProps<"/welcome"
   }
 
   if (step === "ai") {
-    const [usable, view] = await Promise.all([isAiUsable(), loadAiSettingsView()]);
+    const [view, one] = await Promise.all([loadAiSettingsView(), loadOneView()]);
     return (
       <SetupFrame
         step="ai"
-        title="Connect OpenRouter"
-        complete={usable}
-        lead="Add your OpenRouter API key. Luna reads postings and handles emails, Sonnet writes documents, and Jev scores job fit."
+        title="Connect OpenRouter and One"
+        complete={view.keyState === "set" || view.keyState === "env"}
+        lead="OpenRouter powers writing and job scoring. Connect One to add web research and hiring contact lookup."
       >
         <AiProviderSection initial={view} />
+        <OneSection initial={one} outcome={oneConnect} inGuide />
       </SetupFrame>
     );
   }
@@ -148,7 +149,7 @@ export default async function WelcomePage({ searchParams }: PageProps<"/welcome"
         complete={view.scorer === "AI" || view.keyState === "set" || view.keyState === "env"}
         lead="Score in Find jobs and the job agent say how well a posting fits your profile, so you can see the good ones first. Your resumes and letters are always written by your AI."
       >
-        <ScoringStep initial={view} />
+        <ScoringStep />
       </SetupFrame>
     );
   }

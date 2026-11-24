@@ -13,7 +13,7 @@ import { readPostingJob } from "@/lib/jobs/read-posting";
 import { scorePastedPostingJob } from "@/lib/jobs/score-posting";
 import { startJob } from "@/lib/jobs/runner";
 import { writeDocumentsJob } from "@/lib/jobs/write-documents";
-import { fetchPosting } from "@/lib/posting-fetch";
+import { importJobPosting } from "@/lib/job-posting-import";
 import { loadProfile } from "@/lib/profile-data";
 import { loadSettings } from "@/lib/settings-data";
 import { withoutSectionsOff } from "@/lib/resume-sections";
@@ -71,16 +71,15 @@ async function finishedReading(id: string) {
 export const startWritingDocuments = action(
   z.object({
     readJobId: z.string().min(1),
-    postingUrl: z.string().max(2000).optional(),
-    startupId: z.string().min(1).max(100).nullish(),
     details: detailsSchema,
     match: matchSchema,
     tone: z.enum(Tone),
     note: z.string().trim().max(2000),
+    postingUrl: z.string().max(2000).optional(),
     evidence: z.array(applicationEvidenceSchema).max(49).optional(),
     write: z.enum(DOCUMENTS_TO_WRITE).default("both"),
   }),
-  async ({ readJobId, postingUrl, startupId, details, match, tone, note, write, evidence = [] }) => {
+  async ({ readJobId, details, match, tone, note, write, postingUrl, evidence = [] }) => {
     const reading = await finishedReading(readJobId);
     const [profile, settings] = await Promise.all([loadProfile(), loadSettings()]);
     const options = evidenceOptions(withoutSectionsOff(profile, settings.resumeSections));
@@ -105,21 +104,20 @@ export const startWritingDocuments = action(
       if (note.trim()) await recordMemorySource(tx, { sourceKey: `draft:${readJobId}:note`, kind: "INITIAL_NOTE", text: note, context: { scope: "UNRESOLVED" } });
       for (const entry of evidence) await recordMemorySource(tx, { sourceKey: `draft:${readJobId}:evidence:${entry.id}`, kind: "EVIDENCE", text: entry.text, context: { unitId: entry.targetUnitId, scope: entry.targetUnitId ? "UNRESOLVED" : "GENERAL", label: options.find(option => option.id === entry.targetUnitId)?.label ?? "" } });
     });
-    const startup = startupId && write !== "resume" && settings.companyResearchEnabled ? await prisma.startup.findUnique({ where: { id: startupId }, select: { website: true } }) : null;
-    return startJob(writeDocumentsJob, { readJobId, ...(postingUrl ? { postingUrl: postingLink(postingUrl) } : {}), ...(startup?.website ? { companyWebsite: startup.website } : {}), posting: reading.input.posting, extracted, match, tone, note, write, evidenceFacts });
+    return startJob(writeDocumentsJob, { readJobId, posting: reading.input.posting, extracted, match, tone, note, write, evidenceFacts, ...(postingUrl === undefined ? {} : { postingUrl: postingLink(postingUrl) }) });
   },
 );
 
 /**
  * "Fetch" (E7-8, NEW-9): the posting's text from its link, for the user to
- * check before it's read. The request goes to the job site from the server.
+ * check before it's read. A connected Exa can supply text if the site fetch fails.
  */
 export const fetchPostingText = action(z.object({ link: z.string().max(2000) }), async ({ link }) => {
   const url = postingLink(link);
   if (!url) throw new ActionError("Enter the link to the posting first.");
-  const fetched = await fetchPosting(url);
+  const fetched = await importJobPosting(url);
   if (!fetched.ok) throw new ActionError(fetched.error);
-  return { text: fetched.text, url: fetched.url };
+  return { text: fetched.text, url: fetched.url, via: fetched.via };
 });
 
 /** A link as typed, with https:// added when it has no scheme; empty stays empty. */

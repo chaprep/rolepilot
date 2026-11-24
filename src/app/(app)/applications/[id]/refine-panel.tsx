@@ -31,6 +31,7 @@ const SUBTITLES: Record<Tab, string> = {
   email: "Ask for changes to this application’s plain-text email.",
   conversation: "Answers to employers are drafted right in the conversation.",
   posting: "Switch to the resume, cover letter or email to make changes.",
+  people: "Switch to the resume, cover letter or email to make changes.",
   notes: "Switch to the resume, cover letter or email to make changes.",
 };
 

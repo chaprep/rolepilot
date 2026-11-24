@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { usageFigures } from "@/lib/usage";
+import { USAGE_TASKS, usageFigures } from "@/lib/usage";
 
 import { UsageScreen } from "./usage-screen";
 
@@ -29,12 +29,22 @@ describe("UsageScreen (#290)", () => {
     expect(screen.getByRole("radio", { name: "Last 30 days" })).toBeChecked();
     const tasks = screen.getAllByRole("rowheader").map((header) => header.querySelector("span")?.textContent ?? header.textContent);
     expect(tasks.slice(0, 2)).toEqual(["Writing resumes", "Scoring postings with Jev"]);
-    expect(tasks).toHaveLength(17);
-    expect(cells("Researching companies")).toEqual(["0", "0", "0", "0"]);
+    expect(tasks).toHaveLength(USAGE_TASKS.length + 1);
+    expect(tasks).toContain("Refining email in chat");
+    expect(tasks).toContain("Finding hiring contacts");
+    expect(tasks).toContain("Researching companies");
+    expect(tasks).toContain("Planning cover letter research");
     expect(tasks.at(-1)).toBe("All tasks");
     expect(cells("Writing resumes")).toEqual(["4", "24,000", "6,500", "30,500"]);
     expect(cells("Connection checks")).toEqual(["0", "0", "0", "0"]);
     expect(cells("All tasks")).toEqual(["21", "55,8003 requests not reported", "6,90015 requests not reported", "62,700"]);
+  });
+
+  it("keeps historical company research usage in the totals", () => {
+    const history = usageFigures([{ task: "research-company", requests: 1, inputRequests: 1, input: 10, outputRequests: 1, output: 2 }]);
+    render(<UsageScreen figures={history} period="all" countingSince={null} />);
+    expect(cells("Researching companies")).toEqual(["1", "10", "2", "12"]);
+    expect(cells("All tasks")).toEqual(["1", "10", "2", "12"]);
   });
 
   it("says Not reported for counts a server didn't send, and how many requests lacked one", () => {

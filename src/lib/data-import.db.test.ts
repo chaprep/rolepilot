@@ -68,7 +68,7 @@ it("round-trips the letter template and defaults older backups to Classic", asyn
   const letter = await prisma().document.findFirstOrThrow({ where: { kind: "COVER_LETTER" } });
   await prisma().document.update({ where: { id: letter.id }, data: { initialLetterLayout: "SIDEBAR" } });
   const file = await asFile();
-  expect(file.schemaVersion).toBe(16);
+  expect(file.schemaVersion).toBe(EXPORT_SCHEMA_VERSION);
   await importExport(prisma(), file);
   expect((await prisma().document.findUniqueOrThrow({ where: { id: letter.id } })).initialLetterLayout).toBe("SIDEBAR");
   const older = { ...file, schemaVersion: 13, applications: file.applications.map(app => ({ ...app, documents: app.documents.map(doc => ({ ...doc, initialLetterLayout: undefined })) })) };
@@ -527,4 +527,31 @@ it("canonicalizes legacy writing modes and retires language settings without mod
   expect(await prisma().setting.findUnique({ where: { key: "docLanguage" } })).toBeNull();
   const restored = await asFile();
   expect(restored.applications).toEqual(file.applications);
+});
+
+it("round-trips People and cover letter research and accepts older backups", async () => {
+  const application = await prisma().application.findFirstOrThrow();
+  const peopleResearch = {
+    version: 1, fingerprint: "a".repeat(64), searchedAt: "2026-11-22T08:00:00.000Z", status: "found", partial: false,
+    contacts: [{
+      id: "contact-1", name: "Maya Rao", title: "Design Director", relationship: "likely_team_lead", reason: "Leads the team.",
+      linkedinUrl: "https://www.linkedin.com/in/maya", sources: [{ url: "https://example.com/team", title: "Team", excerpt: "Maya Rao leads the team." }],
+    }],
+  };
+  const coverLetterResearch = {
+    version: 1, promptVersion: "research-company@1", researchedAt: "2026-11-24T08:00:00.000Z",
+    fingerprint: "b".repeat(64), outcome: "sourced",
+    findings: [{ sourceId: "source-1", quote: "The partner onboarding program expanded.", fact: "The company expanded partner onboarding.",
+      relevance: "The role improves onboarding.", inferred: true, candidateIds: [], url: "https://example.com/news", title: "Company news" }],
+  };
+  await prisma().application.update({ where: { id: application.id }, data: { peopleResearch, coverLetterResearch } });
+  const file = await asFile();
+  await importExport(prisma(), file);
+  expect(await prisma().application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({ peopleResearch, coverLetterResearch });
+
+  const older = { ...file, schemaVersion: 16, applications: file.applications.map((entry) => ({ ...entry, peopleResearch: undefined, coverLetterResearch: undefined })) };
+  const parsed = parseExport(JSON.stringify(older));
+  if (!parsed.ok) throw new Error(parsed.error);
+  await importExport(prisma(), parsed.data);
+  expect(await prisma().application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({ peopleResearch: null, coverLetterResearch: null });
 });

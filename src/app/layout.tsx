@@ -12,6 +12,14 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: PRODUCT_NAME, template: `%s · ${PRODUCT_NAME}` },
   description: "Your career. Cleared for takeoff.",
+  // Brand-specific URLs avoid cached Dossier icons from earlier installs on the same origin.
+  icons: {
+    icon: [
+      { url: "/brand/rolepilot-favicon.ico", sizes: "32x32", type: "image/x-icon" },
+      { url: "/brand/rolepilot-icon.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: { url: "/brand/rolepilot-apple-icon.png", sizes: "180x180", type: "image/png" },
+  },
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

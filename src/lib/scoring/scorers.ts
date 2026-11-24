@@ -1,5 +1,4 @@
-// What can score postings (#274): the AI model in Settings → AI provider,
-// or TypeSafe's Jev. Shared by the server and Settings → Scoring.
+// Scorer names retained for compatibility with saved settings.
 
 export const SCORERS = ["AI", "JEV"] as const;
 export type Scorer = (typeof SCORERS)[number];
@@ -7,21 +6,8 @@ export type Scorer = (typeof SCORERS)[number];
 /** Like the job sources' keys: saved here, from ROLEPILOT_TYPESAFE_KEY, missing, or saved under another ROLEPILOT_SECRET. */
 export type ScoringKeyState = "none" | "set" | "unreadable" | "env";
 
-/** What Settings → Scoring shows: the choice and the key's state, never the key. */
+/** Scoring readiness without the shared OpenRouter key. */
 export type ScoringView = { scorer: Scorer; keyState: ScoringKeyState };
-
-export const SCORER_INFO: Record<Scorer, { name: string; description: string; tag: string }> = {
-  AI: {
-    name: "Your AI model",
-    description: "The AI provider in Settings → AI provider scores each posting and writes why it fits, in its own words.",
-    tag: "Uses your AI provider",
-  },
-  JEV: {
-    name: "Jev through OpenRouter",
-    description: "A model made for quick judgments. It answers questions about the posting, and rolepilot builds the score and the reasons from the posting's own lines.",
-    tag: "Uses your OpenRouter key",
-  },
-};
 
 export const TYPESAFE_KEY_URL = "https://console.typesafe.ai/keys";
 

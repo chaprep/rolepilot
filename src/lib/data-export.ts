@@ -1,9 +1,10 @@
 import "server-only";
 import { memoryExportSchema } from "@/lib/memory/schema";
 
-import { savedCompanyResearch, companyResearchSchema } from "@/lib/research/schema";
-
 import { z } from "zod";
+
+import { coverLetterResearchSchema } from "@/lib/cover-letter-research";
+import { peopleResearchSchema } from "@/lib/people/schema";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import {
@@ -50,14 +51,14 @@ import { themeMarginSchema } from "./theme-file";
 
 export const EXPORT_FORMAT = "rolepilot-export";
 /** Bump when the file's shape changes; imports refuse versions they don't know. 2 added Find jobs' postings and keys (E14-9), 3 projects (PRO-13) and the job agent (E16), 4 facts (PRO-14, APP-15), 5 publications (#218), the profile photo's theme and application options (#224) and Startups (#222), 6 the line about a role's company (#257), 7 skill groups (#280), 8 certifications (#293) and volunteering (#294), 9 resume section order (#297), custom sections (#298) and what sent applications were sent with (#299), and the board's order (public issue 60), 10 the tailored resume's score (#370), 11 the job agent's recurring searches and which found each candidate (public PR 61), 12 custom theme page margins, 13 independent application document state and history, 14 initial cover-letter format, 15 reusable candidate memory and its sources, 16 saved company research. */
-export const EXPORT_SCHEMA_VERSION = 16;
+export const EXPORT_SCHEMA_VERSION = 18;
 /** The versions imports can read. */
-export const EXPORT_SCHEMA_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+export const EXPORT_SCHEMA_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 
 /** The setting that holds the encrypted API key, which only this server can read. */
 const API_KEY_SETTING = "apiKeyEnc";
 /** The settings that hold encrypted keys, which only this server can read: never exported as they are. */
-export const SECRET_SETTINGS: readonly string[] = [API_KEY_SETTING, "jsearchKeyEnc", "adzunaKeyEnc", "typesafeKeyEnc", "zyteKeyEnc"];
+export const SECRET_SETTINGS: readonly string[] = [API_KEY_SETTING, "jsearchKeyEnc", "adzunaKeyEnc", "typesafeKeyEnc", "zyteKeyEnc", "oneConfigEnc"];
 /** The settings that belong to this install rather than its data (the usage ping's and its consent, the Google client and the browser's time zone): never exported, and kept by an import. */
 export const INSTALL_SETTINGS: readonly string[] = [
   "usagePingId",
@@ -67,6 +68,7 @@ export const INSTALL_SETTINGS: readonly string[] = [
   "usagePingChoiceText",
   // Whether this install's setup guide was opened, and where it was left (E21).
   "setupGuide",
+  "openRouterVerifiedKey",
   // The job agent's runs count against this server's job source key (E16).
   "agentRuns",
   // When Startups was last opened and what its last refresh found (#222).
@@ -85,6 +87,9 @@ export const INSTALL_SETTINGS: readonly string[] = [
   "browserTimeZone",
   "companyResearchEnabled",
   "zyteVerified",
+  "oneUserReference",
+  "oneExaConnectionKey",
+  "oneMuapiConnectionKey",
   // An import must never open the MCP connector's addresses on this server (#221), or let another app sign in (#281).
   "connectorEnabledAt",
   "connectorRedirects",
@@ -263,7 +268,10 @@ const application = z.object({
   deadline: optionalDate,
   postingUrl: text,
   postingText: text,
-  companyResearch: companyResearchSchema.nullable().optional(),
+  /** Retired research is preserved in backups for installations that used it. */
+  companyResearch: z.unknown().optional(),
+  peopleResearch: peopleResearchSchema.nullish(),
+  coverLetterResearch: coverLetterResearchSchema.nullish(),
   extracted: z.unknown().nullable(),
   extractedWith: text.nullable(),
   match: z.unknown().nullable(),
@@ -404,7 +412,7 @@ const postingSearch = z.object({
 export const exportSchema = z.object({
   memory: memoryExportSchema.optional(),
   format: z.enum([EXPORT_FORMAT, "dossier-export"]),
-  schemaVersion: z.literal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]),
+  schemaVersion: z.literal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]),
   appVersion: text,
   exportedAt: date,
   profile: z.object({
@@ -544,7 +552,7 @@ export async function buildExport(
       settings: settings.map(setting => setting.key === "creativity" && setting.value === "EXPRESSIVE" ? { ...setting, value: "OPTIMIZED" } : setting).filter((setting) => !["docLanguage", "resumeLanguage", "customLanguages"].includes(setting.key) && setting.key !== "agentQuery" && !SECRET_SETTINGS.includes(setting.key) && !INSTALL_SETTINGS.includes(setting.key)),
       ...(apiKey ? { apiKey } : {}),
       ...(Object.keys(jobSourceKeys).length > 0 ? { jobSourceKeys } : {}),
-      applications: applications.map(application => ({ ...application, companyResearch: savedCompanyResearch(application.companyResearch) ?? null, documents: application.documents.map(document => ({ ...document, initialLetterLayout: document.initialLetterLayout === null ? null : coverLetterLayoutSchema.parse(document.initialLetterLayout) })) })),
+      applications: applications.map(application => ({ ...application, peopleResearch: peopleResearchSchema.nullable().parse(application.peopleResearch), coverLetterResearch: coverLetterResearchSchema.nullable().parse(application.coverLetterResearch), documents: application.documents.map(document => ({ ...document, initialLetterLayout: document.initialLetterLayout === null ? null : coverLetterLayoutSchema.parse(document.initialLetterLayout) })) })),
       postings,
       searches,
       agentCandidates,

@@ -4,8 +4,9 @@ import { useRef, type ReactNode } from "react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export function ResumeSidebar({ enabled, view, onViewChange, controls, children }: {
+export function ResumeSidebar({ enabled, hidden, view, onViewChange, controls, children }: {
   enabled: boolean;
+  hidden?: boolean;
   view: string;
   onViewChange: (view: string) => void;
   controls: ReactNode;
@@ -16,7 +17,8 @@ export function ResumeSidebar({ enabled, view, onViewChange, controls, children 
 
   return (
     <div
-      className="flex touch-pan-y min-w-0 flex-[1_0_300px] flex-col border-t border-line bg-paper @min-[780px]:min-h-0 @min-[780px]:border-t-0 @min-[780px]:border-l"
+      hidden={hidden}
+      className={hidden ? "hidden" : "flex touch-pan-y min-w-0 flex-[1_0_300px] flex-col border-t border-line bg-paper @min-[780px]:min-h-0 @min-[780px]:border-t-0 @min-[780px]:border-l"}
       onTouchStart={(event) => {
         start.current = null;
         if (!enabled || event.touches.length !== 1 || (event.target as Element).closest("input, textarea, select, button, a, [role=slider], [data-no-swipe]")) return;

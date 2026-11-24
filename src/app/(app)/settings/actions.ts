@@ -10,9 +10,10 @@ import { lockAgentSearches } from "@/lib/agent/searches";
 import { AiError, createProvider } from "@/lib/ai";
 import { applyApiKeyChange } from "@/lib/ai/api-key";
 import { LUNA, SONNET, OPENROUTER_URL } from "@/lib/ai/assignments";
-import { keyStateOf, loadAiConfig, resolveAiConfig } from "@/lib/ai/config";
+import { keyStateOf, loadAiConfig, openRouterKeyFingerprint, resolveAiConfig } from "@/lib/ai/config";
 import type { KeyState } from "@/lib/ai/provider-options";
 import { deleteAllBackups } from "@/lib/backups";
+import { lockForTransaction } from "@/lib/db-lock";
 import { env } from "@/lib/env";
 import { JobSearchError, testSource } from "@/lib/job-search";
 import { credentialsFor, jobSearchView, loadJobSearchConfig, requestContext } from "@/lib/job-search/config";
@@ -33,6 +34,8 @@ import { loadSettings, saveSettings } from "@/lib/settings-data";
 
 // Settings → AI provider (E6-3). Every field saves on its own, so a test
 // or a model list always reflects what's saved.
+
+const OPENROUTER_LOCK = 974634121;
 
 /** The key state after a change, for the settings screen. */
 async function currentKeyState(): Promise<KeyState> {
@@ -67,12 +70,16 @@ export const saveApiKey = action(
     ]),
   }),
   async ({ change }) => {
-    const current = await loadSettings();
-    await saveSettings({
-      apiKeyEnc: applyApiKeyChange(current.apiKeyEnc, change),
-      // Until now the provider came from ROLEPILOT_AI_*; the key makes it a saved choice.
-      provider: AiProvider.OPENAI, baseUrl: OPENROUTER_URL,
+    await prisma.$transaction(async (tx) => {
+      await lockForTransaction(tx, OPENROUTER_LOCK);
+      const current = await loadSettings(tx);
+      await saveSettings({
+        apiKeyEnc: applyApiKeyChange(current.apiKeyEnc, change),
+        openRouterVerifiedKey: null,
+        provider: AiProvider.OPENAI, baseUrl: OPENROUTER_URL,
+      }, tx);
     });
+    revalidatePath("/welcome");
     return { keyState: await currentKeyState() };
   },
 );
@@ -195,18 +202,22 @@ export const saveTypesafeKey = action(
 export const testJev = action(z.object({}), async () => {
   const jev = jevKey(await loadScoringConfig());
   if (jev.problem !== null) return { connected: false as const, message: jev.problem };
+  return checkJevConnection(jev.key);
+});
+
+async function checkJevConnection(key: string) {
   const started = performance.now();
   try {
     const { model } = await askJev(
       { state: "rolepilot is checking that it can reach Jev.", questions: { check: { type: "noul", instructions: "Is this text about checking a connection?" } } },
-      { key: jev.key, timeoutMs: TEST_TIMEOUT_MS, retryDelaysMs: [] },
+      { key, timeoutMs: TEST_TIMEOUT_MS, retryDelaysMs: [] },
     );
     return { connected: true as const, model, seconds: Math.round((performance.now() - started) / 100) / 10 };
   } catch (error) {
     if (error instanceof AiError) return { connected: false as const, message: error.message };
     throw error;
   }
-});
+}
 
 /**
  * Saves the settings that are a plain choice or switch, each as it changes
@@ -342,21 +353,39 @@ export const removeConnectorRedirect = action(z.object({ uri: z.string().max(200
 
 /** Checks inference access, not just whether models appear in the catalog. */
 export const testOpenRouterConnection = action(z.object({}), async () => {
-  const config = await loadAiConfig();
+  const saved = await loadSettings();
+  const config = resolveAiConfig(saved, env);
+  const { apiKey, apiKeyProblem } = config;
+  if (apiKeyProblem || !apiKey) {
+    return { connected: false, message: apiKeyProblem ?? "Enter your OpenRouter API key first." };
+  }
   const results = await Promise.all([LUNA, SONNET].map(async (model) => {
     try {
-      if (!config.apiKey || config.apiKeyProblem) throw AiError.config(config.apiKeyProblem ?? "Enter your OpenRouter key first.");
       const provider = createProvider({ ...config, model, timeoutMs: TEST_TIMEOUT_MS });
       await provider.complete({ task: "connection-check", system: "Return a JSON object with ok set to true.",
         messages: [{ role: "user", content: "Check the connection." }], schema: z.object({ ok: z.literal(true) }),
         schemaName: "connection_check", maxTokens: 4096 });
-      return { model, connected: true, message: "Connected" };
+      return null;
     } catch (error) {
-      return { model, connected: false, message: error instanceof AiError ? error.message : "Connection check failed." };
+      return error instanceof AiError ? error.kind : "provider";
     }
   }));
-  const jev = await testJev({});
-  results.push({ model: "typesafe/jev-1.14", connected: jev.ok && jev.data.connected,
-    message: !jev.ok ? jev.error : jev.data.connected ? "Connected" : jev.data.message });
-  return { results };
+  const jev = await checkJevConnection(apiKey);
+  const connected = results.every((failure) => failure === null) && jev.connected;
+  const sameKey = await prisma.$transaction(async (tx) => {
+    await lockForTransaction(tx, OPENROUTER_LOCK);
+    const current = await loadSettings(tx);
+    if (current.apiKeyEnc !== saved.apiKeyEnc || resolveAiConfig(current, env).apiKey !== apiKey) return false;
+    await saveSettings({ openRouterVerifiedKey: connected ? openRouterKeyFingerprint(apiKey) : null }, tx);
+    return true;
+  });
+  revalidatePath("/welcome");
+  if (!sameKey) return { connected: false, message: "The OpenRouter key changed. Test the current key." };
+  if (connected) {
+    return { connected: true, message: "OpenRouter connection verified." };
+  }
+  if (results.every((failure) => failure === "auth")) {
+    return { connected: false, message: "OpenRouter rejected the API key. Check the key and try again." };
+  }
+  return { connected: false, message: "OpenRouter did not pass all connection checks. Check your OpenRouter credits and access, then try again." };
 });

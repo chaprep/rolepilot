@@ -39,6 +39,7 @@ import {
   updateNote,
 } from "./actions";
 import { ApplicationView, type ApplicationViewProps } from "./application-view";
+import { applyHiringContact, startPeopleSearch } from "./people-actions";
 
 vi.mock("./actions", () => ({
   saveApplicationTheme: vi.fn(),
@@ -67,6 +68,7 @@ vi.mock("./actions", () => ({
   startScoringResume: vi.fn(async () => ({ ok: true, data: "score-1" })),
   undoEmailRewrite: vi.fn(async () => ({ ok: true, data: null })),
 }));
+vi.mock("./people-actions", () => ({ startPeopleSearch: vi.fn(), applyHiringContact: vi.fn(), undoHiringContact: vi.fn() }));
 vi.mock("@/lib/copy-text", () => ({ copyText: vi.fn(async () => true) }));
 vi.mock("@/lib/jobs/actions", () => ({ retry: vi.fn(async () => ({ ok: true, data: null })) }));
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -165,8 +167,53 @@ describe("the document tabs (E8-2)", () => {
   it("has Resume, Cover letter, Email and the posting with its match", () => {
     render(<ApplicationView {...props} />);
     const tabs = within(screen.getByRole("tablist", { name: "Application" })).getAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Resume", "Cover letter", "Email", "Job posting · 5/7 match", "Notes"]);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Resume", "Cover letter", "Email", "Job posting · 5/7 match", "People", "Notes"]);
     expect(screen.getByRole("tab", { name: "Resume" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("opens the hiring contacts introduction in the People tab", async () => {
+    const user = userEvent.setup();
+    render(<ApplicationView {...props} />);
+    await user.click(screen.getByRole("tab", { name: "People" }));
+    expect(window.location.search).toBe("?tab=people");
+    const people = screen.getByRole("tabpanel", { name: "People" });
+    expect(within(people).getByRole("heading", { name: "Hiring contacts" })).toBeVisible();
+    expect(within(people).getByText(/look for people involved in hiring for this role/)).toBeVisible();
+    expect(within(people).getByRole("button", { name: "Find hiring contacts" })).toBeEnabled();
+    expect(screen.queryByRole("complementary", { name: "Refine with AI" })).not.toBeInTheDocument();
+  });
+
+  it("starts an on-demand People search and follows the application job", async () => {
+    vi.mocked(startPeopleSearch).mockResolvedValue({ ok: true, data: "people-job" });
+    const user = userEvent.setup();
+    render(<ApplicationView {...props} initialTab="people" />);
+    await user.click(screen.getByRole("button", { name: "Find hiring contacts" }));
+    expect(startPeopleSearch).toHaveBeenCalledWith({ id: props.application.id });
+    expect(await screen.findByText("Starting the search…")).toBeVisible();
+    expect(jobs.listeners.has("people-job")).toBe(true);
+  });
+
+  it("shows a saved contact with evidence and applies it to one existing draft", async () => {
+    const user = userEvent.setup();
+    const searchedAt = "2026-11-22T08:00:00.000Z";
+    vi.mocked(applyHiringContact).mockResolvedValue({ ok: true, data: { previous: null, updated: "Dear Maya Rao," } });
+    render(<ApplicationView {...props} initialTab="people" peopleSearch={{
+      postingFingerprint: "a".repeat(64), activeJob: null, previousError: null,
+      saved: {
+        version: 1, status: "found", fingerprint: "a".repeat(64), searchedAt, partial: false,
+        contacts: [{
+          id: "contact-1", name: "Maya Rao", title: "Design Director", relationship: "likely_team_lead",
+          reason: "Leads the relevant design team.", linkedinUrl: "https://www.linkedin.com/in/maya",
+          sources: [{ title: "Company design team", url: "https://example.com/design", excerpt: "Maya leads Design." }],
+        }],
+      },
+    }} />);
+    expect(screen.getByRole("heading", { name: "Maya Rao" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Company design team" })).toHaveAttribute("href", "https://example.com/design");
+    expect(screen.queryByRole("button", { name: "Use in email" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Use in cover letter" }));
+    expect(applyHiringContact).toHaveBeenCalledWith(expect.objectContaining({ target: "COVER_LETTER", contactId: "contact-1", searchedAt }));
+    expect(await screen.findByRole("button", { name: "Undo greeting change" })).toBeVisible();
   });
 
   it("keeps the tab in the URL", async () => {
@@ -305,6 +352,17 @@ describe("the document tabs (E8-2)", () => {
     expect(screen.getByRole("tab", { name: "Job posting" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Write the tailored resume" }));
     expect(startWritingDocument).toHaveBeenCalledWith({ id: props.application.id, kind: "RESUME" });
+  });
+
+  it("introduces the cover letter and starts a draft on request", async () => {
+    const user = userEvent.setup();
+    render(<ApplicationView {...props} initialTab="letter" letter={null} />);
+    const panel = screen.getByRole("tabpanel", { name: "Cover letter" });
+    expect(within(panel).getByRole("heading", { name: "Cover letter" })).toBeVisible();
+    expect(within(panel).getByText(/draft a cover letter tailored to this role/)).toBeVisible();
+    await user.click(within(panel).getByRole("button", { name: "Write the cover letter" }));
+    expect(startWritingDocument).toHaveBeenCalledWith({ id: props.application.id, kind: "COVER_LETTER" });
+    expect(await within(panel).findByRole("button", { name: "Writing the cover letter…" })).toBeDisabled();
   });
 });
 

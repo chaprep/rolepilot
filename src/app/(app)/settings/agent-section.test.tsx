@@ -120,7 +120,7 @@ describe("Settings → Job agent", () => {
 
   it("asks for the TypeSafe key when Jev scores without one (#274)", () => {
     open({ scoring: { scorer: "JEV", ready: false } });
-    expect(screen.getByRole("note")).toHaveTextContent("The agent scores postings with Jev through OpenRouter. Add your shared API key in Settings → AI provider.");
+    expect(screen.getByRole("note")).toHaveTextContent("The agent needs an OpenRouter API key to score postings. Add it in Settings → AI provider.");
     expect(screen.getByRole("link", { name: "Settings → AI provider" })).toHaveAttribute("href", "/settings?section=ai");
   });
 

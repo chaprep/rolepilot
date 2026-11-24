@@ -1133,6 +1133,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@modelcontextprotocol/client@npm:^2.4.0":
+  version: 2.4.0
+  resolution: "@modelcontextprotocol/client@npm:2.4.0"
+  dependencies:
+    "@modelcontextprotocol/core": "npm:2.4.0"
+    cross-spawn: "npm:^7.0.5"
+    eventsource: "npm:^3.0.2"
+    eventsource-parser: "npm:^3.0.8"
+    jose: "npm:^6.1.3"
+    pkce-challenge: "npm:^5.0.0"
+    zod: "npm:^4.2.0"
+  checksum: 10c0/60945ef6c12651436f43b390f17bb8979a921d9ae6eb146e5d1f38bd259585ff0fcc8a702796925d35b78c4da681844ac750f361ef21f8a2ccc42dd2d159b9f6
+  languageName: node
+  linkType: hard
+
 "@modelcontextprotocol/core@npm:2.4.0":
   version: 2.4.0
   resolution: "@modelcontextprotocol/core@npm:2.4.0"
@@ -4018,6 +4033,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@withone/connect@npm:^0.24.3":
+  version: 0.24.3
+  resolution: "@withone/connect@npm:0.24.3"
+  peerDependencies:
+    react: ">=17"
+    vue: ">=3"
+  peerDependenciesMeta:
+    react:
+      optional: true
+    vue:
+      optional: true
+  checksum: 10c0/8bc392385b0c8db6dd6ef30adb1c340f417686c7aa863387569612c27f54c1f437221b7f302d005f876fe6969fcf7722c50f5fff27211a0c7871511dee3b9bee
+  languageName: node
+  linkType: hard
+
 "@xmldom/xmldom@npm:^0.8.6":
   version: 0.8.15
   resolution: "@xmldom/xmldom@npm:0.8.15"
@@ -4634,7 +4664,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cross-spawn@npm:^7.0.6":
+"cross-spawn@npm:^7.0.5, cross-spawn@npm:^7.0.6":
   version: 7.0.6
   resolution: "cross-spawn@npm:7.0.6"
   dependencies:
@@ -5730,6 +5760,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"eventsource-parser@npm:^3.0.1, eventsource-parser@npm:^3.0.8":
+  version: 3.1.1
+  resolution: "eventsource-parser@npm:3.1.1"
+  checksum: 10c0/dd3236c61140587253dcaaf947de528ac0e7371caffdc53c77afaeee36a17661f00e251a6ea16af56c99be5ac138303e67b5d750630e7c41b02e3564e8ad8c44
+  languageName: node
+  linkType: hard
+
+"eventsource@npm:^3.0.2":
+  version: 3.0.7
+  resolution: "eventsource@npm:3.0.7"
+  dependencies:
+    eventsource-parser: "npm:^3.0.1"
+  checksum: 10c0/c48a73c38f300e33e9f11375d4ee969f25cbb0519608a12378a38068055ae8b55b6e0e8a49c3f91c784068434efe1d9f01eb49b6315b04b0da9157879ce2f67d
+  languageName: node
+  linkType: hard
+
 "expand-template@npm:^2.0.3":
   version: 2.0.3
   resolution: "expand-template@npm:2.0.3"
@@ -6660,6 +6706,13 @@ __metadata:
   bin:
     jiti: lib/jiti-cli.mjs
   checksum: 10c0/1b1e2310a490dce1aeea3da5f5dfe18273516c20ce48be2e98eb8ea452d5f3dcc8fd0cfd6d28b4052a24c5dbab6e3089b2d7e79f0bce7915b10d750929563c42
+  languageName: node
+  linkType: hard
+
+"jose@npm:^6.1.3":
+  version: 6.2.18
+  resolution: "jose@npm:6.2.18"
+  checksum: 10c0/95144c43dfa0c8206f13f8133ed74ba9106785df81c864d6399af06616ad8fdbdc18937109aac099f560f6159aaf2fe2fca3984a6629c899af396a1e9986008d
   languageName: node
   linkType: hard
 
@@ -7952,6 +8005,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"pkce-challenge@npm:^5.0.0":
+  version: 5.0.1
+  resolution: "pkce-challenge@npm:5.0.1"
+  checksum: 10c0/207f4cb976682f27e8324eb49cf71937c98fbb8341a0b8f6142bc6f664825b30e049a54a21b5c034e823ee3c3d412f10d74bd21de78e17452a6a496c2991f57c
+  languageName: node
+  linkType: hard
+
 "pkg-types@npm:^2.3.0":
   version: 2.3.3
   resolution: "pkg-types@npm:2.3.3"
@@ -8548,6 +8608,7 @@ __metadata:
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@modelcontextprotocol/client": "npm:^2.4.0"
     "@modelcontextprotocol/server": "npm:^2.4.0"
     "@playwright/test": "npm:1.64.1"
     "@prisma/adapter-better-sqlite3": "npm:^7.10.1"
@@ -8565,6 +8626,7 @@ __metadata:
     "@types/react-dom": "npm:^19"
     "@vitejs/plugin-react": "npm:^6.2.1"
     "@vitest/coverage-v8": "npm:^5.0.5"
+    "@withone/connect": "npm:^0.24.3"
     dotenv: "npm:^18.0.9"
     esbuild: "npm:0.28.2"
     eslint: "npm:^9"

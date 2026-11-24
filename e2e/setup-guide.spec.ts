@@ -29,23 +29,16 @@ test("opens by itself on a fresh install and walks through every step", async ({
   await expect(page.getByRole("dialog", { name: "Send a daily usage ping?" })).toHaveCount(0);
   await expectAccessible(page);
 
-  // AI: the e2e server's is set in the environment, so it's done already.
+  // The environment supplies a key so Continue is available while One is optional.
   await page.getByRole("link", { name: "Let's start →" }).click();
-  await expect(page.getByText(/rolepilot already writes with OpenAI-compatible, using fake-model\. It's set on the server/)).toBeVisible();
-  await page.getByRole("button", { name: "Choose another" }).click();
-  await page.getByRole("radio", { name: "Best writing" }).click();
-  await expect(page.getByRole("radio", { name: "OpenAI" })).toBeChecked();
-  await expect(page.getByRole("list", { name: "Setting up OpenAI" }).getByRole("link", { name: /Open OpenAI's API keys/ })).toHaveAttribute("href", "https://platform.openai.com/api-keys");
-  await page.getByRole("radio", { name: "Claude" }).click();
-  await expect(page.getByText(/set it to Never expire/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect OpenRouter and One" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open One dashboard" })).toHaveAttribute("href", "https://app.withone.ai/developers/connect");
+  await page.getByText("Enter One Connect credentials", { exact: true }).click();
+  await expect(page.getByLabel("One Connect key")).toBeVisible();
+  await page.getByLabel("OpenRouter API key").fill("e2e-openrouter-key");
+  await page.getByRole("button", { name: "Save key" }).click();
+  await expect(page.getByText("API key saved. Select Test connection to verify OpenRouter.")).toBeVisible();
   await expectAccessible(page);
-
-  // A model on this computer that isn't there: found nowhere, and nothing saved.
-  await page.getByRole("radio", { name: "Free and private" }).click();
-  await page.getByRole("button", { name: "Find LM Studio" }).click();
-  await expect(page.getByText("rolepilot couldn't find LM Studio.")).toBeVisible({ timeout: 30_000 });
-  const [saved] = await sql<{ count: number }>(`SELECT count(*)::int AS count FROM "Setting" WHERE key = 'provider'`);
-  expect(saved.count).toBe(0);
   await page.getByRole("link", { name: "Continue →" }).click();
 
   // Job search: JSearch with a key, checked against the fake source.
@@ -57,8 +50,8 @@ test("opens by itself on a fresh install and walks through every step", async ({
   await expect(page.getByText("It works: rolepilot can search JSearch.")).toBeVisible();
   await page.getByRole("link", { name: "Continue →" }).click();
 
-  // Scoring: your AI is the choice already.
-  await expect(page.getByRole("radio", { name: "Your AI" })).toBeChecked();
+  // Scoring shares the key saved in the first step.
+  await expect(page.getByText("Scoring uses the shared OpenRouter key from AI settings.")).toBeVisible();
   await page.getByRole("link", { name: "Continue →" }).click();
 
   // Google: the steps, the address to copy, and Connect once a client is saved.

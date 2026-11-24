@@ -575,6 +575,9 @@ model Application {
   postingText         String            @default("")
   /// Versioned, sourced findings kept with the application.
   companyResearch     Json?
+  /// Versioned findings from the People tab.
+  peopleResearch      Json?
+  coverLetterResearch Json?
   /// What the AI read from the posting (extractedSchema).
   extracted           Json?
   /// The prompt version that wrote `extracted`, e.g. "extract-posting@1" (E6-5).

@@ -7,6 +7,7 @@ describe("settings sections", () => {
     expect(settingsSectionFromParam("data")).toBe("data");
     expect(settingsSectionFromParam(undefined)).toBe("ai");
     expect(settingsSectionFromParam("nope")).toBe("ai");
+    expect(settingsSectionFromParam("scoring")).toBe("ai");
     expect(settingsSectionFromParam(["about", "data"])).toBe("ai");
     // The MCP connector's old name (#281).
     expect(settingsSectionFromParam("claude")).toBe("connector");

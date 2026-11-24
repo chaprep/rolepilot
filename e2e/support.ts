@@ -39,6 +39,7 @@ export function appEnv(): Record<string, string> {
   return {
     NODE_OPTIONS: `--require ${JSON.stringify(resolve("e2e/openrouter-preload.cjs"))}`,
     FAKE_AI_PORT: String(FAKE_AI_PORT),
+    FAKE_JOBS_PORT: String(FAKE_JOBS_PORT),
     DATABASE_URL: e2eDatabaseUrl(),
     ROLEPILOT_PASSWORD: PASSWORD_HASH,
     ROLEPILOT_SECRET: "e2e-secret-e2e-secret-e2e-secret-e2e",
@@ -54,8 +55,6 @@ export function appEnv(): Record<string, string> {
     // Google's sign-in, Gmail and Calendar are the fake Google's (E15). It's
     // only used once a spec enters an OAuth client in Settings → Google.
     ROLEPILOT_GOOGLE_TEST_BASE_URL: `http://localhost:${FAKE_GOOGLE_PORT}`,
-    // Jev is the fake job sources' too, once a spec chooses it in Settings → Scoring (#274).
-    ROLEPILOT_TYPESAFE_TEST_BASE_URL: `http://localhost:${FAKE_JOBS_PORT}/typesafe`,
     PORT: String(APP_PORT),
   };
 }

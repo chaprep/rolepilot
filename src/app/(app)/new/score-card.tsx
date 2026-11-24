@@ -16,7 +16,7 @@ export function ScoreCard({ fit, scoring, step, onScore }: { fit: PostingFit | n
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h3 className="text-field font-medium">How well it fits</h3>
-          <p className="text-meta text-muted">A score from 0 to 100 with the reasons, as Find jobs gives, from the scorer in Settings → Scoring.</p>
+          <p className="text-meta text-muted">Get a score from 0 to 100 and see how the posting matches your profile.</p>
         </div>
         <Button variant="secondary" size="sm" aria-disabled={scoring || undefined} onClick={() => !scoring && onScore()}>
           {scoring ? "Scoring…" : fit ? "Score it again" : "Score it"}

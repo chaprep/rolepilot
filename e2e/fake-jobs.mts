@@ -11,8 +11,8 @@ const JSEARCH_KEY = "e2e-jsearch-key";
 // Equal fixture dates keep shared score-cap ordering stable even if creating
 // the three postings straddles a millisecond boundary.
 const postedAt = new Date(Date.now() - 2 * 86_400_000).toISOString();
-/** The TypeSafe key a spec saves in Settings → Scoring (#274). */
-const TYPESAFE_KEY = "e2e-typesafe-key";
+/** Scoring uses the same test key as writing. */
+const OPENROUTER_KEY = "e2e-fake-key";
 
 const job = (id: string, title: string, company: string, extra: Record<string, unknown> = {}) => ({
   job_id: id,
@@ -95,12 +95,12 @@ createServer((request, response) => {
   if (url.pathname === "/searches") return send(response, 200, { searches });
   if (url.pathname === "/startup-requests") return send(response, 200, { requests: siteRequests });
   if (url.pathname.startsWith("/startups/")) return startups(url.pathname, request, response);
-  // Jev (ROLEPILOT_TYPESAFE_TEST_BASE_URL, #274): each question answered from
+  // Jev through the fake OpenRouter connection answers each question from
   // its id and line, so a spec knows the score: every Score at its top level
   // but past work one below, a line with "years", "skills" or "experience"
   // required, and shown when it's about product design or Figma.
   if (url.pathname === "/typesafe/v1/systemone" && request.method === "POST") {
-    if (request.headers.authorization !== `Bearer ${TYPESAFE_KEY}`) return send(response, 401, { detail: "Invalid API key" });
+    if (request.headers.authorization !== `Bearer ${OPENROUTER_KEY}`) return send(response, 401, { detail: "Invalid API key" });
     let body = "";
     request.on("data", (chunk: Buffer) => (body += chunk.toString()));
     request.on("end", () => {

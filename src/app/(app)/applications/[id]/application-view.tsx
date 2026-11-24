@@ -64,7 +64,6 @@ import { ThemePicker } from "../../resume/theme-picker";
 import { ThemeBuilder, draftFrom, type ThemeDraft } from "../../resume/theme-builder";
 import { ResumeSidebar } from "./resume-sidebar";
 import { ResumeScore } from "./resume-score";
-import { ResearchPanel, type ResearchPanelData } from "./research-panel";
 import { WriteMissingDocument } from "./write-missing-document";
 import { ApplicationHeader } from "./application-header";
 import { ApplicationMenu } from "./application-menu";
@@ -74,6 +73,7 @@ import type { GmailSender } from "./send-with-gmail";
 
 import { JobWatcher } from "./job-watcher";
 import { NotesTab } from "./notes-tab";
+import { PeopleTab, type PeopleSearch } from "./people-tab";
 import { PostingTab, type PostingData } from "./posting-tab";
 import { RefinePanel, type ChatEntry } from "./refine-panel";
 import { StatusControl } from "./status-control";
@@ -164,7 +164,6 @@ export type ApplicationViewProps = {
   /** The email being written, e.g. since before a reload. */
   writingEmail: string | null;
   /** A resume or letter it was created without, being written (#367), e.g. since before a reload. */
-  research?: ResearchPanelData;
   writingDocuments?: { resume: string | null; letter: string | null };
   /** The PDFs to attach to the email. */
   attachments: Attachments;
@@ -182,6 +181,7 @@ export type ApplicationViewProps = {
   /** The tailored resume's score, once asked for (#370), and its scoring if it's running. */
   resumeFit?: ResumeFit | null;
   scoringResume?: string | null;
+  peopleSearch?: PeopleSearch;
   initialTab: Tab;
   /** Whether an AI provider is set up; without one, the AI buttons point to Settings. */
   aiReady: boolean;
@@ -218,7 +218,6 @@ export function ApplicationView({
   baseSections,
   email,
   writingEmail,
-  research,
   writingDocuments = { resume: null, letter: null },
   attachments,
   gmail,
@@ -230,6 +229,7 @@ export function ApplicationView({
   score,
   resumeFit = null,
   scoringResume = null,
+  peopleSearch,
   initialTab,
   aiReady,
   rewriting: rewritingAtLoad,
@@ -711,7 +711,7 @@ export function ApplicationView({
               </Link>
             )}
             <StatusControl id={application.id} status={application.status} interviewAt={application.nextInterviewAt} timeZone={timeZone} />
-            {(resume || letter) && (
+            {tab !== "people" && (resume || letter) && (
               // The document on screen; from the Job posting tab, the resume (E8-8).
               <DownloadPdfButton
                 variant="secondary"
@@ -736,6 +736,7 @@ export function ApplicationView({
             </TabsTrigger>
           )}
           <TabsTrigger value="posting">{score ? `Job posting · ${score.hit}/${score.total} match` : "Job posting"}</TabsTrigger>
+          <TabsTrigger value="people">People</TabsTrigger>
           <TabsTrigger value="notes">{notes > 0 ? `Notes · ${notes}` : "Notes"}</TabsTrigger>
         </TabsList>
       </ApplicationHeader>
@@ -782,7 +783,6 @@ export function ApplicationView({
         </TabsContent>
 
         <TabsContent value="letter" className="flex min-h-0 min-w-0 flex-[999_1_480px] flex-col">
-          {research && (research.enabled || research.saved || research.jobId) && <ResearchPanel applicationId={application.id} data={research} />}
           {letter && letterTheme && letterUnits ? (
             <DocumentPreview
               label={
@@ -847,6 +847,13 @@ export function ApplicationView({
           />
         </TabsContent>
 
+        <TabsContent value="people" className="flex min-h-0 min-w-0 flex-[999_1_480px]">
+          <PeopleTab applicationId={application.id} search={peopleSearch} drafts={{
+            ...(letter && { COVER_LETTER: letter.units.find((part) => part.id === "greeting")?.text ?? null }),
+            ...(email && { EMAIL: email.find((part) => part.id === "body")?.text ?? null }),
+          }} />
+        </TabsContent>
+
         <TabsContent value="notes" className="flex min-h-0 min-w-0 flex-[999_1_480px]">
           <NotesTab applicationId={application.id} activity={activity} />
         </TabsContent>
@@ -862,6 +869,7 @@ export function ApplicationView({
         />
         <ResumeSidebar
           enabled={tab === "resume" && !!resume}
+          hidden={tab === "people"}
           view={sidebarView}
           onViewChange={setSidebarView}
           controls={resumeTheme && selectedResumeTheme && resumeUnits ? (

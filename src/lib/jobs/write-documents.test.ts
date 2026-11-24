@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { MockProvider } from "@/lib/ai/providers/mock";
 
-import { WRITE_DOCUMENTS_STEPS } from "./application-steps";
+import { TAILOR_RESUME_STEP, WRITE_COVER_LETTER_STEP } from "./application-steps";
 import { writeDocumentsJob } from "./write-documents";
 
 vi.mock("@/lib/memory/context", () => ({ prepareCandidateProfile: async (profile: unknown) => profile, assertCandidateContext: async () => {}, candidateMemoryRevision: () => undefined }));
@@ -34,9 +34,9 @@ describe("writeDocumentsJob (E7-6)", () => {
       { readJobId: "read-job", posting: "Ledgerly is hiring.", extracted, match: { items: [] }, tone: "WARM", note: "", write: "both" },
       { id: "test-job", step: async (name) => void steps.push(name), signal: new AbortController().signal },
     );
-    expect(steps).toEqual(WRITE_DOCUMENTS_STEPS.slice(0, 2));
+    expect(steps).toEqual([TAILOR_RESUME_STEP, WRITE_COVER_LETTER_STEP]);
     expect(result.resumeWith).toBe("tailor-resume@11");
-    expect(result.letterWith).toBe("write-cover-letter@8");
+    expect(result.letterWith).toBe("write-cover-letter@10");
     // Strict mode: the fact guard marks what the profile doesn't back.
     expect(result.resume[0]).toMatchObject({ id: "summary", unverified: ["Google"] });
     expect(result.letter.map((unit) => unit.id)).toEqual(["recipient", "greeting", "paragraph:1", "sign-off"]);
@@ -68,7 +68,7 @@ describe("writeDocumentsJob (E7-6)", () => {
     steps.length = 0;
     const letterOnly = await writeDocumentsJob.run({ ...input, write: "letter" }, context);
     expect(asked).toEqual(["cover_letter"]);
-    expect(steps).toEqual([WRITE_DOCUMENTS_STEPS[1]]);
-    expect(letterOnly).toMatchObject({ resume: [], resumeWith: "", letterWith: "write-cover-letter@8" });
+    expect(steps).toEqual([WRITE_COVER_LETTER_STEP]);
+    expect(letterOnly).toMatchObject({ resume: [], resumeWith: "", letterWith: "write-cover-letter@10" });
   });
 });

@@ -1,5 +1,6 @@
-import { prepareCandidateProfile, assertCandidateContext } from "@/lib/memory/context";
 import "server-only";
+
+import { prepareCandidateProfile, assertCandidateContext } from "@/lib/memory/context";
 
 import { z } from "zod";
 
@@ -7,7 +8,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { DocumentKind, VersionCause } from "@/generated/prisma/enums";
 import { getAiProvider } from "@/lib/ai";
 import { loadTaskOptions } from "@/lib/ai/task-options";
-import { tailorResume, writeCoverLetter } from "@/lib/ai/tasks";
+import { tailorResume } from "@/lib/ai/tasks";
 import { documentStateSchema, readDocumentState } from "@/lib/document-state";
 import { tailoredProfile } from "@/lib/resume-fit";
 import { calendarDay } from "@/lib/application-documents";
@@ -23,10 +24,10 @@ import { loadFactTexts } from "@/lib/profile-data";
 import { sectionLayoutSchema, withoutSectionsOff } from "@/lib/resume-sections";
 import { loadTheme } from "@/lib/theme-data";
 import { BUILT_IN_THEMES } from "@/lib/themes";
-import { savedCompanyResearch } from "@/lib/research/schema";
-import { applicationResearchInput, researchForWriting, saveApplicationResearch } from "@/lib/research/application";
 import { loadSettings } from "@/lib/settings-data";
 
+import { coverLetterFingerprint, type CoverLetterResearch } from "@/lib/cover-letter-research";
+import { generateCoverLetter } from "./generate-cover-letter";
 import { defineJob } from "./runner";
 
 /** The key of writing an application's missing document, to find it again after a reload. */
@@ -47,7 +48,7 @@ export const writeDocumentJob = defineJob({
   async run({ applicationId, kind }, context) {
     const { step, signal } = context;
     if (kind === DocumentKind.RESUME) await step("Tailoring your resume");
-    const application = await prisma.application.findUniqueOrThrow({ where: { id: applicationId }, include: { startup: { select: { website: true } }, documents: { select: { kind: true, state: true, units: true } } } });
+    const application = await prisma.application.findUniqueOrThrow({ where: { id: applicationId }, include: { documents: { select: { kind: true, state: true, units: true } } } });
     if (application.documents.some((document) => document.kind === kind)) return { applicationId };
 
     const [provider, options, fullProfile, settings] = await Promise.all([
@@ -72,21 +73,14 @@ export const writeDocumentJob = defineJob({
 
     let units: Unit[];
     let writtenWith: string;
+    let research: CoverLetterResearch | undefined;
     if (kind === DocumentKind.RESUME) {
       const resume = await tailorResume(provider, { profile, evidenceProfile, extracted, match, facts: await loadFactTexts(applicationId), posting }, taskOptions);
       units = resume.data;
       writtenWith = resume.promptVersion;
     } else {
-      let companyResearch = settings.companyResearchEnabled
-        ? await researchForWriting(applicationResearchInput(application), settings, provider, context, application.companyResearch)
-        : undefined;
-      if (companyResearch && companyResearch.finishedAt !== savedCompanyResearch(application.companyResearch)?.finishedAt) {
-        signal.throwIfAborted();
-        // Use research in the draft only when its source record was saved.
-        if (!await saveApplicationResearch(application, companyResearch)) companyResearch = undefined;
-      }
-      await step("Writing your cover letter");
-      const letter = await writeCoverLetter(provider, { profile, extracted, match, tone: application.tone, facts: await loadFactTexts(applicationId), posting, companyResearch }, taskOptions);
+      const letter = await generateCoverLetter(provider, { profile, extracted, match, tone: application.tone, facts: await loadFactTexts(applicationId), posting, postingUrl: application.postingUrl }, taskOptions, context);
+      research = letter.research;
       const language = "English";
       // The sender and signature from the profile, and today's date, as a new application's letter has (E8-11).
       units = sidebarLetterUnits(withFrame(
@@ -107,7 +101,15 @@ export const writeDocumentJob = defineJob({
     const theme = settings.baseThemeId ? await loadTheme(settings.baseThemeId) : null;
     try {
       await prisma.$transaction(async (tx) => {
+        signal.throwIfAborted();
         await assertCandidateContext(evidenceProfile, tx);
+        if (research) {
+          const current = await tx.application.findUniqueOrThrow({ where: { id: applicationId }, select: { company: true, role: true, location: true, postingUrl: true, postingText: true } });
+          if (coverLetterFingerprint(current) !== research.fingerprint) throw new Error("The job details changed while writing. Try again with the updated details.");
+          // Guard the same fields during the update so a concurrent edit cannot save a stale brief.
+          const { count } = await tx.application.updateMany({ where: { id: applicationId, ...current }, data: { coverLetterResearch: research } });
+          if (!count) throw new Error("The job details changed while writing. Try again with the updated details.");
+        }
         const state = documentStateSchema.parse({ version: 1, profile: evidenceProfile, role: application.role, language: "English", tone: application.tone, theme: kind === "COVER_LETTER" ? sidebarLetterTheme(theme ?? BUILT_IN_THEMES[0]) : theme ?? BUILT_IN_THEMES[0], paper: settings.paper ?? "A4", dateFormat: settings.dateFormat, sections: local?.sections ?? (sections.success ? sections.data : settings.resumeSections), showPhoto: application.showPhoto, followThemeLayout: application.followThemeLayout, includeReferences: (settings.includeRefs && extracted.asksForReferences) || (local?.sections ?? (sections.success ? sections.data : settings.resumeSections)).withReferences === true, letterDate: calendarDay().toISOString(), company: application.company, location: application.location, coverLetterLayout: kind === "COVER_LETTER" ? "SIDEBAR" : "CLASSIC", styles: kind === "COVER_LETTER" ? letterFormatting("SIDEBAR") ?? {} : {} });
         state.profile.facts = [];
         if (kind === "COVER_LETTER") {

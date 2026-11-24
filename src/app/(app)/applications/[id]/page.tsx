@@ -9,9 +9,9 @@ import { formatShortDate } from "@/lib/dates";
 import { resolveFileName } from "@/lib/file-name";
 import { refineJobKey } from "@/lib/jobs/refine";
 import { regenerateUnitJob, unitJobKey } from "@/lib/jobs/regenerate-unit";
-import { refreshResearchJobKey } from "@/lib/jobs/refresh-research";
-import { savedCompanyResearch } from "@/lib/research/schema";
-import { findUnfinishedJobs } from "@/lib/jobs/runner";
+import { peopleJobKey, postingFingerprint } from "@/lib/jobs/find-hiring-contacts";
+import { peopleResearchSchema } from "@/lib/people/schema";
+import { findLatestJob, findUnfinishedJobs } from "@/lib/jobs/runner";
 import { writeDocumentJobKey } from "@/lib/jobs/write-document";
 import { scoreResumeJobKey } from "@/lib/jobs/score-resume";
 import { resumeFitSchema } from "@/lib/resume-fit";
@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: PageProps<"/applications/[id]
 export default async function ApplicationPage({ params, searchParams }: PageProps<"/applications/[id]">) {
   const [{ id }, { tab }] = await Promise.all([params, searchParams]);
   await pullCalendar(id);
-  const [{ application, profile, liveProfile, sent, settings, extracted, resume, letter, email, includeReferences, sections, ownSections, letterDate }, aiReady, unitJobs, refineJobs, emailJobs, timeZone, google, emails, themes, resumeJobs, letterJobs, scoreJobs, researchJobs] =
+  const [{ application, profile, liveProfile, sent, settings, extracted, resume, letter, email, includeReferences, sections, ownSections, letterDate }, aiReady, unitJobs, refineJobs, emailJobs, timeZone, google, emails, themes, resumeJobs, letterJobs, scoreJobs, peopleJob] =
     await Promise.all([
       loadDocuments(id),
       isAiConfigured(),
@@ -62,10 +62,9 @@ export default async function ApplicationPage({ params, searchParams }: PageProp
       findUnfinishedJobs(writeDocumentJobKey(id, "RESUME")),
       findUnfinishedJobs(writeDocumentJobKey(id, "COVER_LETTER")),
       findUnfinishedJobs(scoreResumeJobKey(id)),
-      findUnfinishedJobs(refreshResearchJobKey(id)),
+      findLatestJob(peopleJobKey(id)),
     ]);
 
-  const saved = savedCompanyResearch(application.companyResearch);
   const match = readJson(matchSchema, application.match);
   const messages = application.messages
     .map((message, index) => ({
@@ -130,9 +129,14 @@ export default async function ApplicationPage({ params, searchParams }: PageProp
       email={email}
       writingEmail={emailJobs.at(-1)?.id ?? null}
       writingDocuments={{ resume: resumeJobs.at(-1)?.id ?? null, letter: letterJobs.at(-1)?.id ?? null }}
-      research={{ enabled: settings.companyResearchEnabled, jobId: researchJobs.at(-1)?.id ?? null, saved: saved && { status: saved.status, sources: saved.sources } }}
       resumeFit={readJson(resumeFitSchema, application.resumeFit)}
       scoringResume={scoreJobs.at(-1)?.id ?? null}
+      peopleSearch={{
+        saved: readJson(peopleResearchSchema, application.peopleResearch),
+        postingFingerprint: postingFingerprint(application),
+        activeJob: peopleJob?.status === "QUEUED" || peopleJob?.status === "RUNNING" ? peopleJob.id : null,
+        previousError: peopleJob?.status === "FAILED" ? peopleJob.error : null,
+      }}
       attachments={{ resume: resume ? fileName("RESUME") : null, letter: letter ? fileName("COVER_LETTER") : null }}
       gmail={
         google.status === "not-configured" && emails.length === 0

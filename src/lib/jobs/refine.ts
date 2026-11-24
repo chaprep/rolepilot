@@ -1,8 +1,6 @@
 import { prepareCandidateProfile, assertCandidateContext } from "@/lib/memory/context";
 import "server-only";
 
-import { researchForEdits } from "@/lib/research/application";
-
 import { z } from "zod";
 
 import { ChatRole, DocumentKind, VersionCause } from "@/generated/prisma/enums";
@@ -105,6 +103,7 @@ export const refineJob = defineJob({
         privateFields,
         history,
         target: targetUnit ? `${targetUnit.label} (${targetUnit.id})` : null,
+        targetDocument: targetUnit ? target?.document : undefined,
         viewing,
         resume,
         letter,
@@ -114,7 +113,6 @@ export const refineJob = defineJob({
         tone: documentStates.COVER_LETTER?.tone ?? application.tone,
         facts: await loadFactTexts(applicationId),
         posting: application.postingText,
-        companyResearch: researchForEdits(application),
       },
       // Requested text is English; partial edits retain historical document metadata.
       { ...options, signal },

@@ -1,21 +1,20 @@
 import { z } from "zod";
 
-import type { CompanyResearch } from "@/lib/research/schema";
 import { acceptedSkills, RESUME_RULES, RESUME_STRATEGY, resumeEvidenceSources, tailoredSkillsSchema } from "./tailor-resume";
 
 import { DocumentKind, type Tone } from "@/generated/prisma/enums";
 import { SIGN_OFF_UNIT, type Extracted, type Unit } from "@/lib/application-data";
 import { emailParts } from "@/lib/application-email";
-import { isFrameUnit } from "@/lib/letter-frame";
+import { companyClaimsSchema, keepCandidateWarnings, RESEARCH_CLAIMS_RULE, RESEARCH_WRITING_RULES, researchForPrompt, validCompanyClaims, type CoverLetterResearch } from "@/lib/cover-letter-research";
+import { isFrameUnit, isParagraph } from "@/lib/letter-frame";
 import type { ProfileData } from "@/lib/profile";
 import { TONES } from "@/lib/tones";
 import { bulletLines, isBulletUnit } from "@/lib/unit-text";
 
-import { guardCoverLetter, guardSources, guardUnits, resumeFactSources } from "../fact-guard";
+import { guardSources, guardUnits, resumeFactSources } from "../fact-guard";
 
 import {
   applicationFacts,
-  companyResearchForPrompt,
   candidateFacts,
   COVER_LETTER_APPROACH,
   CREATIVITY,
@@ -32,7 +31,7 @@ import {
 
 import { EMAIL_WRITING_BRIEF } from "./write-email";
 
-export const REGENERATE_UNIT_VERSION = "regenerate-unit@11";
+export const REGENERATE_UNIT_VERSION = "regenerate-unit@13";
 
 /** What the letter's frame parts are, for the model (E8-11). */
 const FRAME_PARTS: Record<string, string> = {
@@ -55,7 +54,7 @@ const DOCUMENT_NAMES: Record<DocumentKind, string> = {
   [DocumentKind.EMAIL]: "application email",
 };
 
-const answerSchema = z.object({ text: z.string(), skills: tailoredSkillsSchema.nullable().optional() });
+const answerSchema = z.object({ text: z.string(), skills: tailoredSkillsSchema.nullable().optional(), companyClaims: companyClaimsSchema.nullable().optional() });
 
 export type RegenerateInput = {
   kind: DocumentKind;
@@ -70,7 +69,7 @@ export type RegenerateInput = {
   facts: string[];
   /** The posting as pasted, for the fact guard. */
   posting: string;
-  companyResearch?: CompanyResearch;
+  research?: CoverLetterResearch | null;
 };
 
 /** APP-5: a fresh version of one part, the rest left alone; the unit comes back with its new text. */
@@ -79,7 +78,9 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
   const bullets = isBulletUnit(unit.id);
   const isProject = unit.id.startsWith("project:");
   const what = DOCUMENT_NAMES[kind];
-  const answer = await provider.complete({
+  const letterBody = kind === DocumentKind.COVER_LETTER && isParagraph(unit);
+  const research = letterBody ? input.research : null;
+  const rewrite = (brief?: CoverLetterResearch | null) => provider.complete({
     task: "regenerate-unit",
     system: system(
       `You write a new version of one part of a candidate's ${what} for one job, as JSON with the new text.`,
@@ -92,6 +93,8 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
       }`,
       // The letter's greeting and address block aren't where its argument goes.
       kind === DocumentKind.COVER_LETTER && !isFrameUnit(unit.id) && COVER_LETTER_APPROACH,
+      letterBody && RESEARCH_WRITING_RULES,
+      Boolean(brief?.findings.length) && RESEARCH_CLAIMS_RULE,
       kind !== DocumentKind.RESUME && `Tone: ${TONES[tone].label}. ${TONES[tone].description}`,
       kind === DocumentKind.COVER_LETTER && FRAME_PARTS[unit.id],
       kind === DocumentKind.EMAIL && EMAIL_PARTS[unit.id],
@@ -114,8 +117,9 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
           `The whole ${what} now:\n${JSON.stringify(document, null, 2)}`,
           kind === DocumentKind.RESUME && `Original posting (reference only):\n${postingForPrompt(posting)}`,
           kind === DocumentKind.RESUME && `Candidate evidence sources:\n${JSON.stringify(resumeEvidenceSources(profile, facts))}`,
+          letterBody && `Job posting (source material):\n${postingForPrompt(posting)}`,
+          researchForPrompt(brief),
           applicationFacts(facts),
-          kind === DocumentKind.COVER_LETTER && companyResearchForPrompt(input.companyResearch),
           `Write a new version of "${unit.label}" (${unit.id}). Its current text:\n${unit.text}`,
         ]
           .filter(Boolean)
@@ -127,15 +131,25 @@ export const regenerateUnit: Task<RegenerateInput, Unit> = async (provider, inpu
     creativity: options.creativity,
     signal: options.signal,
   });
+  let brief = research;
+  let answer = await rewrite(brief);
+  if (brief?.findings.length && !validCompanyClaims(answer.text, answer.companyClaims, brief)) {
+    brief = null;
+    answer = await rewrite();
+  }
   const text = kind === DocumentKind.RESUME && unit.id === "skills" ? acceptedSkills(profile, answer.skills ?? [], facts) : bullets ? bulletLines(answer.text) : answer.text.trim();
   // An English sign-off stays the tone's.
   const updated = { ...unit, text: unit.id === SIGN_OFF_UNIT ? TONES[tone].signOff : text || unit.text };
+  const flagLetter = () => {
+    const checked = guardUnits([updated], guardSources(profile, extracted, posting, facts))[0];
+    return { ...checked, unverified: keepCandidateWarnings(text, checked.unverified, answer.companyClaims, brief) };
+  };
   return {
     // The letter's recipient and greeting aren't claims about the candidate.
     data:
       options.strict && !isFrameUnit(unit.id)
         ? kind === DocumentKind.COVER_LETTER
-          ? guardCoverLetter([updated], guardSources(profile, extracted, posting, facts), profile.basics.name, input.companyResearch)[0]
+          ? flagLetter()
           // The email's greeting names its recipient, from the posting or typed in by the user.
           : guardUnits([updated], kind === DocumentKind.RESUME ? resumeFactSources(profile, facts) : guardSources(profile, extracted, [posting, emailParts(document).to].join("\n"), facts))[0]
         : { ...updated, unverified: undefined },

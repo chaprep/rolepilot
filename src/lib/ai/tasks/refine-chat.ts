@@ -2,8 +2,6 @@ import { RESUME_STRATEGY } from "./tailor-resume";
 import type { JsonCompletionRequest } from "../provider";
 import { z } from "zod";
 
-import type { CompanyResearch } from "@/lib/research/schema";
-
 import { DocumentKind, Tone } from "@/generated/prisma/enums";
 import { SIGN_OFF_UNIT, type Extracted, type Unit, type UnitEdit } from "@/lib/application-data";
 import { withoutPrivateParts } from "@/lib/letter-frame";
@@ -14,7 +12,6 @@ import { THEME_FONTS, BUILT_IN_THEMES, type ThemeData } from "@/lib/themes";
 
 import {
   applicationFacts,
-  companyResearchForPrompt,
   CREATIVITY,
   jobForPrompt,
   ENGLISH_WRITING,
@@ -25,7 +22,7 @@ import {
   type Task,
 } from "./prompt-parts";
 
-export const REFINE_CHAT_VERSION = "refine-chat@16";
+export const REFINE_CHAT_VERSION = "refine-chat@17";
 
 const answerSchema = z.object({
   reply: z.string(),
@@ -56,6 +53,7 @@ export type RefineInput = {
   history: ChatTurn[];
   /** The unit the request is about, if the user picked one ("About: Summary"). */
   target: string | null;
+  targetDocument?: DocumentKind;
   /** The document on screen, which a request without a target is most likely about. */
   viewing?: DocumentKind | null;
   resume: Unit[];
@@ -69,7 +67,6 @@ export type RefineInput = {
   facts: string[];
   /** The posting as pasted, for job context. */
   posting: string;
-  companyResearch?: CompanyResearch;
 };
 
 export type Refinement = { reply: string; edits: UnitEdit[]; tone: Tone | null; declined: boolean; operations?: DocumentOperation[] };
@@ -89,7 +86,7 @@ export const refineChat: Task<RefineInput, Refinement> = async (provider, input,
   const { request, history, target, viewing, resume, letter, email = [], profile, extracted, tone, facts, posting } = input;
   const looking = viewing ? LOOKING_AT[viewing] : null;
   const completion: JsonCompletionRequest<z.infer<typeof answerSchema>> = {
-    task: "refine-chat",
+    task: (input.targetDocument ?? viewing) === DocumentKind.EMAIL ? "refine-email-chat" : "refine-chat",
     system: system(
       INSTRUCTIONS,
       input.documentStates && DOCUMENT_OPERATIONS,
@@ -113,7 +110,6 @@ export const refineChat: Task<RefineInput, Refinement> = async (provider, input,
           email.length > 0 && `The email's units:\n${JSON.stringify(email, null, 2)}`,
           `Original posting (reference only; corrected job details above take precedence):\n${postingForPrompt(posting)}`,
           applicationFacts(facts),
-          letter.length > 0 && (!viewing || viewing === DocumentKind.COVER_LETTER) && companyResearchForPrompt(input.companyResearch),
           input.documentStates && `Current independent document inputs (use these over global defaults):\n${JSON.stringify(Object.fromEntries(Object.entries(input.documentStates).map(([kind, state]) => [kind, stateForPrompt(state!)])))}`,
           input.documentStates && `Available themes:\n${JSON.stringify(input.themes?.length ? input.themes : BUILT_IN_THEMES)}`,
           input.documentStates && `Registered fonts:\n${JSON.stringify(Object.keys(THEME_FONTS))}`,

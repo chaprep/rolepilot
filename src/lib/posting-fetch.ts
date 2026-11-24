@@ -34,7 +34,8 @@ const MAX_REDIRECTS = 5;
 /** Less than this isn't a posting: a cookie wall, an error page or a script shell. */
 const MIN_CHARACTERS = 200;
 
-export type FetchedPosting = { ok: true; text: string; source: "structured" | "page"; url: string } | { ok: false; error: string };
+type FetchFailure = { ok: false; error: string; tryExa?: true };
+export type FetchedPosting = { ok: true; text: string; source: "structured" | "page"; url: string } | FetchFailure;
 
 // ─── Where requests may go ───────────────────────────────────────────────────
 
@@ -108,6 +109,7 @@ function request(url: URL, lookup: LookupFunction, timeoutMs: number, userAgent:
     const outgoing = client.get(
       url,
       {
+        agent: false,
         lookup,
         headers: {
           "user-agent": userAgent,
@@ -155,13 +157,13 @@ export async function fetchPosting(
   { lookup = guardedLookup, timeoutMs = TIMEOUT_MS }: { lookup?: LookupFunction; timeoutMs?: number } = {},
 ): Promise<FetchedPosting> {
   const page = await fetchHtml(link, { lookup, timeoutMs });
-  if (!page.ok) return { ok: false, error: page.error };
+  if (!page.ok) return { ok: false, error: page.error, ...(page.tryExa && { tryExa: true }) };
   const posting = postingFromHtml(page.html);
-  if (!posting) return { ok: false, error: FETCH_MESSAGES.unreadable };
+  if (!posting) return { ok: false, error: FETCH_MESSAGES.unreadable, tryExa: true };
   return { ok: true, ...posting, url: page.url };
 }
 
-export type FetchedPage = { ok: true; html: string; url: string } | { ok: false; error: string; status?: number };
+export type FetchedPage = { ok: true; html: string; url: string } | (FetchFailure & { status?: number });
 
 /**
  * A web page's text, with the same guards as fetching a posting: public
@@ -190,26 +192,41 @@ export async function fetchHtml(
     if (lookup === guardedLookup && (isIP(host) ? !isPublicAddress(host) : /(^|\.)localhost\.?$/i.test(host))) {
       return { ok: false, error: FETCH_MESSAGES.privateAddress };
     }
+    let addressChecked = isIP(host) !== 0;
+    const trackLookup: LookupFunction = (hostname, options, callback) => {
+      lookup(hostname, options, (...args) => {
+        addressChecked = !args[0];
+        callback(...args);
+      });
+    };
     let response: Response;
     try {
       response = await Promise.race([
-        request(url, lookup, timeoutMs, userAgent),
+        request(url, trackLookup, timeoutMs, userAgent),
         new Promise<never>((_, reject) => setTimeout(() => reject(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" })), Math.max(0, deadline - Date.now())).unref()),
       ]);
     } catch (error) {
       const code = (error as { code?: string }).code;
       if (code === "EPRIVATE") return { ok: false, error: FETCH_MESSAGES.privateAddress };
       if (code === "ETOOBIG") return { ok: false, error: FETCH_MESSAGES.tooBig };
-      return { ok: false, error: FETCH_MESSAGES.unreachable };
+      return { ok: false, error: FETCH_MESSAGES.unreachable, ...(addressChecked && { tryExa: true }) };
     }
 
     const location = response.headers.location;
     if (response.status >= 300 && response.status < 400 && location) {
       if (redirects >= MAX_REDIRECTS) return { ok: false, error: FETCH_MESSAGES.unreachable };
-      url = new URL(location, url);
+      try {
+        url = new URL(location, url);
+      } catch {
+        return { ok: false, error: FETCH_MESSAGES.notWeb };
+      }
       continue;
     }
-    if (response.status >= 400) return { ok: false, error: FETCH_MESSAGES.failed(response.status), status: response.status };
+    if (response.status >= 400) {
+      const status = response.status;
+      const retryable = [401, 403, 408, 429, 999].includes(status) || (status >= 500 && status <= 599);
+      return { ok: false, error: FETCH_MESSAGES.failed(status), status, ...(retryable && { tryExa: true }) };
+    }
 
     const type = String(response.headers["content-type"] ?? "");
     if (type && !/text\/html|application\/xhtml\+xml|text\/plain/i.test(type)) return { ok: false, error: FETCH_MESSAGES.notPage };

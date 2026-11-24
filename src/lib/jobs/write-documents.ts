@@ -1,21 +1,24 @@
-import { prepareCandidateProfile, assertCandidateContext, candidateMemoryRevision } from "@/lib/memory/context";
 import "server-only";
+
+import { prepareCandidateProfile, assertCandidateContext, candidateMemoryRevision } from "@/lib/memory/context";
 
 import { z } from "zod";
 
 import { Tone } from "@/generated/prisma/enums";
 import { getAiProvider } from "@/lib/ai";
 import { loadTaskOptions } from "@/lib/ai/task-options";
-import { tailorResume, writeCoverLetter } from "@/lib/ai/tasks";
+import { tailorResume } from "@/lib/ai/tasks";
 import { extractedSchema, matchSchema, unitsSchema } from "@/lib/application-data";
-import { companyResearchSchema } from "@/lib/research/schema";
-import { researchForWriting, researchInput } from "@/lib/research/application";
 import { loadProfile } from "@/lib/profile-data";
 import { withoutSectionsOff } from "@/lib/resume-sections";
 import { DOCUMENTS_TO_WRITE } from "@/lib/settings";
 import { loadSettings } from "@/lib/settings-data";
 
-import { WRITE_DOCUMENTS_STEPS } from "./application-steps";
+import { coverLetterResearchSchema } from "@/lib/cover-letter-research";
+
+import { TAILOR_RESUME_STEP } from "./application-steps";
+
+import { generateCoverLetter } from "./generate-cover-letter";
 import { defineJob } from "./runner";
 
 /**
@@ -32,7 +35,6 @@ export const writeDocumentsJob = defineJob({
     readJobId: z.string().min(1),
     posting: z.string().min(1),
     postingUrl: z.string().max(2000).optional(),
-    companyWebsite: z.string().max(2048).optional(),
     /** What was read, with the user's corrections (company, role…) for the prompts. */
     extracted: extractedSchema,
     /** The match as shown, including skills added to the profile since. */
@@ -43,10 +45,10 @@ export const writeDocumentsJob = defineJob({
     /** Which documents to write (#367); the job agent and the connector write both. */
     write: z.enum(DOCUMENTS_TO_WRITE).default("both"),
   }),
-  result: z.object({ memoryRevision: z.number().int().optional(), resume: unitsSchema, resumeWith: z.string(), letter: unitsSchema, letterWith: z.string(), companyResearch: companyResearchSchema.optional() }),
-  async run({ posting, postingUrl, companyWebsite, extracted, match, tone, note, write, evidenceFacts = [] }, context) {
+  result: z.object({ memoryRevision: z.number().int().optional(), resume: unitsSchema, resumeWith: z.string(), letter: unitsSchema, letterWith: z.string(), coverLetterResearch: coverLetterResearchSchema.optional() }),
+  async run({ posting, postingUrl, extracted, match, tone, note, write, evidenceFacts = [] }, context) {
     const { step, signal } = context;
-    if (write !== "letter") await step(WRITE_DOCUMENTS_STEPS[0]);
+    if (write !== "letter") await step(TAILOR_RESUME_STEP);
     const [provider, options, fullProfile, settings] = await Promise.all([getAiProvider(), loadTaskOptions(), loadProfile(), loadSettings()]);
     // A section that's off on the base resume isn't written about (#297).
     const evidenceProfile = await prepareCandidateProfile(fullProfile, posting, signal, provider);
@@ -60,13 +62,10 @@ export const writeDocumentsJob = defineJob({
         ? skipped
         : await tailorResume(provider, { profile, evidenceProfile, extracted, match, facts, posting }, { ...options, signal });
 
-    const companyResearch = write === "resume" || !settings.companyResearchEnabled ? undefined
-      : await researchForWriting(researchInput({ extracted, posting, postingUrl, website: companyWebsite }), settings, provider, context);
-    if (write !== "resume") await step(WRITE_DOCUMENTS_STEPS[1]);
-    const letter = write === "resume" ? skipped : await writeCoverLetter(provider, { profile, extracted, match, tone, facts, posting, companyResearch }, { ...options, signal });
+    const letter = write === "resume" ? null : await generateCoverLetter(provider, { profile, extracted, match, tone, facts, posting, postingUrl }, options, context);
 
     await assertCandidateContext(evidenceProfile);
-    return { ...(companyResearch ? { companyResearch } : {}), memoryRevision: candidateMemoryRevision(evidenceProfile), resume: resume.data, resumeWith: resume.promptVersion, letter: letter.data, letterWith: letter.promptVersion };
+    return { memoryRevision: candidateMemoryRevision(evidenceProfile), resume: resume.data, resumeWith: resume.promptVersion, letter: letter?.data ?? [], letterWith: letter?.promptVersion ?? "", coverLetterResearch: postingUrl === undefined ? undefined : letter?.research };
   },
 });
 

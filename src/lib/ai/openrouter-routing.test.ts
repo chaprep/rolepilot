@@ -19,6 +19,8 @@ it("routes every task, overrides low effort, and records the actual model in com
     expect(usage[index]).toMatchObject({ task: assignment.task, model: assignment.model, provider: "OPENROUTER" });
   });
   expect(new Set(usage.map((entry) => entry.model))).toEqual(new Set([LUNA, SONNET]));
+  expect(usage.find(({ task }) => task === "refine-chat")?.model).toBe(LUNA);
+  expect(usage.find(({ task }) => task === "refine-email-chat")?.model).toBe(SONNET);
 });
 it("does not silently drop medium effort when the host rejects it", async () => {
   const requests = stubFetch(() => json({ error: { message: "Unsupported reasoning_effort" } }, { status: 400 }));
@@ -41,7 +43,7 @@ it("sends native tool definitions and preserves multiple tool call IDs, raw argu
   const usage: UsageEntry[] = [];
   const provider = new OpenRouterProvider("OPENAI", OPENROUTER_URL, "test-key", LUNA, 10_000, (entry) => usage.push(entry));
   const query = {
-    task: "research-company" as const, system: "Research",
+    task: "write-cover-letter" as const, system: "Research",
     tools: [{ name: "searchWeb", description: "Search", parameters: { type: "object", properties: { query: { type: "string" } } } }],
     messages: [{ role: "user" as const, content: "Ledgerly" }],
   };
@@ -61,12 +63,12 @@ it("sends native tool definitions and preserves multiple tool call IDs, raw argu
     { role: "tool", tool_call_id: "search-1" },
     { role: "tool", tool_call_id: "read-1" },
   ] });
-  expect(usage).toEqual(Array.from({ length: 2 }, () => ({ task: "research-company", provider: "OPENROUTER", model: SONNET, input: 10, output: 3 })));
+  expect(usage).toEqual(Array.from({ length: 2 }, () => ({ task: "write-cover-letter", provider: "OPENROUTER", model: SONNET, input: 10, output: 3 })));
 });
 
 it("reports a model without tool-capable endpoints without retrying", async () => {
   const requests = stubFetch(() => json({ error: { message: "No endpoints found that support tool use" } }, { status: 404 }));
   const provider = new OpenRouterProvider("OPENAI", OPENROUTER_URL, "test-key", LUNA, 10_000);
-  await expect(provider.toolTurn({ task: "research-company", system: "Test", messages: [], tools: [] })).rejects.toThrow();
+  await expect(provider.toolTurn({ task: "write-cover-letter", system: "Test", messages: [], tools: [] })).rejects.toThrow();
   expect(requests).toHaveLength(1);
 });

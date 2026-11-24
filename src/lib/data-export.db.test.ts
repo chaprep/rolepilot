@@ -83,6 +83,15 @@ describe("buildExport (E10-4)", () => {
     expect(JSON.stringify(data)).not.toContain("usagePing");
   });
 
+  it("keeps the One configuration and grant out of backups", async () => {
+    const keys = ["oneConfigEnc", "oneUserReference", "oneExaConnectionKey", "oneMuapiConnectionKey"];
+    await prisma().setting.createMany({ data: keys.map((key) => ({ key, value: "test-one-setting" })) });
+    const data = await buildExport(prisma(), { now, includeApiKey: true });
+    const exportedKeys = data.settings.map(({ key }) => key);
+    for (const key of keys) expect(exportedKeys).not.toContain(key);
+    expect(JSON.stringify(data)).not.toContain("test-one-setting");
+  });
+
   it("treats the job sources' keys like the API key, and has the postings (E14-9)", async () => {
     await prisma().setting.createMany({
       data: [

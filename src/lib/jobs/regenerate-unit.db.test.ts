@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MockProvider } from "@/lib/ai/providers/mock";
+import { coverLetterFingerprint, researchVersion } from "@/lib/cover-letter-research";
 import { demoResumeUnits } from "@/lib/demo-profile";
 import { createTestClient, resetDatabase } from "@/test/db";
 
@@ -118,4 +119,27 @@ describe("the letter's frame (E8-11)", () => {
     expect(prompt).toMatch(/It's the letter's greeting/);
     expect(prompt).toMatch(/Dutch/);
   });
+});
+
+it.each([false, true])("reuses the saved company brief only while it matches the posting (stale: %s)", async stale => {
+  const paragraph = { id: "paragraph:1", label: "Hook", text: "I solve onboarding problems." };
+  const application = await prisma().application.findUniqueOrThrow({ where: { id: "app-1" } });
+  const quote = "Ledgerly opened a partner design program.";
+  await prisma().application.update({ where: { id: application.id }, data: {
+    ...(stale ? { role: "A new role" } : {}),
+    coverLetterResearch: {
+      version: 1, promptVersion: researchVersion, researchedAt: "2026-11-24T08:00:00.000Z", fingerprint: coverLetterFingerprint(application),
+      outcome: "sourced", findings: [{ sourceId: "source-1", url: "https://ledgerly.example/news", title: "Company news", quote, fact: quote,
+        relevance: "The role supports partner tools.", inferred: true, candidateIds: ["a".repeat(24)] }],
+    },
+    documents: { create: { kind: "COVER_LETTER", units: [paragraph] } },
+  } });
+  const mock = new MockProvider({ reply: () => ({ text: "I could build better partner tools.", companyClaims: [] }) });
+  provider.current = mock;
+
+  expect(await regenerateUnitJob.run({ ...input, document: "COVER_LETTER", unitId: paragraph.id, from: paragraph.text }, context)).toMatchObject({ outcome: "rewritten" });
+  expect(mock.calls).toHaveLength(1);
+  const prompt = JSON.stringify(mock.calls[0]);
+  expect(prompt.includes(quote)).toBe(!stale);
+  expect(prompt).not.toContain("a".repeat(24));
 });

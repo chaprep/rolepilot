@@ -49,7 +49,7 @@ beforeEach(async () => {
 afterAll(() => prisma().$disconnect());
 
 describe("the Agent screen's data (E16-6)", () => {
-  it("links missing Jev credentials to Settings → Scoring", async () => {
+  it("links missing scoring credentials to Settings → AI provider", async () => {
     await saveSettings({ scorer: "JEV" });
     availability.ready=false;
     expect(await loadAgentView(now)).toMatchObject({ setupSection: "ai", setupProblem: "Enter your OpenRouter key in Settings → AI provider first." });

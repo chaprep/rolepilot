@@ -15,7 +15,7 @@ import { googleConnectPath, mayOpenExternally, navigationFor, permissionAllowed,
 // its start screen or rolepilot, from the user's server or from a server the app
 // starts on this computer. rolepilot is the same either way, as a web page in a view.
 
-const REPOSITORY_URL = "https://github.com/chaprep/job-finder";
+const REPOSITORY_URL = "https://github.com/chaprep/rolepilot";
 const SERVER_SESSION = "persist:rolepilot";
 const LOCAL_SESSION = "persist:local";
 const DESKTOP_TOKEN_HEADER = "x-rolepilot-desktop-token";

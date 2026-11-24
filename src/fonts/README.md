@@ -54,7 +54,7 @@ Then load it in `index.ts` with `next/font/local`, one `src` entry per weight. `
 
 ## Fonts for other scripts
 
-Documents can be written in Greek, Arabic, Persian, Hindi, Chinese, Japanese and Korean (PRD SET-7), which the theme fonts don't cover (E5-8). `index.ts` loads a fallback face for each script, limited with `unicode-range` to that script's characters, and every document font stack lists them before the theme font (`resolveTheme` in `src/lib/themes.ts`, `--script-fonts` in `src/components/documents/document.module.css`). Latin text skips them, a browser downloads one only for text that needs it, and PDFs never fall back to whatever fonts the server has.
+Existing documents and profile content can contain Greek, Arabic, Persian, Hindi, Chinese, Japanese and Korean text. The theme fonts use fallback faces for those scripts. `index.ts` loads a fallback face for each script, limited with `unicode-range` to that script's characters, and every document font stack lists them before the theme font (`resolveTheme` in `src/lib/themes.ts`, `--script-fonts` in `src/components/documents/document.module.css`). Latin text skips them, a browser downloads one only for text that needs it, and PDFs never fall back to whatever fonts the server has.
 
 - **Greek:** EB Garamond for serif themes and IBM Plex Sans for the others, loaded a second time with a Greek-only range. Next.js emits those two files twice (0.5 MB); the Greek face has to come before the theme font, because Geist has a handful of Greek letters and would otherwise mix two styles.
 - **Arabic and Persian:** IBM Plex Sans Arabic. **Hindi:** IBM Plex Sans Devanagari.
