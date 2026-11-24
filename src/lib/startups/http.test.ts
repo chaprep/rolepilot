@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe("Startups' requests (#222)", () => {
   it("say what they are, and link to the page explaining them", () => {
-    expect(STARTUPS_USER_AGENT).toMatch(/^Mozilla\/5\.0 \(compatible; rolepilot\/[\w.-]+; \+https:\/\/github\.com\/chaprep\/job-finder\/blob\/main\/PRIVACY\.md#startups\)$/);
+    expect(STARTUPS_USER_AGENT).toMatch(/^Mozilla\/5\.0 \(compatible; rolepilot\/[\w.-]+; \+https:\/\/github\.com\/chaprep\/rolepilot\/blob\/main\/PRIVACY\.md#startups\)$/);
   });
 
   it("go to the fake server in the end-to-end tests", () => {

@@ -1,5 +1,10 @@
 # Rolepilot changelog
 
+## 2026-11-24 — Update the GitHub image workflow’s repository-link test
+
+- Updated the Startups user-agent test to expect the current Rolepilot repository link. The previous assertion failed the GitHub coverage test step and prevented the production image job from starting.
+- All four tests in the affected file and Git whitespace checks passed. The change leaves the running deployment and saved data intact.
+
 ## 2026-11-24 — Prepare the update for the Rolepilot repository
 
 - Updated the GitHub destination in the public guides, issue templates, application source links, desktop metadata and request identification. The application snapshot includes OpenRouter onboarding, the One integration, People search, cover letter research and the posting import fallback.
