@@ -1,5 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestClient, resetDatabase } from "@/test/db";
+import { getSession } from "@/lib/auth/session";
+import { getAiProvider } from "@/lib/ai";
+import { extractedOf } from "@/lib/application-data";
 import { demoProfile } from "@/lib/demo-profile";
 import { MockProvider } from "@/lib/ai/providers/mock";
 import { applyMemoryExtraction, forgetMemory, memoryState, recordMemorySource, withdrawSources } from "./store";
@@ -10,9 +13,13 @@ import { matchRequirements } from "@/lib/ai/tasks/match-requirements";
 import { buildExport } from "@/lib/data-export";
 import { importExport, parseExport } from "@/lib/data-import";
 import { validateMemoryImport } from "./import";
+import { clarifyMemory, correctRememberedFact, forgetRememberedFact, listMemories, matchMemoryStatus, pauseMemory, refreshMemoryMatch, retryMemory } from "./actions";
 
 const db = vi.hoisted(() => ({ client: undefined as ReturnType<typeof createTestClient> | undefined }));
 vi.mock("@/lib/prisma", async () => { const { createTestClient } = await import("@/test/db"); db.client = createTestClient(); return { prisma: db.client }; });
+vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/lib/ai", () => ({ getAiProvider: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/env", () => ({ env: { ROLEPILOT_SECRET: "s".repeat(32) } }));
 const prisma = () => db.client!;
 const claim = (text = "I used Docker to deploy internal tools.", extra: Partial<MemoryClaim> = {}): MemoryClaim => ({ text, quote: text, kind: "EXPERIENCE", subject: "deployments", capabilities: ["Docker"], unitId: null, replaces: null, conflicts: [], ...extra });
@@ -194,5 +201,71 @@ describe("automatic reusable memory", () => {
     expect(input.facts.some(row => row.text.includes("Python"))).toBe(true);
     expect(input.facts.some(row => row.text.includes("Docker"))).toBe(false);
     expect((await memoryState()).revision).toBe(file.memory!.state!.revision);
+  });
+});
+
+describe("memory controls", () => {
+  beforeEach(() => {
+    vi.mocked(getSession).mockResolvedValue({ persistent: false, issuedAt: new Date(), expiresAt: new Date() });
+  });
+
+  it("lists remembered evidence and keeps corrections attributable to an existing role", async () => {
+    const { fact } = await remember();
+    await prisma().experience.create({ data: { id: "role", role: "Engineer", company: "Company X" } });
+    await prisma().project.create({ data: { id: "project", name: "Tooling" } });
+    const input = { id: fact.id, revision: fact.revision, text: "I used Docker on two internal tools." };
+    expect(await listMemories({})).toMatchObject({
+      ok: true,
+      data: {
+        count: 1,
+        contexts: [{ id: "experience:role", label: "Engineer at Company X" }, { id: "project:project", label: "Tooling" }],
+        facts: [{ id: fact.id, evidence: [{ quote: claim().text, applicationId: "a" }] }],
+      },
+    });
+    expect(await correctRememberedFact({ ...input, unitId: "experience:missing" })).toMatchObject({ ok: false, error: expect.stringContaining("no longer exists") });
+    expect(await correctRememberedFact({ ...input, text: "Contact me at person@example.com" })).toMatchObject({ ok: false, error: expect.stringContaining("contact details") });
+    expect(await correctRememberedFact({ ...input, unitId: "experience:role" })).toMatchObject({ ok: true });
+    expect(await correctRememberedFact(input)).toMatchObject({ ok: false, error: expect.stringContaining("memory changed") });
+    const replacement = await prisma().memoryFact.findFirstOrThrow({ where: { status: "ACTIVE" } });
+    expect(replacement).toMatchObject({ text: input.text, experienceId: "role" });
+    expect(await correctRememberedFact({ id: replacement.id, revision: replacement.revision, unitId: null, text: "I used Docker on three internal tools." })).toMatchObject({ ok: true });
+    const general = await prisma().memoryFact.findFirstOrThrow({ where: { status: "ACTIVE" } });
+    expect(general).toMatchObject({ experienceId: null, attribution: { scope: "GENERAL" } });
+    expect(await forgetRememberedFact({ id: general.id, revision: general.revision })).toMatchObject({ ok: true });
+    expect(await listMemories({})).toMatchObject({ ok: true, data: { count: 0, facts: [] } });
+  });
+
+  it("queues one clarification, allows retry, and preserves pending evidence while paused", async () => {
+    const source = await prisma().$transaction(tx => recordMemorySource(tx, { sourceKey: "clarify", kind: "CHAT", text: "I mentored three people.", applicationId: "a" }));
+    const model = new MockProvider({ reply: () => ({ claims: [], clarifications: ["In which role?"] }) });
+    await processMemorySource(source.id, model);
+    expect(await listMemories({})).toMatchObject({ ok: true, data: { questions: [{ id: source.id, error: "In which role?" }] } });
+    expect(await pauseMemory({ paused: true })).toMatchObject({ ok: true });
+    expect(await clarifyMemory({ sourceId: source.id, answer: "At Company A." })).toMatchObject({ ok: true });
+    expect(await clarifyMemory({ sourceId: source.id, answer: "At Company B." })).toMatchObject({ ok: false, error: expect.stringContaining("already been resolved") });
+    const pending = await prisma().memorySource.findFirstOrThrow({ where: { status: "PENDING" } });
+    expect(pending).toMatchObject({ applicationId: "a", text: "I mentored three people.\nClarification from the candidate: At Company A." });
+    await processMemorySource(pending.id, model);
+    expect(model.calls).toHaveLength(1);
+    await prisma().memorySource.update({ where: { id: pending.id }, data: { status: "FAILED", attempts: 3, error: "offline" } });
+    expect(await retryMemory({})).toMatchObject({ ok: true });
+    expect(await listMemories({})).toMatchObject({ ok: true, data: { pending: 1, failed: 0, paused: true } });
+    expect(await prisma().memorySource.findUnique({ where: { id: pending.id } })).toMatchObject({ attempts: 0, error: null });
+    expect(await pauseMemory({ paused: false })).toMatchObject({ ok: true });
+    expect((await memoryState()).paused).toBe(false);
+  });
+
+  it("marks application matches stale until they are refreshed with the corrected facts", async () => {
+    const { fact } = await remember();
+    const app = await prisma().application.findUniqueOrThrow({ where: { id: "a" } });
+    const requirements = [{ text: "Containerization experience", kind: "skill", skill: "Docker", years: null, language: null }] as const;
+    await prisma().application.update({ where: { id: app.id }, data: { extracted: { ...extractedOf(app), requirements: [...requirements] } } });
+    const model = new MockProvider({ reply: () => ({ matches: [{ requirement: 0, skill: null, language: null, certification: null, evidence: [{ id: `memory:${fact.id}`, quote: claim().text }] }] }) });
+    vi.mocked(getAiProvider).mockResolvedValueOnce(model);
+    expect(await refreshMemoryMatch({ applicationId: app.id })).toMatchObject({ ok: true });
+    expect(await matchMemoryStatus({ applicationId: app.id })).toEqual({ ok: true, data: { stale: false } });
+    expect(await prisma().application.findUnique({ where: { id: app.id } })).toMatchObject({ match: { items: [{ evidenceOrigin: "memory" }] } });
+    expect(await forgetRememberedFact({ id: fact.id, revision: fact.revision })).toMatchObject({ ok: true });
+    expect(await matchMemoryStatus({ applicationId: app.id })).toEqual({ ok: true, data: { stale: true } });
   });
 });

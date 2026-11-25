@@ -35,6 +35,7 @@ async function readResume(page: Page) {
 
 test("says which files it takes", async ({ page }) => {
   await page.goto("/profile/import");
+  await page.waitForLoadState("networkidle");
   const file = page.getByLabel("Your resume, as PDF, Word (.docx) or Markdown (.md)");
   await file.setInputFiles({ name: "resume.png", mimeType: "image/png", buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]) });
   await page.getByRole("button", { name: "Read my resume →" }).click();
@@ -79,6 +80,7 @@ test("replaces the profile after asking", async ({ page }) => {
 test("reads a PDF too: rolepilot's own base resume", async ({ page }) => {
   const pdf = await (await page.request.get("/api/pdf?doc=base")).body();
   await page.goto("/profile/import");
+  await page.waitForLoadState("networkidle");
   await page.getByLabel("Your resume, as PDF, Word (.docx) or Markdown (.md)").setInputFiles({ name: "resume.pdf", mimeType: "application/pdf", buffer: pdf });
   await page.getByRole("button", { name: "Read my resume →" }).click();
   await expect(page.getByRole("heading", { name: "Here's what your resume says" })).toBeVisible();
@@ -96,6 +98,7 @@ test("reads Markdown too", async ({ page }) => {
     "**Skills:** Figma · **Languages:** Dutch (native)",
   ].join("\n");
   await page.goto("/profile/import");
+  await page.waitForLoadState("networkidle");
   await page.getByLabel("Your resume, as PDF, Word (.docx) or Markdown (.md)").setInputFiles({ name: "resume.md", mimeType: "text/markdown", buffer: Buffer.from(markdown) });
   await page.getByRole("button", { name: "Read my resume →" }).click();
   await expect(page.getByRole("heading", { name: "Here's what your resume says" })).toBeVisible();

@@ -96,21 +96,26 @@ createServer((request, response) => {
   if (url.pathname === "/startup-requests") return send(response, 200, { requests: siteRequests });
   if (url.pathname.startsWith("/startups/")) return startups(url.pathname, request, response);
   // Jev through the fake OpenRouter connection answers each question from
-  // its id and line, so a spec knows the score: every Score at its top level
-  // but past work one below, a line with "years", "skills" or "experience"
-  // required, and shown when it's about product design or Figma.
+  // its id, line and posting. The three jobs have distinct work matches so
+  // the agent exercises ordering and retains a posting below its threshold.
   if (url.pathname === "/typesafe/v1/systemone" && request.method === "POST") {
     if (request.headers.authorization !== `Bearer ${OPENROUTER_KEY}`) return send(response, 401, { detail: "Invalid API key" });
     let body = "";
     request.on("data", (chunk: Buffer) => (body += chunk.toString()));
     request.on("end", () => {
-      const { questions } = JSON.parse(body) as { questions: Record<string, { type: string; criteria?: unknown[]; instructions: unknown }> };
+      const { state, questions } = JSON.parse(body) as {
+        state?: { posting?: { company?: string } };
+        questions: Record<string, { type: string; criteria?: unknown[]; instructions: unknown }>;
+      };
+      const company = state?.posting?.company;
+      const workGap = company === "Harbour Freight" ? 2 : company === "Tulip Health" ? 3 : 1;
       const lineOf = (question: { instructions: unknown }) => String((question.instructions as { line?: string }).line ?? "");
       const answers = Object.fromEntries(
         Object.entries(questions).map(([id, question]) => {
           if (question.type === "score") {
             const top = (question.criteria?.length ?? 1) - 1;
-            return [id, { type: "score", score: id === "work" ? top - 1 : top, confidence: 0.9, legend: {}, probabilities: {} }];
+            const gap = id === "work" ? workGap : id === "seniority" && company === "Tulip Health" ? 1 : 0;
+            return [id, { type: "score", score: Math.max(0, top - gap), confidence: 0.9, legend: {}, probabilities: {} }];
           }
           if (question.type === "choice") {
             const required = /years|skills|experience/i.test(lineOf(question));

@@ -87,8 +87,13 @@ test("keeps added JD evidence inside one application through generation, updatin
   await row.getByRole("button", { name: "Add for this application" }).click();
   await page.getByRole("textbox", { name: "Supporting experience", exact: true }).fill("Used Kubernetes for service rollouts.");
   await page.getByRole("button", { name: "Save for this application" }).click();
-  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Added your supporting experience to this resume.")).toBeVisible();
+  await expect(page.getByText("Information saved for this application.", { exact: false })).toBeVisible();
   await page.getByRole("tab", { name: "Resume", exact: true }).click();
+  await expect(page.locator('[data-unit="summary"]')).toHaveText(summaryBefore);
+  const chat = page.getByRole("textbox", { name: "Ask for a change" });
+  await chat.fill("Use my saved Kubernetes evidence in the summary.");
+  await chat.press("Enter");
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Added your supporting experience to this resume.")).toBeVisible();
   await expect(page.locator('[data-unit="summary"]')).not.toHaveText(summaryBefore);
   const pdf = await page.request.get(`/api/pdf?doc=resume&application=${id}`);
   expect(pdf.ok()).toBe(true);

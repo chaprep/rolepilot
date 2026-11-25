@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { resetData, sql } from "./support";
 
 // The setup guide (E21): it opens by itself on a fresh install, walks
-// through each step, and holds the usage ping question back until it's left.
+// through each step, and returns to the dashboard.
 // Hosted AI keys aren't checked here: that would reach the vendors.
 test.beforeEach(async () => {
   await resetData();
@@ -12,16 +12,20 @@ test.beforeEach(async () => {
 
 async function expectAccessible(page: Page) {
   const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
-  expect(violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical").map((violation) => violation.id)).toEqual([]);
+  expect(violations
+    .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
+    .map(({ id, nodes }) => ({ id, nodes: nodes.map(({ target, failureSummary }) => ({ target, failureSummary })) }))).toEqual([]);
 }
 
 const freshInstall = async () => {
   await sql(`DELETE FROM "Application"`);
   await sql(`DELETE FROM "ProfileField" WHERE key = 'name'`);
-  await sql(`DELETE FROM "Setting" WHERE key IN ('setupGuide', 'usagePingChoice', 'usagePingChoiceAt', 'usagePingChoiceText')`);
+  await sql(`DELETE FROM "Setting" WHERE key = 'setupGuide'`);
 };
 
 test("opens by itself on a fresh install and walks through every step", async ({ page }) => {
+  // Check stable colors between the guide's step transitions.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await freshInstall();
   await page.goto("/");
   await expect(page).toHaveURL("/welcome");
@@ -66,13 +70,13 @@ test("opens by itself on a fresh install and walks through every step", async ({
   await expect(page.locator("input[type=file]")).toBeAttached();
   await page.getByRole("link", { name: "Skip this step →" }).click();
 
-  // Done: what's set up, and the usage ping question once the guide is behind.
+  // Done: review the setup summary and return to the dashboard.
   await expect(page.getByRole("heading", { name: "You're all set" })).toBeVisible();
   await expect(page.getByRole("definition").filter({ hasText: "JSearch" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Fill in your profile" })).toBeVisible();
   await page.getByRole("link", { name: "Go to the dashboard" }).click();
   await expect(page).toHaveURL("/");
-  await expect(page.getByRole("dialog", { name: "Send a daily usage ping?" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Send a daily usage ping?" })).toHaveCount(0);
 });
 
 test("opens again from Settings, and leaving it goes back to the app for good", async ({ page }) => {

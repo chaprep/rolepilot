@@ -22,6 +22,19 @@ describe("document labels", () => {
     }
   });
 
+  it.each(DOCUMENT_LANGUAGES)("formats the dynamic labels on saved $name documents", ({ name }) => {
+    const labels = documentLabels(name);
+    const date = "2027";
+    const years = new Intl.NumberFormat(labels.locale).format(34);
+    expect(labels.validUntil(date)).toContain(date);
+    expect(ageLabel(34, labels)).toContain(years);
+    const generic = labels.greeting("");
+    const named = labels.greeting("Ledgerly");
+    expect(generic.trim()).not.toBe("");
+    expect(generic).not.toContain("Ledgerly");
+    if (named !== generic) expect(named).toContain("Ledgerly");
+  });
+
   it("uses English for English, no language, and languages added with Other language…", () => {
     for (const language of ["English", null, undefined, "", "Hebrew", "Klingon"]) {
       expect(documentLabels(language)).toBe(ENGLISH_LABELS);

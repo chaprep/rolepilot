@@ -9,7 +9,7 @@ test("automatically reuses, corrects and forgets candidate information across ap
   await page.goto(`/applications/${application.id}`);
   await page.getByRole("textbox", { name: "Ask for a change" }).fill(statement);
   await page.getByRole("textbox", { name: "Ask for a change" }).press("Enter");
-  await expect.poll(async () => (await sql<{ count: string }>(`SELECT count(*)::text AS count FROM "MemoryFact" WHERE text = $1 AND status = 'ACTIVE'`, [statement]))[0].count).toBe("1");
+  await expect(page.getByRole("log", { name: "Conversation" })).toContainText(statement);
   await expect(page.getByText("Thinking…", { exact: true })).not.toBeVisible();
   const original = await sql(`SELECT units::text, state::text FROM "Document" WHERE "applicationId" = $1 ORDER BY kind`, [application.id]);
   await page.goto("/new?fresh=1");
@@ -17,6 +17,7 @@ test("automatically reuses, corrects and forgets candidate information across ap
   await page.getByRole("button", { name: "Read the posting →" }).click();
   await expect(page.getByRole("heading", { name: "How you match" })).toBeVisible();
   await expect(page.getByText(/Supported by remembered information/)).toBeVisible();
+  await expect.poll(async () => (await sql<{ count: string }>(`SELECT count(*)::text AS count FROM "MemoryFact" WHERE text = $1 AND status = 'ACTIVE'`, [statement]))[0].count).toBe("1");
   await page.getByRole("button", { name: "Create application →" }).click();
   await page.waitForURL(/\/applications\/c/);
   await expect(page.locator('[data-unit="summary"]')).toContainText("Docker deployments");

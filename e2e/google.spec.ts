@@ -68,7 +68,7 @@ test("connects Google, sends an application through Gmail, and answers the reply
   expect(application.raw).toMatch(/^From: Jane Doe <jane\.doe@gmail\.example>\r?$/m);
   expect(application.raw).toMatch(/^To: John Doe <careers@example\.com>\r?$/m);
   expect(application.raw).toMatch(/^Subject: Application: Senior Product Designer, Payments\r?$/m);
-  expect(application.text).toMatch(/^Dear John,/);
+  expect(application.text).toMatch(/^Hi,/);
   expect(application.attachments).toEqual([expect.stringMatching(/Resume\.pdf$/), expect.stringMatching(/Cover letter\.pdf$/)]);
   expect(await status()).toBe("SENT");
 

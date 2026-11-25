@@ -1,5 +1,12 @@
 # Rolepilot changelog
 
+## 2026-11-25 — Repair the checks that gate Docker publishing
+
+- Updated Playwright tests and fake service responses for the current Job Agent and OpenRouter scoring, resume controls, email, setup, and candidate evidence workflows. File upload tests wait for interactive controls, and reorder tests wait for saves before reloading.
+- Added regression coverage for One setup, candidate memory controls, localized document labels, Google settings and callback display, clipboard fallback, and SQLite transaction isolation. Retained the existing coverage thresholds and GitHub image workflow checks.
+- PostgreSQL coverage passed with 2,322 tests and 78.28% branch coverage. SQLite passed with 628 tests. All 177 Playwright cases passed across the initial run and focused reruns on an isolated database. Lint and TypeScript checks passed.
+- GitHub builds and publishes the test-gated production images on the main-branch push. The local application and its data were left in place.
+
 ## 2026-11-24 — Update the GitHub image workflow’s repository-link test
 
 - Updated the Startups user-agent test to expect the current Rolepilot repository link. The previous assertion failed the GitHub coverage test step and prevented the production image job from starting.

@@ -16,6 +16,11 @@ test.beforeAll(async () => {
   await sql(`INSERT INTO "Setting" (key, value, "updatedAt") VALUES ('baseThemeId', $1, now()) ON CONFLICT (key) DO UPDATE SET value = $1`, [editorial.id]);
 });
 
+async function openApplicationSections(page: Page) {
+  await page.getByRole("tab", { name: "Resume controls", exact: true }).click();
+  await page.getByRole("tab", { name: "Sections", exact: true }).click();
+}
+
 const titles = (page: Page) => page.getByRole("article", { name: "Resume" }).getByRole("heading", { level: 2 }).allTextContents();
 
 test("moves and removes sections on the Base resume, and it stays that way", async ({ page }) => {
@@ -44,7 +49,12 @@ test("moves and removes sections on the Base resume, and it stays that way", asy
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + from.width / 2, to.y + to.height / 2, { steps: 12 });
+  const savedOrder = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/resume" && response.request().method() === "POST",
+  );
   await page.mouse.up();
+  expect((await savedOrder).ok()).toBe(true);
+  await page.reload();
   await expect.poll(async () => (await titles(page)).indexOf("Languages")).toBeLessThan((await titles(page)).indexOf("Education"));
 
   await page.getByRole("button", { name: "Put back Projects" }).click();
@@ -95,18 +105,16 @@ test("an application gets a new section only when it's added", async ({ page }) 
   const resume = page.getByRole("article", { name: "Resume" });
   await expect(resume.getByRole("heading", { name: "Awards" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: /^Sections/ }).click();
+  await openApplicationSections(page);
   await page.getByRole("button", { name: "Add Awards" }).click();
   const line = resume.locator('[data-unit^="custom-line:"]');
   await expect(line).toContainText("Best Paper");
 
-  // Word for word: it can be edited or left out, not rewritten by the AI.
-  await page.keyboard.press("Escape");
+  // The candidate can edit, request a change in chat, or leave out the line.
   await line.hover();
-  await expect(line.getByRole("button")).toHaveText(["Edit", "Leave out"]);
+  await expect(line.getByRole("button")).toHaveText(["Edit", "Ask AI", "Leave out"]);
 
-  // Its own order, without changing the base resume's.
-  await page.getByRole("button", { name: /^Sections/ }).click();
+  // Its own layout, without changing the base resume's.
   await page.getByRole("button", { name: "Remove Awards" }).click();
   await expect(resume.getByRole("heading", { name: "Awards" })).toHaveCount(0);
   await page.getByRole("button", { name: "Add Awards" }).click();
@@ -120,7 +128,7 @@ test("an application gets a new section only when it's added", async ({ page }) 
 test("renames a heading on one resume, in the preview and the PDF, and back again (#339)", async ({ page }) => {
   await page.goto(url);
   const resume = page.getByRole("article", { name: "Resume" });
-  await page.getByRole("button", { name: /^Sections/ }).click();
+  await openApplicationSections(page);
   await page.getByRole("button", { name: "Rename Experience" }).click();
   await page.getByRole("textbox", { name: "New heading for Experience" }).fill("Relevant experience");
   await page.getByRole("button", { name: "Save" }).click();
@@ -141,7 +149,7 @@ test("renames a heading on one resume, in the preview and the PDF, and back agai
   await expect(page.getByRole("article", { name: "Resume" }).getByRole("heading", { name: "Experience", exact: true })).toBeVisible();
 
   await page.goto(url);
-  await page.getByRole("button", { name: /^Sections/ }).click();
+  await openApplicationSections(page);
   await page.getByRole("button", { name: "Use “Experience”" }).click();
   await expect(resume.getByRole("heading", { name: "Experience", exact: true })).toBeVisible();
 });

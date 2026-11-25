@@ -68,8 +68,8 @@ test("leaves a publication out of a tailored resume, and puts it back", async ({
   const publication = page.locator('[data-unit^="publication:"]');
   await expect(publication).toContainText("Trust in automated scheduling");
   await publication.hover();
-  // Written by the candidate: no Regenerate or Ask AI.
-  await expect(publication.getByRole("button")).toHaveText(["Edit", "Leave out"]);
+  // Written by the candidate: chat is available, while automatic regeneration is disabled.
+  await expect(publication.getByRole("button")).toHaveText(["Edit", "Ask AI", "Leave out"]);
   await publication.getByRole("button", { name: "Leave out" }).click();
   await expect(publication).toHaveCount(0);
   const notice = page.getByRole("note");

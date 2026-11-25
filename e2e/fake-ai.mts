@@ -121,7 +121,7 @@ const answers: Record<string, (messages: Message[]) => unknown> = {
     subject: "Application: Senior Product Designer, Payments",
     greeting: "Dear John,",
     paragraphs: [
-      emails++ === 0
+      emails++ % 2 === 0
         ? "I'm applying for the Senior Product Designer role on your Payments team."
         : "I'd love to help Ledgerly's customers feel calm about their payments as your Senior Product Designer.",
       "I've designed complex operational tools end to end, from research to shipped flows.",
@@ -143,18 +143,17 @@ const answers: Record<string, (messages: Message[]) => unknown> = {
         { type: "unit", document: "RESUME", action: "upsert", id: "custom-line:local-community", label: "Community award", text: "**Community award** for __mentoring__.", beforeId: null },
       ] };
     }
-    if (/Use the submitted evidence/.test(request)) {
-      const sources = section(messages[1].content, "Candidate evidence sources:\n") as Record<string, string>;
+    if (request.includes("Use my saved Kubernetes evidence in the summary.")) {
+      const evidence = "Used Kubernetes for service rollouts.";
+      if (!messages[1].content.includes(evidence)) throw new Error("The saved application evidence was missing from the refinement prompt.");
       const resume = section(messages[1].content, "The resume's units:\n") as Unit[];
       const summary = resume.find((unit) => unit.id === "summary")!;
-      const focused = section(messages[1].content, "Submitted candidate evidence (use this example for this update):\n") as string;
-      const [sourceId, text] = Object.entries(sources).find(([id, text]) => id.startsWith("application:") && text === focused)!;
-      const skill = text.split("\n")[0].slice(10).trim();
-      const quote = text.split("Evidence: ")[1];
       return { reply: "Added your supporting experience to this resume.", edits: [
-        { document: "RESUME", unitId: "summary", text: `${summary.text} ${quote}` },
-        { document: "RESUME", unitId: "skills", text: "", skills: [{ name: skill, group: "Additional skills", evidence: [{ sourceId, quote }] }, ...Object.entries(sources).filter(([id]) => id.startsWith("skills:")).map(([sourceId, name]) => ({ name, group: "Core skills", evidence: [{ sourceId, quote: name }] }))] },
+        { document: "RESUME", unitId: "summary", text: `${summary.text} ${evidence}` },
       ], tone: null, declined: false };
+    }
+    if (request.includes("I used Docker and Kubernetes to deploy internal reporting tools.")) {
+      return { reply: "Thanks for the context.", edits: [], tone: null, declined: false };
     }
     if (/kubernetes/i.test(request)) {
       return { reply: "Added your requested Kubernetes experience.", edits: [{ document: "RESUME", unitId: "summary", text: "Designer with ten years of Kubernetes experience." }], tone: null, declined: false };

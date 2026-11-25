@@ -17,7 +17,11 @@ const pdfHasImage = async (page: import("@playwright/test").Page, path: string) 
 
 test("adds a photo, cropped from the keyboard, and shows it on the base resume and its PDF", async ({ page }) => {
   await page.goto("/profile");
-  await page.getByLabel("Photo file").setInputFiles({ name: "me.png", mimeType: "image/png", buffer: portraitPng() });
+  const [chooser] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    page.getByRole("button", { name: "Add a photo" }).click(),
+  ]);
+  await chooser.setFiles({ name: "me.png", mimeType: "image/png", buffer: portraitPng() });
   const dialog = page.getByRole("dialog", { name: "Crop your photo" });
   const crop = dialog.getByRole("group", { name: /Photo crop/ });
   await crop.focus();

@@ -96,18 +96,18 @@ test("scores a posting against the profile, and keeps the score (#208)", async (
   await page.getByRole("search", { name: "Search postings" }).getByRole("button", { name: "Search" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Senior Product Designer, Payments" })).toBeVisible();
   await page.getByRole("button", { name: "Score", exact: true }).click();
-  await expect(page.getByText("Excellent fit · 91 of 100")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("list", { name: "Why it fits" })).toContainText("product design roles");
-  await expect(page.getByRole("list", { name: "Postings" }).getByRole("img", { name: "Score 91 of 100" })).toBeVisible();
+  await expect(page.getByText("Excellent fit · 90 of 100")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("list", { name: "Why it fits" })).toContainText("Covers: 5+ years of product design");
+  await expect(page.getByRole("list", { name: "Postings" }).getByRole("img", { name: "Score 90 of 100" })).toBeVisible();
 
   // An unscored posting scores from its pill in the list, and the open one stays open.
   await page.getByRole("button", { name: "Score “Product Designer, Logistics”" }).click();
-  await expect(page.getByRole("list", { name: "Postings" }).getByRole("img", { name: "Score 78 of 100" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("list", { name: "Postings" }).getByRole("img", { name: "Score 80 of 100" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { level: 2, name: "Senior Product Designer, Payments" })).toBeVisible();
 
   // Kept with the posting, so it's there after a reload.
   await page.reload();
-  await expect(page.getByText("Excellent fit · 91 of 100")).toBeVisible();
+  await expect(page.getByText("Excellent fit · 90 of 100")).toBeVisible();
   await expect(page.getByRole("button", { name: "Score again" })).toBeVisible();
   await sql(`DELETE FROM "PostingScore"`);
 });

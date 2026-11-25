@@ -65,8 +65,8 @@ test("leaves a certification out of a tailored resume, and puts it back", async 
   const certification = page.locator('[data-unit^="certification:"]');
   await expect(certification).toContainText("Certified Accessibility Specialist");
   await certification.hover();
-  // Written by the candidate: no Regenerate or Ask AI.
-  await expect(certification.getByRole("button")).toHaveText(["Edit", "Leave out"]);
+  // Written by the candidate: chat is available, while automatic regeneration is disabled.
+  await expect(certification.getByRole("button")).toHaveText(["Edit", "Ask AI", "Leave out"]);
   await certification.getByRole("button", { name: "Leave out" }).click();
   await expect(certification).toHaveCount(0);
   const notice = page.getByRole("note");
